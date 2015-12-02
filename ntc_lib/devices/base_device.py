@@ -1,4 +1,9 @@
 class BaseDevice(object):
+    def __init__(self, host, username, password, **kwargs):
+        self.host = host
+        self.username = username
+        self.password = password
+
     def open(self):
         raise NotImplementedError
 
