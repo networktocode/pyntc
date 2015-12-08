@@ -22,7 +22,7 @@ class BaseDevice(object):
     def show_list(self, commands):
         raise NotImplementedError
 
-    def save(self):
+    def save(self, filename=None):
         raise NotImplementedError
 
     @property

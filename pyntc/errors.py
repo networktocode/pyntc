@@ -16,3 +16,8 @@ class DeviceNameNotFoundError(NTCError):
     def __init__(self, name, filename):
         message = 'Name %s not found in %s. The file may not exist.' % (name, filename)
         super(self.__class__, self).__init__(message)
+
+class CommandError(NTCError):
+    def __init__(self, message):
+        message = 'Command was not successful: %s' % message
+        super(self.__class__, self).__init__(message)

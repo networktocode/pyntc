@@ -27,12 +27,14 @@ class NXOSDevice(BaseDevice):
     def show_list(self, commands, raw_text=False):
         return self.native.show_list(commands, raw_text=raw_text)
 
-    def save(self):
-        return self.native.save()
+    def save(self, filename='startup-config'):
+        return self.native.save(filename=filename)
 
     @property
     def facts(self):
-        return self.native.facts
+        facts = self.native.facts
+        facts['vendor'] = 'Cisco'
+        return facts
 
     @property
     def running_config(self):
