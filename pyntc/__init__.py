@@ -1,7 +1,6 @@
 import os
 
-from .devices.eos_device import EOSDevice
-from .devices.nxos_device import NXOSDevice
+from .devices import supported_devices, VENDOR_KEY, DEVICE_CLASS_KEY
 from .errors import UnsupportedDeviceError, DeviceNameNotFoundError
 
 try:
@@ -11,19 +10,35 @@ except ImportError:
 
 LIB_PATH_ENV_VAR = 'PYNTC_CONF'
 
-def get_device(vendor, *args, **kwargs):
-    device_map = {
-        'nxos': NXOSDevice,
-        'eos': EOSDevice,
-    }
+def get_device(device_type, *args, **kwargs):
     try:
-        device_class = device_map[vendor.lower()]
-        return device_class(*args, **kwargs)
+        device_class = supported_devices[device_type][DEVICE_CLASS_KEY]
+        vendor = supported_devices[device_type][VENDOR_KEY]
+        return device_class(vendor, device_type, *args, **kwargs)
     except KeyError:
-        raise UnsupportedDeviceError(vendor)
+        raise UnsupportedDeviceError(device_type)
 
 
 def get_device_by_name(name, filename=None):
+    config = get_config_from_file(filename=filename)
+    sections = config.sections()
+    for section in sections:
+        if ':' in section:
+            device_type_and_conn_name = section.split(':')
+            device_type = device_type_and_conn_name[0]
+            conn_name = device_type_and_conn_name[1]
+
+            if name == conn_name:
+                device_kwargs = dict(config.items(section))
+                if 'host' not in device_kwargs:
+                    device_kwargs['host'] = name
+
+                return get_device(device_type, **device_kwargs)
+
+    raise DeviceNameNotFoundError(name, filename)
+
+
+def get_config_from_file(filename=None):
     if filename is None:
         if LIB_PATH_ENV_VAR in os.environ:
             filename = os.path.expanduser(os.environ[LIB_PATH_ENV_VAR])
@@ -32,22 +47,5 @@ def get_device_by_name(name, filename=None):
 
     config = SafeConfigParser()
     config.read(filename)
-    sections = config.sections()
 
-    if not sections:
-        return None
-
-    for section in sections:
-        if ':' in section:
-            vendor_and_conn_name = section.split(':')
-            vendor = vendor_and_conn_name[0]
-            conn_name = vendor_and_conn_name[1]
-
-            if name == conn_name:
-                device_kwargs = dict(config.items(section))
-                if 'host' not in device_kwargs:
-                    device_kwargs['host'] = name
-
-                return get_device(vendor, **device_kwargs)
-
-    raise DeviceNameNotFoundError(name, filename)
+    return config

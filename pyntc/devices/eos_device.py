@@ -8,8 +8,8 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 class EOSDevice(BaseDevice):
-    def __init__(self, host, username, password, transport=u'http', timeout=60, **kwargs):
-        super(self.__class__, self).__init__(host, username, password)
+    def __init__(self, vendor, device_type, host, username, password, transport=u'http', timeout=60, **kwargs):
+        super(self.__class__, self).__init__(vendor, device_type, host, username, password)
         self.transport = transport
         self.timeout = timeout
 
@@ -70,6 +70,7 @@ class EOSDevice(BaseDevice):
     @property
     def facts(self):
         facts = {}
+        facts['vendor'] = self.vendor
 
         sh_version_output = self.show('show version')
         facts.update(convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM))
