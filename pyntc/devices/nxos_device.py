@@ -6,9 +6,7 @@ from pynxos.errors import CLIError
 
 class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport=u'http', timeout=30, **kwargs):
-        super(self.__class__, self).__init__(host, username, password)
-        self.device_type = 'nxos'
-        self.vendor = 'Cisco'
+        super(self.__class__, self).__init__(host, username, password, vendor='Cisco', device_type='nxos')
         self.transport = transport
         self.timeout = timeout
 
@@ -24,25 +22,25 @@ class NXOSDevice(BaseDevice):
         try:
             return self.native.config(command)
         except CLIError as e:
-            raise CommandError(e.message)
+            raise CommandError(str(e))
 
     def config_list(self, commands):
         try:
             return self.native.config_list(commands)
         except CLIError as e:
-            raise CommandError(e.message)
+            raise CommandError(str(e))
 
     def show(self, command, raw_text=False):
         try:
             return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
-            raise CommandError(e.message)
+            raise CommandError(str(e))
 
     def show_list(self, commands, raw_text=False):
         try:
             return self.native.show_list(commands, raw_text=raw_text)
         except CLIError as e:
-            raise CommandError(e.message)
+            raise CommandError(str(e))
 
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)

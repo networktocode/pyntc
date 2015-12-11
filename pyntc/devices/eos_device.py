@@ -9,9 +9,7 @@ from pyeapi.eapilib import CommandError as EOSCommandError
 
 class EOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport=u'http', timeout=60, **kwargs):
-        super(self.__class__, self).__init__(host, username, password)
-        self.device_type = 'eos'
-        self.vendor = 'Arista'
+        super(self.__class__, self).__init__(host, username, password, vendor='Arista', device_type='eos')
         self.transport = transport
         self.timeout = timeout
 

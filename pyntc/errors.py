@@ -21,3 +21,8 @@ class CommandError(NTCError):
     def __init__(self, message):
         message = 'Command was not successful: %s' % message
         super(self.__class__, self).__init__(message)
+
+class FeatureNotFoundError(NTCError):
+    def __init__(self, feature, device_type):
+        message = '%s feature not found for %s device type.' % (feature, device_type)
+        super(self.__class__, self).__init__(message)
