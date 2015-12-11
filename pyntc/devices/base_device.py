@@ -1,7 +1,5 @@
 class BaseDevice(object):
-    def __init__(self, vendor, device_type, host, username, password, **kwargs):
-        self.vendor = vendor
-        self.device_type = device_type
+    def __init__(self, host, username, password, **kwargs):
         self.host = host
         self.username = username
         self.password = password

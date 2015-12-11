@@ -28,4 +28,3 @@ class TestInfra(unittest.TestCase):
 
         eos_device = get_device_by_name('spine1')
         self.assertIsInstance(eos_device, EOSDevice)
-

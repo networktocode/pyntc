@@ -20,25 +20,11 @@ class TestDevices(unittest.TestCase):
         for device in self.devices:
             device.close()
 
-    def test_config(self):
-        pass
-
-    def test_config_list(self):
-        pass
-
-    def test_show(self):
-        pass
-
-    def test_show_list(self):
-        pass
-
     def test_facts(self):
         for device in self.devices:
-            facts = device.facts
-            validate(facts, 'facts')
+            validate(device.facts, 'facts')
 
-
-
-
-
-
+    def test_running_config(self):
+        for device in self.devices:
+            running_config = device.running_config
+            self.assertGreater(len(running_config) > 0)

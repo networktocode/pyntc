@@ -14,7 +14,7 @@ def get_device(device_type, *args, **kwargs):
     try:
         device_class = supported_devices[device_type][DEVICE_CLASS_KEY]
         vendor = supported_devices[device_type][VENDOR_KEY]
-        return device_class(vendor, device_type, *args, **kwargs)
+        return device_class(*args, **kwargs)
     except KeyError:
         raise UnsupportedDeviceError(device_type)
 

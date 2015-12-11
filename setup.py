@@ -6,7 +6,5 @@ setup(name='pyntc',
       install_requires=['requests>=2.7.0',
                         'jsonschema',
                         'future',
-                        'pyeapi',
-                        'configparser'
                        ]
       )

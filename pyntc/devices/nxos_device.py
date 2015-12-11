@@ -5,8 +5,10 @@ from pynxos.device import Device as NXOSNative
 from pynxos.errors import CLIError
 
 class NXOSDevice(BaseDevice):
-    def __init__(self, vendor, device_type, host, username, password, transport=u'http', timeout=30, **kwargs):
-        super(self.__class__, self).__init__(vendor, device_type, host, username, password)
+    def __init__(self, host, username, password, transport=u'http', timeout=30, **kwargs):
+        super(self.__class__, self).__init__(host, username, password)
+        self.device_type = 'nxos'
+        self.vendor = 'Cisco'
         self.transport = transport
         self.timeout = timeout
 

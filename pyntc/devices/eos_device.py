@@ -8,8 +8,10 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 class EOSDevice(BaseDevice):
-    def __init__(self, vendor, device_type, host, username, password, transport=u'http', timeout=60, **kwargs):
-        super(self.__class__, self).__init__(vendor, device_type, host, username, password)
+    def __init__(self, host, username, password, transport=u'http', timeout=60, **kwargs):
+        super(self.__class__, self).__init__(host, username, password)
+        self.device_type = 'eos'
+        self.vendor = 'Arista'
         self.transport = transport
         self.timeout = timeout
 
@@ -24,17 +26,20 @@ class EOSDevice(BaseDevice):
     def close(self):
         pass
 
-    def _parse_response(self, response):
-        return list(x['result'] for x in response)
+    def _parse_response(self, response, raw_text):
+        if raw_text:
+            return list(x['result']['output'] for x in response)
+        else:
+            return list(x['result'] for x in response)
 
     def config(self, command):
         command = str(command)
-        response_list = self.command_list([command])
+        response_list = self.config_list([command])
         return response_list[0]
 
     def config_list(self, commands):
         try:
-            return self.native.config(commands)
+            return list(None for x in self.native.config(commands) if x == {})
         except EOSCommandError as e:
             raise CommandError(e.message)
 
@@ -50,7 +55,7 @@ class EOSDevice(BaseDevice):
             encoding = 'json'
 
         try:
-            return self._parse_response(self.native.enable(commands, encoding=encoding))
+            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
         except EOSCommandError as e:
             raise CommandError(e.message)
 
