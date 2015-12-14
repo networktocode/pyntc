@@ -8,5 +8,10 @@ INTERFACES_KM = {
     'duplex': 'duplex',
     'vlan': ['vlanInformation', 'vlanId'],
     'state': 'linkStatus',
-    'description': 'description'
+    'description': 'description',
+}
+
+VLAN_KM = {
+    'state': 'status',
+    'name': 'name',
 }

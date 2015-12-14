@@ -18,8 +18,13 @@ def get_device(device_type, *args, **kwargs):
     except KeyError:
         raise UnsupportedDeviceError(device_type)
 
-
 def get_device_by_name(name, filename=None):
+    if filename is None:
+        if LIB_PATH_ENV_VAR in os.environ:
+            filename = os.path.expanduser(os.environ[LIB_PATH_ENV_VAR])
+        else:
+            filename = os.path.expanduser('~/.ntc.conf')
+
     config = get_config_from_file(filename=filename)
     sections = config.sections()
     for section in sections:
@@ -37,14 +42,7 @@ def get_device_by_name(name, filename=None):
 
     raise DeviceNameNotFoundError(name, filename)
 
-
 def get_config_from_file(filename=None):
-    if filename is None:
-        if LIB_PATH_ENV_VAR in os.environ:
-            filename = os.path.expanduser(os.environ[LIB_PATH_ENV_VAR])
-        else:
-            filename = os.path.expanduser('~/.ntc.conf')
-
     config = SafeConfigParser()
     config.read(filename)
 

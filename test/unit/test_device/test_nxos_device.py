@@ -23,7 +23,7 @@ class TestNXOSDevice(unittest.TestCase):
 
         result = self.device.config_list(commands)
 
-        self.assertEquals(result, [None, None])
+        self.assertEqual(result, [None, None])
         self.device.native.config_list.assert_called_with(commands)
 
     def test_show(self):
