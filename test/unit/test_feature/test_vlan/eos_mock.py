@@ -104,5 +104,14 @@ class FakeEOSNative:
         if commands == EOS_LIST_VLAN:
             return EOS_LIST_VLAN_RESPONSE
 
+        assert False
+
     def config(self, commands):
-        return EOS_CONFIG_VLAN_RESPONSE
+        if commands == EOS_CONFIG_VLAN
+            return EOS_CONFIG_VLAN_RESPONSE
+
+        assert False
+
+def instance():
+    return FakeEOSNative()
+

@@ -12,6 +12,7 @@ INTERFACES_KM = {
 }
 
 VLAN_KM = {
-    'state': 'status',
+    'state': 'state',
     'name': 'name',
+    'id': 'vlan_id',
 }

@@ -1,10 +1,11 @@
 import unittest
 import os
 
-from pyntc import get_device, get_device_by_name
+from pyntc import get_device, get_device_by_name, get_config_from_file
 from pyntc.errors import UnsupportedDeviceError
 from pyntc.devices import supported_devices, DEVICE_CLASS_KEY
-from pyntc.devices import EOSDevice, NXOSDevice
+from pyntc.devices import BaseDevice, EOSDevice, NXOSDevice
+
 
 BAD_DEVICE_TYPE = '238nzsvkn3981'
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), '..', 'fixtures')
@@ -21,10 +22,10 @@ class TestInfra(unittest.TestCase):
             get_device(BAD_DEVICE_TYPE)
 
     def test_device_by_name(self):
-        config_filepath = os.path.join(FIXTURES_DIR, '.ntc.conf')
+        config_filepath = os.path.join(FIXTURES_DIR, '.ntc.conf.sample')
 
-        nxos_device = get_device_by_name('n9k1')
+        nxos_device = get_device_by_name('test_nxos', filename=config_filepath)
         self.assertIsInstance(nxos_device, NXOSDevice)
 
-        eos_device = get_device_by_name('spine1')
+        eos_device = get_device_by_name('test_eos', filename=config_filepath)
         self.assertIsInstance(eos_device, EOSDevice)

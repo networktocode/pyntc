@@ -1,6 +1,6 @@
 from .base_device import BaseDevice
 from pyntc.errors import CommandError
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key
+from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
 
 from pyeapi import connect as eos_connect
@@ -8,8 +8,8 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 class EOSDevice(BaseDevice):
-    def __init__(self, host, username, password, transport=u'http', timeout=60, **kwargs):
-        super(self.__class__, self).__init__(host, username, password, vendor='Arista', device_type='eos')
+    def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
+        super(EOSDevice, self).__init__(host, username, password, vendor='Arista', device_type='eos')
         self.transport = transport
         self.timeout = timeout
 
@@ -31,18 +31,15 @@ class EOSDevice(BaseDevice):
             return list(x['result'] for x in response)
 
     def config(self, command):
-        command = str(command)
-        response_list = self.config_list([command])
-        return response_list[0]
+        self.config_list([command])
 
     def config_list(self, commands):
         try:
-            return list(None for x in self.native.config(commands) if x == {})
+            self.native.config(commands)
         except EOSCommandError as e:
             raise CommandError(e.message)
 
     def show(self, command, raw_text=False):
-        command = str(command)
         response_list = self.show_list([command], raw_text=raw_text)
         return response_list[0]
 
@@ -53,7 +50,7 @@ class EOSDevice(BaseDevice):
             encoding = 'json'
 
         try:
-            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
+            return strip_unicode(self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
             raise CommandError(e.message)
 
@@ -85,4 +82,8 @@ class EOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show running-config', raw_text=True)['output']
+        return self.show('show running-config', raw_text=True)
+
+    @property
+    def startup_config(self):
+        return self.show('show startup-config', raw_text=True)

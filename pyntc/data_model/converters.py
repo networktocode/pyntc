@@ -1,3 +1,19 @@
+import collections
+import sys
+
+def strip_unicode(data):
+    if sys.version_info.major >= 3:
+        return data
+
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(strip_unicode, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(strip_unicode, data))
+    else:
+        return data
+
 def recursive_key_lookup(keys, obj):
     if not isinstance(keys, list):
         return obj.get(keys)
@@ -35,7 +51,7 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
 
 def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
     converted_list = []
-    for original in original_list:
+    for original in list(original_list):
         converted_list.append(
             convert_dict_by_key(original,
                                 key_map,

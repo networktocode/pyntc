@@ -1,34 +1,39 @@
-from .base_vlans import BaseVlans
+from .base_vlans import BaseVlans, vlan_not_in_range_error
 from pyntc.data_model.key_maps.nxos_key_maps import VLAN_KM
 from pynxos.lib.data_model.converters import converted_list_from_table
 
+UPPER_LIMIT = 3967
+
 class NXOSVlans(BaseVlans):
+
     def __init__(self, device):
         self.device = device
-        self._list = []
+        self.native_vlans = self.device.native.feature('vlans')
 
     def get(self, vlan_id):
-        vlan_id_table = self.device.show('show vlan id %s' % vlan_id)
-        try:
-            return converted_list_from_table(vlan_id_table, 'vlanbriefid', VLAN_KM)[0]
-        except IndexError:
-            return {}
+        vlan_not_in_range_error(vlan_id, upper=UPPER_LIMIT)
+        native_get_vlan = self.native_vlans.get(vlan_id)
+        return native_get_vlan
 
-    def list(self):
-        all_vlan_table = self.device.show('show vlan')
-        all_vlan_list = converted_list_from_table(all_vlan_table, 'vlanbrief', VLAN_KM)
-        vlan_id_list = list(x['id'] for x in all_vlan_list)
+    def get_list(self):
+        native_get_list = self.native_vlans.get_list()
+        return native_get_list
 
-        return vlan_id_list
+    def get_all(self):
+        native_get_all = self.native_vlans.get_all()
+        return native_get_all
 
     def config(self, vlan_id, **params):
-        vlan_config_commands = ['vlan %s' % vlan_id]
-        vlan_name = params.get('name')
-        if vlan_name:
-            vlan_config_commands.append('name %s' % vlan_name)
+        vlan_not_in_range_error(vlan_id, upper=UPPER_LIMIT)
+        self.native_vlans.config(vlan_id, **params)
 
-        self.device.config_list(vlan_config_commands)
+    def set_name(self, vlan_id, vlan_name, default=False, disable=False):
+        vlan_not_in_range_error(vlan_id, upper=UPPER_LIMIT)
+        self.native_vlans.set_name(vlan_id, vlan_name, default=default, disable=disable)
 
+    def remove(self, vlan_id):
+        vlan_not_in_range_error(vlan_id)
+        self.native_vlans.remove(vlan_id)
 
 def instance(device):
     return NXOSVlans(device)

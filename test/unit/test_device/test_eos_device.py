@@ -23,7 +23,7 @@ class TestEOSDevice(unittest.TestCase):
 
         result = self.device.config_list(commands)
 
-        self.assertEquals(result, [None, None])
+        self.assertIsNone(result)
         self.device.native.config.assert_called_with(commands)
 
     def test_show(self):

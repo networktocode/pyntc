@@ -39,11 +39,16 @@ class BaseDevice(object):
     def running_conig(self):
         raise NotImplementedError
 
+    @property
+    def startup_config(self):
+        raise NotImplementedError
+
     def feature(self, feature_name):
         try:
             feature_module = importlib.import_module(
                 'pyntc.features.%s.%s_%s' % (feature_name, self.device_type, feature_name))
             return feature_module.instance(self)
-        except:
-            raise
+        except ImportError:
             raise FeatureNotFoundError(feature_name, self.device_type)
+        except AttributeError:
+            raise

@@ -1,10 +1,10 @@
-[nxos:n9k1]
+[nxos:test_nxos]
 host: 192.168.43.3
-username: admin
-password: arista
-transport: https
+username: user
+password: pass
+transport: http
 
-[eos:spine1]
-username: admin
+[eos:test_eos]
+username: user
 password: arista
-transport: https
+transport: http

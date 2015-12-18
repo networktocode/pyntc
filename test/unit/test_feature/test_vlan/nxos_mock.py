@@ -1,5 +1,7 @@
-NXOS_GET_VLAN = 'show vlan id 10'
-NXOS_GET_VLAN_RESPONSE = {
+from pynxos.errors import CLIError
+
+GET_VLAN = 'show vlan id 10'
+GET_VLAN_RESPONSE = {
                             u'vlanshowrspan-vlantype': u'notrspan',
                             u'TABLE_vlanbriefid': {
                                 u'ROW_vlanbriefid': {
@@ -21,8 +23,8 @@ NXOS_GET_VLAN_RESPONSE = {
                             u'is-vtp-manageable': u'enabled'
                         }
 
-NXOS_LIST_VLAN = 'show vlan'
-NXOS_LIST_VLAN_RESPONSE = {
+LIST_VLAN = 'show vlan'
+LIST_VLAN_RESPONSE = {
     "TABLE_mtuinfo": {
         "ROW_mtuinfo": [
             {
@@ -449,8 +451,16 @@ NXOS_LIST_VLAN_RESPONSE = {
     }
 }
 
-NXOS_CONFIG_VLAN = ['vlan 10', 'name test']
-NXOS_CONFIG_VLAN_RESPONSE = [None, None]
+CONFIG_VLAN = ['vlan 10', 'name test']
+CONFIG_VLAN_RESPONSE = [None, None]
+
+GET_BAD = 'show vlan 5000'
+
+CONFIG_BAD = ['vlan 5000']
+
+CONFIG_WITH_NAME = ['vlan 10', 'name test']
+CONFIG_WITH_NAME_RESPONSE = [None, None]
+
 
 class FakeNXOSNative:
     def show(self, command, raw_text=False):
@@ -458,6 +468,21 @@ class FakeNXOSNative:
             return NXOS_GET_VLAN_RESPONSE
         if command == NXOS_LIST_VLAN:
             return NXOS_LIST_VLAN_RESPONSE
+        if command == GET_BAD:
+            raise CLIError
+
+
+        assert False
 
     def config_list(self, commands):
-        return NXOS_CONFIG_VLAN_RESPONSE
+        if commands == CONFIG_VLAN:
+            return NXOS_CONFIG_VLAN_RESPONSE
+        if commands == CONFIG_BAD:
+            raise CLIError
+        if commands == CONFIG_WITH_NAME:
+            CONFIG_WITH_NAME_RESPONSE
+
+        assert False
+
+def instance():
+    return FakeNXOSNative()

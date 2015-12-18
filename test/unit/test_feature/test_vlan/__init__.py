@@ -1,7 +1,7 @@
-from .eos_mock import FakeEOSNative
-from .nxos_mock import FakeNXOSNative
+import .eos_mock
+import .nxos_mock
 
 mock_mapper = {
-    'eos': FakeEOSNative,
-    'nxos': FakeNXOSNative,
+    'eos': eos_mock,
+    'nxos': nxos_mock,
 }
