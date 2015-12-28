@@ -13,8 +13,6 @@ class TestVlan(unittest.TestCase):
             device = supported_devices[device_type][DEVICE_CLASS_KEY]('host', 'user', 'pass')
             device.native = mock_mapper[device_type].instance()
 
-            mock_module = mock_mapper[device_type]
-
             self.devices.append(device)
 
     def test_get(self):
@@ -38,6 +36,9 @@ class TestVlan(unittest.TestCase):
             self.assertIsNone(result)
 
     def test_get_bad(self):
+        for device in self.devices:
+            vlans = device.feature('vlans')
+
 
 
     def test_config_bad(self):

@@ -31,6 +31,21 @@ class BaseDevice(object):
     def save(self, filename=None):
         raise NotImplementedError
 
+    def file_copy(self, src, dest=None):
+        pass
+
+    def reboot(self, timer=0, confirm=False):
+        pass
+
+    def install_os(self, image_name, **vendor_specifics):
+        pass
+
+    def rollback(self, checkpoint=None, filename=None):
+        raise NotSupportedError
+
+    def backup_running_config(self, filename):
+        raise NotImplementedError
+
     @property
     def facts(self):
         raise NotImplementedError

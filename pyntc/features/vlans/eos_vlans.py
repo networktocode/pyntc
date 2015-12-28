@@ -5,8 +5,7 @@ from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key
 class EOSVlans(BaseVlans):
 
     def __init__(self, device):
-        self.device = device
-        self.native_vlans = self.device.native.api('vlans')
+        self.native_vlans = device.native.api('vlans')
 
     def get(self, vlan_id):
         vlan_not_in_range_error(vlan_id)

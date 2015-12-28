@@ -7,8 +7,7 @@ UPPER_LIMIT = 3967
 class NXOSVlans(BaseVlans):
 
     def __init__(self, device):
-        self.device = device
-        self.native_vlans = self.device.native.feature('vlans')
+        self.native_vlans = device.native.feature('vlans')
 
     def get(self, vlan_id):
         vlan_not_in_range_error(vlan_id, upper=UPPER_LIMIT)

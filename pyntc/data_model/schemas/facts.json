@@ -1,9 +1,10 @@
 {
+    "title": "facts schema",
     "type": "object",
     "properties": {
         "interfaces": {
             "type": "array",
-            "items": {"$ref": "base.json#/definitions/interface"}
+            "items": {"$ref": "file:///base.json#/definitions/interface"}
         },
         "os": {"type": "string"},
         "platform": {"type": "string"},
@@ -12,15 +13,15 @@
         "last_reboot_reason": {"type": "string"},
         "modules": {
             "type": "array",
-            "items": {"$ref": "base.json#/definitions/module"}
+            "items": {"$ref": "file:///base.json#/definitions/module"}
         },
         "power_supply_info": {
             "type": "array",
-            "items": {"$ref": "base.json#/definitions/ps_info"}
+            "items": {"$ref": "file:///base.json#/definitions/ps_info"}
         },
         "fan_info": {
             "type": "array",
-            "items": {"$ref": "base.json#/definitions/fans"}
+            "items": {"$ref": "file:///base.json#/definitions/fan_info"}
         },
         "vlan_list": {
             "type": "array"

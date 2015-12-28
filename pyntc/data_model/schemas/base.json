@@ -1,10 +1,11 @@
 {
+    "title": "base schema",
     "definitions": {
         "interface": {
             "type": "object",
             "properties": {
                 "interface": {"type": "string"},
-                "description": {"type": ["string", "null"]},
+                "dedscription": {"type": ["string", "null"]},
                 "state": {"type": "string"},
                 "vlan": {"type": ["string", "null", "number"]},
                 "duplex": {"type": "string"},
@@ -38,7 +39,7 @@
         },
 
         "fan_info": {
-            "id": "#fans",
+            "title": "#fans",
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
