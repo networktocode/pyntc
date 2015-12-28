@@ -1,4 +1,4 @@
-from .base_device import BaseDevice
+    from .base_device import BaseDevice
 from pyntc.errors import CommandError
 from pyntc.data_model.converters import strip_unicode
 
@@ -45,6 +45,24 @@ class NXOSDevice(BaseDevice):
 
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
+
+    def file_copy(self, src, dest=None):
+        self.native.file_copy(src, dest)
+
+    def reboot(self, timer=0, confirm=False):
+        self.native.reboot(confirm=confirm)
+
+    def install_os(self, image_name, **vendor_specifics):
+        return self.native.install_os(image_name)
+
+    def checkpoint(self, filename):
+        self.native.checkpoint(filename)
+
+    def rollback(self, filename):
+        self.native.rollback(filename)
+
+    def backup_running_config(self, filename):
+        self.native.backup_running_config(filename)
 
     @property
     def facts(self):
