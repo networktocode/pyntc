@@ -1,4 +1,4 @@
-    from .base_device import BaseDevice
+from .base_device import BaseDevice
 from pyntc.errors import CommandError
 from pyntc.data_model.converters import strip_unicode
 

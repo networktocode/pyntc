@@ -1,11 +1,17 @@
+import signal
+
 from .base_device import BaseDevice
-from pyntc.errors import CommandError
+from pyntc.errors import CommandError, NTCError
 from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
+from pyntc.features.file_copy.eos_file_copy import EOSFileCopy
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
+
+class RebootSignal(NTCError):
+    pass
 
 class EOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
@@ -56,6 +62,31 @@ class EOSDevice(BaseDevice):
 
     def save(self, filename='startup-config'):
         return self.show('copy running-config %s' % filename)
+
+    def file_copy(self, src, dest=None):
+        fc = EOSFileCopy(self, src)
+        if not fc.remote_file_exists():
+            fc.send()
+
+    def reboot(self, confirm=False):
+        if confirm:
+            self.show('reload now')
+        else:
+            print('Need to confirm reboot with confirm=True')
+
+    def install_os(self, image_name, **vendor_specifics):
+        self.show('install source' % image_name)
+
+    def checkpoint(self, filename):
+        self.show('copy running-config %s' % filename)
+
+    def rollback(self, filename):
+        self.show('configure replace %s force' %
+            filename)
+
+    def backup_running_config(self, filename):
+        with open(filename, 'w') as f:
+            f.write(self.running_config)
 
     def _interfaces_status_list(self):
         interfaces_list = []

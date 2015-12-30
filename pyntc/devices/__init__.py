@@ -1,5 +1,6 @@
 from .eos_device import EOSDevice
 from .nxos_device import NXOSDevice
+from .ios_device import IOSDevice
 from .base_device import BaseDevice
 
 
@@ -12,5 +13,9 @@ supported_devices = {
 
     'nxos': {
         DEVICE_CLASS_KEY: NXOSDevice,
+    },
+
+    'ios': {
+        DEVICE_CLASS_KEY: IOSDevice
     }
 }
