@@ -1,0 +1,30 @@
+# .coveragerc to control coverage.py
+[run]
+branch = True
+omit = *request*
+       *test*
+       *pyeapi*
+       *pkg_resource*
+       *pynxos*
+       *mock*
+       *six*
+       *pbr*
+       *jsonschema*
+       *pyasn1*
+       *OpenSSL*
+       *httpsclient*
+       *future*
+       *builtins*
+       *http*
+       *queue*
+       *functools*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+
+ignore_errors = True
+
+[html]
+directory = coverage_html_report

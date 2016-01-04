@@ -11,14 +11,14 @@ except ImportError:
 LIB_PATH_ENV_VAR = 'PYNTC_CONF'
 LIB_PATH_DEFAULT = '~/.ntc.conf'
 
-def get_device(device_type, *args, **kwargs):
+def ntc_device(device_type, *args, **kwargs):
     try:
         device_class = supported_devices[device_type][DEVICE_CLASS_KEY]
         return device_class(*args, **kwargs)
     except KeyError:
         raise UnsupportedDeviceError(device_type)
 
-def get_device_by_name(name, filename=None):
+def ntc_device_by_name(name, filename=None):
     config, filename = get_config_from_file(filename=filename)
     sections = config.sections()
     for section in sections:
@@ -32,7 +32,7 @@ def get_device_by_name(name, filename=None):
                 if 'host' not in device_kwargs:
                     device_kwargs['host'] = name
 
-                return get_device(device_type, **device_kwargs)
+                return ntc_device(device_type, **device_kwargs)
 
     raise DeviceNameNotFoundError(name, filename)
 

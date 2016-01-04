@@ -1,5 +1,5 @@
 import unittest
-from pyntc import get_device_by_name
+from pyntc import ntc_device_by_name
 
 class BaseDeviceTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -10,7 +10,7 @@ class BaseDeviceTest(unittest.TestCase):
         super(BaseDeviceTest, self).__init__(args[0], **kwargs)
 
     def setUp(self, device=None):
-        self.device = get_device_by_name(self.conn_name)
+        self.device = ntc_device_by_name(self.conn_name)
         self.device.open()
 
     def tearDown(self):

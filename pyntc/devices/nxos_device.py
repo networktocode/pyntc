@@ -6,12 +6,12 @@ from pynxos.device import Device as NXOSNative
 from pynxos.errors import CLIError
 
 class NXOSDevice(BaseDevice):
-    def __init__(self, host, username, password, transport='http', timeout=30, **kwargs):
+    def __init__(self, host, username, password, transport='http', timeout=30, port=None, **kwargs):
         super(NXOSDevice, self).__init__(host, username, password, vendor='Cisco', device_type='nxos')
         self.transport = transport
         self.timeout = timeout
 
-        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout)
+        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
 
     def open(self):
         pass
