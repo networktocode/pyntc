@@ -1,7 +1,9 @@
 BASIC_FACTS_KM = {
-    'platform': 'modelName',
-    'os': 'internalVersion',
+    'model': 'modelName',
+    'os_version': 'internalVersion',
+    'serial_number': 'serialNumber'
 }
+
 
 INTERFACES_KM = {
     'speed': 'bandwidth',

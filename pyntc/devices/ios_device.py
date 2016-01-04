@@ -1,10 +1,16 @@
 import signal
+import os
+import re
 
 from .base_device import BaseDevice
 from pyntc.errors import CommandError, NTCError
+from pyntc.templates import get_template_dir, get_structured_data
+from pyntc.data_model.converters import convert_dict_by_key
+from pyntc.data_model.key_maps import ios_key_maps
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
+
 
 class FileTransferError(NTCError):
     pass
@@ -13,7 +19,7 @@ class RebootSignal(NTCError):
     pass
 
 class IOSDevice(BaseDevice):
-    def __init__(self, host, username, password, port=22, **kwargs):
+    def __init__(self, host, username, password, secret='', port=22, **kwargs):
         super(IOSDevice, self).__init__(host, username, password, vendor='Cisco', device_type='ios')
 
         self.native = None
@@ -21,6 +27,7 @@ class IOSDevice(BaseDevice):
         self.host = host
         self.username = username
         self.password = password
+        self.secret = secret
         self.port = int(port)
         self.open()
 
@@ -30,6 +37,7 @@ class IOSDevice(BaseDevice):
                                      username=self.username,
                                      password=self.password,
                                      port=self.port,
+                                     secret=self.secret,
                                      verbose=False)
 
     def close(self):
@@ -126,9 +134,64 @@ class IOSDevice(BaseDevice):
         with open(filename, 'w') as f:
             f.write(self.running_config)
 
+    def _uptime_components(self, uptime_full_string):
+        uptime_regex = r'(\d+) days, (\d+) hours, (\d+) minutes'
+        match = re.search(uptime_regex, uptime_full_string)
+
+        days = int(match.group(1))
+        hours = int(match.group(2))
+        minutes = int(match.group(3))
+
+        return days, hours, minutes
+
+    def _uptime_to_string(self, uptime_full_string):
+        days, hours, minutes = self._uptime_components(uptime_full_string)
+        return '%02d:%02d:%02d:00' % (days, hours, minutes)
+
+    def _uptime_to_seconds(self, uptime_full_string):
+        days, hours, minutes = self._uptime_components(uptime_full_string)
+
+        seconds = days * 24 * 60 * 60
+        seconds += hours * 60 * 60
+        seconds += minutes * 60
+
+        return seconds
+
+    def _interfaces_detailed_list(self):
+        ip_int_br_out = self.show('show ip int br')
+        template_dir = get_template_dir()
+        template = os.path.join(template_dir, 'cisco_ios_show_ip_int_brief.template')
+        ip_int_br_data = get_structured_data(template, ip_int_br_out)
+
+        return ip_int_br_data
+
     @property
     def facts(self):
-        pass
+        '''
+        '''
+        facts = {}
+        facts['vendor'] = self.vendor
+
+        show_version_out = self.show('show version')
+        template_dir = get_template_dir()
+        template = os.path.join(template_dir, 'cisco_ios_show_version.template')
+        version_data = get_structured_data(template, show_version_out)[0]
+
+        facts.update(convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM))
+
+        uptime_full_string = version_data['uptime']
+        facts['uptime'] = self._uptime_to_seconds(uptime_full_string)
+        facts['uptime_string'] = self._uptime_to_string(uptime_full_string)
+
+        facts['fqdn'] = 'N/A'
+        facts['interfaces'] = list(x['intf'] for x in self._interfaces_detailed_list())
+
+        # ios-specific facts
+        ios_facts = facts['ios'] = {}
+        ios_facts['config_register'] = version_data['config_register']
+
+        return facts
+
 
     @property
     def running_config(self):
