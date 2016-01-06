@@ -218,7 +218,11 @@ class IOSDevice(BaseDevice):
 
         facts['fqdn'] = 'N/A'
         facts['interfaces'] = list(x['intf'] for x in self._interfaces_detailed_list())
-        facts['vlans'] = list(x['vlan_id'] for x in self._show_vlan())
+
+        if show_version_facts['model'].startswith('WS'):
+            facts['vlans'] = list(x['vlan_id'] for x in self._show_vlan())
+        else:
+            facts['vlans'] = []
 
         # ios-specific facts
         ios_facts = facts['ios'] = {}
