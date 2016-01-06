@@ -1,7 +1,7 @@
 import unittest
 import os
 
-from pyntc import ntc_device, ntc_device_by_name, get_config_from_file
+from pyntc import ntc_device, ntc_device_by_name
 from pyntc.errors import UnsupportedDeviceError
 from pyntc.devices import supported_devices, DEVICE_CLASS_KEY
 from pyntc.devices import BaseDevice, EOSDevice, NXOSDevice

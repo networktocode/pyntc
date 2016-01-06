@@ -2,7 +2,7 @@ import unittest
 import sys
 import os
 
-from pyntc import get_config_from_file, LIB_PATH_ENV_VAR
+from pyntc import _get_config_from_file, LIB_PATH_ENV_VAR
 from pyntc.devices import supported_devices, DEVICE_CLASS_KEY
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), '..', 'fixtures')
@@ -19,7 +19,7 @@ import test_devices
 sys.path.append(os.path.join(os.path.dirname(__file__), 'test_feature'))
 import test_vlan
 
-device_config = get_config_from_file()[0]
+device_config = _get_config_from_file()[0]
 config_sections = device_config.sections()
 conn_names = list(x.split(':')[1] for x in config_sections)
 
