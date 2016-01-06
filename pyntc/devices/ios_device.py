@@ -56,7 +56,7 @@ class IOSDevice(BaseDevice):
 
     def _send_command(self, command):
         response = self.native.send_command(command)
-        if response[0] == '%':
+        if response.startswith == '% ':
             raise CommandError(response)
 
         return response
@@ -86,7 +86,8 @@ class IOSDevice(BaseDevice):
         return responses
 
     def save(self, filename='startup-config'):
-        self.show_list(['copy running-config %s' % filename, '\n'])
+        self.show_list(['copy running-config %s' % filename, '\n', '\n'])
+        return True
 
     def file_copy(self, src, dest=None):
         if dest is None:
@@ -128,19 +129,21 @@ class IOSDevice(BaseDevice):
             print('Need to confirm reboot with confirm=True')
 
     def install_os(self, image_name, **vendor_specifics):
-        self.config('boot system' % image_name)
+        self.config('boot system flash' % image_name)
+        self.save()
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
 
     def _uptime_components(self, uptime_full_string):
-        uptime_regex = r'(\d+) days, (\d+) hours, (\d+) minutes'
-        match = re.search(uptime_regex, uptime_full_string)
+        match_days = re.search(r'(\d+) days?', uptime_full_string)
+        match_hours = re.search(r'(\d+) hours?', uptime_full_string)
+        match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
 
-        days = int(match.group(1))
-        hours = int(match.group(2))
-        minutes = int(match.group(3))
+        days = int(match_days.group(1)) if match_days else 0
+        hours = int(match_hours.group(1)) if match_hours else 0
+        minutes = int(match_minutes.group(1)) if match_minutes else 0
 
         return days, hours, minutes
 
@@ -165,19 +168,36 @@ class IOSDevice(BaseDevice):
 
         return ip_int_br_data
 
-    @property
-    def facts(self):
-        '''
-        '''
-        facts = {}
-        facts['vendor'] = self.vendor
 
+    def _raw_version_data(self):
         show_version_out = self.show('show version')
         template_dir = get_template_dir()
         template = os.path.join(template_dir, 'cisco_ios_show_version.template')
         version_data = get_structured_data(template, show_version_out)[0]
 
-        facts.update(convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM))
+        return version_data
+
+    def _show_version_facts(self):
+        version_data = self._raw_version_data()
+        show_version_facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+
+        return show_version_facts
+
+
+    @property
+    def facts(self):
+        '''
+        '''
+        if hasattr(self, '_facts'):
+            return self._facts
+
+        facts = {}
+        facts['vendor'] = self.vendor
+
+        version_data = self._raw_version_data()
+        show_version_facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+
+        facts.update(show_version_facts)
 
         uptime_full_string = version_data['uptime']
         facts['uptime'] = self._uptime_to_seconds(uptime_full_string)
@@ -190,6 +210,7 @@ class IOSDevice(BaseDevice):
         ios_facts = facts['ios'] = {}
         ios_facts['config_register'] = version_data['config_register']
 
+        self._facts = facts
         return facts
 
 

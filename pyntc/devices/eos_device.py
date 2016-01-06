@@ -63,7 +63,8 @@ class EOSDevice(BaseDevice):
             raise CommandError(e.message)
 
     def save(self, filename='startup-config'):
-        return self.show('copy running-config %s' % filename)
+        self.show('copy running-config %s' % filename)
+        return True
 
     def file_copy(self, src, dest=None):
         fc = EOSFileCopy(self, src)
@@ -76,8 +77,9 @@ class EOSDevice(BaseDevice):
         else:
             print('Need to confirm reboot with confirm=True')
 
-    def install_os(self, image_name, **vendor_specifics):
+    def set_image(self, image_name, **vendor_specifics):
         self.show('install source' % image_name)
+        self.save()
 
     def checkpoint(self, filename):
         self.show('copy running-config %s' % filename)
@@ -131,6 +133,9 @@ class EOSDevice(BaseDevice):
     def facts(self):
         '''
         '''
+        if hasattr(self, '_facts'):
+            return self._facts
+
         facts = {}
         facts['vendor'] = self.vendor
 
@@ -147,6 +152,7 @@ class EOSDevice(BaseDevice):
         facts['interfaces'] = self._get_interface_list()
         facts['vlans'] = self._get_vlan_list()
 
+        self._facts = facts
         return facts
 
     @property
