@@ -17,7 +17,7 @@ class RebootSignal(NTCError):
 
 class EOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor='Arista', device_type='eos')
+        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type='eos')
         self.transport = transport
         self.timeout = timeout
 

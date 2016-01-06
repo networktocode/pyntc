@@ -7,7 +7,7 @@ from pynxos.errors import CLIError
 
 class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=30, port=None, **kwargs):
-        super(NXOSDevice, self).__init__(host, username, password, vendor='Cisco', device_type='nxos')
+        super(NXOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='nxos')
         self.transport = transport
         self.timeout = timeout
 

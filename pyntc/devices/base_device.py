@@ -49,6 +49,13 @@ class BaseDevice(object):
     def backup_running_config(self, filename):
         raise NotImplementedError
 
+    def refresh_facts(self):
+        del self._facts
+        self.facts
+
+    def refresh(self):
+        self.refresh_facts()
+
     @property
     def facts(self):
         raise NotImplementedError

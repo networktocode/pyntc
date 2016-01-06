@@ -20,7 +20,7 @@ class RebootSignal(NTCError):
 
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor='Cisco', device_type='ios')
+        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='ios')
 
         self.native = None
 
@@ -173,9 +173,11 @@ class IOSDevice(BaseDevice):
 
     def _raw_version_data(self):
         show_version_out = self.show('show version')
-        version_data = get_structured_data('cisco_ios_show_version.template', show_version_out)[0]
-
-        return version_data
+        try:
+            version_data = get_structured_data('cisco_ios_show_version.template', show_version_out)[0]
+            return version_data
+        except IndexError:
+            return {}
 
     def _show_version_facts(self):
         version_data = self._raw_version_data()
