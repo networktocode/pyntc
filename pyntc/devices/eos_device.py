@@ -67,6 +67,9 @@ class EOSDevice(BaseDevice):
         return True
 
     def file_copy(self, src, dest=None):
+        self.config('username %s privilege 15 secret %s' % (self.username, self.password))
+        self.config('aaa authorization exec default local')
+
         fc = EOSFileCopy(self, src)
         if not fc.remote_file_exists():
             fc.send()

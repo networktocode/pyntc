@@ -3,7 +3,7 @@ import os
 import re
 
 from .base_device import BaseDevice
-from pyntc.errors import CommandError, NTCError
+from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_template_dir, get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
@@ -43,20 +43,18 @@ class IOSDevice(BaseDevice):
         self.native.disconnect()
 
     def _enter_config(self):
-        if not self.native.check_config_mode():
-            self.native.config_mode()
+        self._enable()
+        self.native.config_mode()
 
     def _enable(self):
-        if self.native.check_config_mode():
-            self.native.exit_config_mode()
-
+        self.native.exit_config_mode()
         if not self.native.check_enable_mode():
             self.native.enable()
 
     def _send_command(self, command):
         response = self.native.send_command(command)
-        if response.startswith == '% ':
-            raise CommandError(response)
+        if '% ' in response:
+            raise CommandError(command, response)
 
         return response
 
@@ -67,8 +65,13 @@ class IOSDevice(BaseDevice):
 
     def config_list(self, commands):
         self._enter_config()
+        entered_commands = []
         for command in commands:
-            self._send_command(command)
+            entered_commands.append(command)
+            try:
+                self._send_command(command)
+            except CommandError as e:
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
     def show(self, command):

@@ -3,7 +3,7 @@ class NTCError(Exception):
         self.message = message
 
     def __repr__(self):
-        return '%s: %s' % (self.__class__.__name__, self.message)
+        return '%s: \n%s' % (self.__class__.__name__, self.message)
 
     __str__ = __repr__
 
@@ -18,9 +18,18 @@ class DeviceNameNotFoundError(NTCError):
         super(DeviceNameNotFoundError, self).__init__(message)
 
 class CommandError(NTCError):
-    def __init__(self, message):
-        message = 'Command was not successful: %s' % message
+    def __init__(self, command, message):
+        self.cli_error_msg = message
+        message = 'Command %s was not successful: %s' % (command, message)
         super(CommandError, self).__init__(message)
+
+class CommandListError(NTCError):
+    def __init__(self, commands, command, message):
+        message = '\nCommand %s failed with message: %s' % (command, message)
+        message += '\nCommand List: \n'
+        for command in commands:
+            message += '\t%s\n' % command
+        super(CommandListError, self).__init__(message)
 
 class FeatureNotFoundError(NTCError):
     def __init__(self, feature, device_type):
