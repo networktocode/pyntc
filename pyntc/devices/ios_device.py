@@ -29,7 +29,6 @@ class IOSDevice(BaseDevice):
         self.password = password
         self.secret = secret
         self.port = int(port)
-        self.open()
 
     def open(self):
         self.native = ConnectHandler(device_type='cisco_ios',
@@ -162,18 +161,19 @@ class IOSDevice(BaseDevice):
 
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show('show ip int br')
-        template_dir = get_template_dir()
-        template = os.path.join(template_dir, 'cisco_ios_show_ip_int_brief.template')
-        ip_int_br_data = get_structured_data(template, ip_int_br_out)
+        ip_int_br_data = get_structured_data('cisco_ios_show_ip_int_brief.template', ip_int_br_out)
 
         return ip_int_br_data
 
+    def _show_vlan(self):
+        show_vlan_out = self.show('show vlan')
+        show_vlan_data = get_structured_data('cisco_ios_show_vlan.template', show_vlan_out)
+
+        return show_vlan_data
 
     def _raw_version_data(self):
         show_version_out = self.show('show version')
-        template_dir = get_template_dir()
-        template = os.path.join(template_dir, 'cisco_ios_show_version.template')
-        version_data = get_structured_data(template, show_version_out)[0]
+        version_data = get_structured_data('cisco_ios_show_version.template', show_version_out)[0]
 
         return version_data
 
@@ -205,6 +205,7 @@ class IOSDevice(BaseDevice):
 
         facts['fqdn'] = 'N/A'
         facts['interfaces'] = list(x['intf'] for x in self._interfaces_detailed_list())
+        facts['vlans'] = list(x['vlan_id'] for x in self._show_vlan())
 
         # ios-specific facts
         ios_facts = facts['ios'] = {}

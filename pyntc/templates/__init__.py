@@ -9,10 +9,15 @@ def get_template_dir():
     except KeyError:
         return os.path.realpath(os.path.dirname(__file__))
 
-def get_structured_data(template, rawtxt):
+def get_template(template_name):
+    template_dir = get_template_dir()
+    return os.path.join(template_dir, template_name)
+
+def get_structured_data(template_name, rawtxt):
     """Returns structured data given raw text using
     TextFSM templates
     """
+    template = get_template(template_name)
     fsm = textfsm.TextFSM(open(template))
     table = fsm.ParseText(rawtxt)
 
