@@ -35,7 +35,7 @@ class EOSFileCopy(BaseFileCopy):
 
     def remote_file_exists(self):
         try:
-            self.device.show('dir {}'.format(self.remote_basename))
+            self.device.show('dir {}'.format(self.remote))
         except:
             return False
 
@@ -53,7 +53,7 @@ class EOSFileCopy(BaseFileCopy):
 
     def get_remote_md5(self):
         try:
-            hash_out = self.device.show('verify /md5 {}'.format(self.remote_basename), raw_text=True)
+            hash_out = self.device.show('verify /md5 {}'.format(self.remote), raw_text=True)
             hash_out = hash_out.split('=')[1].strip()
             return hash_out
         except:

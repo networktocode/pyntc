@@ -91,19 +91,27 @@ class IOSDevice(BaseDevice):
         self.show_list(['copy running-config %s' % filename, '\n', '\n'])
         return True
 
-    def file_copy(self, src, dest=None):
+    def stage_file_copy(self, src, dest=None):
         if dest is None:
-            dest = src
-        fc = FileTransfer(self.native, src, dest)
-        if not fc.verify_space_available():
-            raise FileTransferError('Not enough space available.')
-        if fc.check_file_exists() and fc.compare_md5():
-            return
+            dest = os.path.basename(src)
 
-        fc.enable_scp()
-        fc.establish_scp_conn()
-        fc.transfer_file()
-        fc.close_scp_chan()
+        self.fc = FileTransfer(self.native, src, dest)
+
+    def file_copy_remote_exists(self):
+        self._enable()
+        if self.fc.check_file_exists() and self.fc.compare_md5():
+            return True
+        return False
+
+    def file_copy(self):
+        self._enable()
+        if not self.fc.verify_space_available():
+            raise FileTransferError('Not enough space available.')
+
+        self.fc.enable_scp()
+        self.fc.establish_scp_conn()
+        self.fc.transfer_file()
+        self.fc.close_scp_chan()
 
     def reboot(self, timer=0, confirm=False):
         if confirm:

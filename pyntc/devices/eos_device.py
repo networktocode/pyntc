@@ -66,13 +66,18 @@ class EOSDevice(BaseDevice):
         self.show('copy running-config %s' % filename)
         return True
 
-    def file_copy(self, src, dest=None):
-        self.config('username %s privilege 15 secret %s' % (self.username, self.password))
-        self.config('aaa authorization exec default local')
+    def stage_file_copy(self, src, dest=None):
+        if dest is None:
+            dest = src
+        self.fc = EOSFileCopy(self, src, dest)
 
-        fc = EOSFileCopy(self, src)
-        if not fc.remote_file_exists():
-            fc.send()
+    def file_copy_remote_exists(self):
+        if self.fc.remote_file_exists():
+            return True
+        return False
+
+    def file_copy(self):
+        self.fc.send()
 
     def reboot(self, confirm=False):
         if confirm:

@@ -46,8 +46,14 @@ class NXOSDevice(BaseDevice):
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
 
-    def file_copy(self, src, dest=None):
-        self.native.file_copy(src, dest)
+    def stage_file_copy(self, src, dest=None):
+        return self.native.stage_file_copy(src, dest)
+
+    def file_copy_remote_exists(self):
+        return self.native.file_copy_remote_exists()
+
+    def file_copy(self):
+        return self.native.file_copy()
 
     def reboot(self, timer=0, confirm=False):
         self.native.reboot(confirm=confirm)
