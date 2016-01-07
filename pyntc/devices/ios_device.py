@@ -105,8 +105,8 @@ class IOSDevice(BaseDevice):
 
     def file_copy(self):
         self._enable()
-        if not self.fc.verify_space_available():
-            raise FileTransferError('Not enough space available.')
+#        if not self.fc.verify_space_available():
+#            raise FileTransferError('Not enough space available.')
 
         self.fc.enable_scp()
         self.fc.establish_scp_conn()
