@@ -1,8 +1,10 @@
 from .base_device import BaseDevice
 from pyntc.errors import CommandError
 from pyntc.data_model.converters import strip_unicode
+from pyntc.features.file_copy.base_file_copy import FileTransferError
 
 from pynxos.device import Device as NXOSNative
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
 
 class NXOSDevice(BaseDevice):
@@ -49,11 +51,14 @@ class NXOSDevice(BaseDevice):
     def stage_file_copy(self, src, dest=None):
         return self.native.stage_file_copy(src, dest)
 
-    def file_copy_remote_exists(self):
-        return self.native.file_copy_remote_exists()
+    def file_copy_remote_exists(self, src, dest):
+        return self.native.file_copy_remote_exists(src, dest)
 
-    def file_copy(self):
-        return self.native.file_copy()
+    def file_copy(self, src, dest):
+        try:
+            return self.native.file_copy(src, dest)
+        except NXOSFileTransferError:
+            raise FileTransferError
 
     def reboot(self, timer=0, confirm=False):
         self.native.reboot(confirm=confirm)

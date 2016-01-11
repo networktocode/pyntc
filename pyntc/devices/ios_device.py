@@ -7,6 +7,7 @@ from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_template_dir, get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
+from pyntc.features.file_copy.base_file_copy import FileTransferError
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -91,27 +92,35 @@ class IOSDevice(BaseDevice):
         self.show_list(['copy running-config %s' % filename, '\n', '\n'])
         return True
 
-    def stage_file_copy(self, src, dest=None):
+    def _file_copy_instance(self, src, dest=None):
         if dest is None:
             dest = os.path.basename(src)
 
-        self.fc = FileTransfer(self.native, src, dest)
+        fc = FileTransfer(self.native, src, dest)
+        return fc
 
-    def file_copy_remote_exists(self):
+    def file_copy_remote_exists(self, src, dest=None):
+        fc = self._file_copy_instance(src, dest)
+
         self._enable()
-        if self.fc.check_file_exists() and self.fc.compare_md5():
+        if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
 
-    def file_copy(self):
+    def file_copy(self, src, dest=None):
+        fc = self._file_copy_instance(src, dest)
         self._enable()
 #        if not self.fc.verify_space_available():
 #            raise FileTransferError('Not enough space available.')
 
-        self.fc.enable_scp()
-        self.fc.establish_scp_conn()
-        self.fc.transfer_file()
-        self.fc.close_scp_chan()
+        try:
+            fc.enable_scp()
+            fc.establish_scp_conn()
+            fc.transfer_file()
+        except:
+            raise FileTransferError
+        finally:
+            fc.close_scp_chan()
 
     def reboot(self, timer=0, confirm=False):
         if confirm:

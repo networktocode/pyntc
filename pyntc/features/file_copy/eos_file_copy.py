@@ -8,11 +8,8 @@ from .base_file_copy import BaseFileCopy, FileTransferError
 class EOSFileCopy(BaseFileCopy):
     def __init__(self, device, local, remote=None, port=22):
         self.device = device
-
         self.local = local
         self.remote = remote or os.path.basename(local)
-        self.remote_basename = os.path.basename(self.remote)
-
         self.port = port
 
     def get_remote_size(self):
@@ -95,8 +92,7 @@ class EOSFileCopy(BaseFileCopy):
             else:
                 scp.put(self.local, self.remote)
         except Exception as e:
-            raise FileTransferError(
-                'Could not transfer file. There was an error during transfer. Please make sure the file exists.')
+            raise FileTransferError
         finally:
             scp.close()
 

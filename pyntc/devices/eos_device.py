@@ -71,13 +71,15 @@ class EOSDevice(BaseDevice):
             dest = src
         self.fc = EOSFileCopy(self, src, dest)
 
-    def file_copy_remote_exists(self):
-        if self.fc.remote_file_exists():
+    def file_copy_remote_exists(self, src, dest=None):
+        fc = EOSFileCopy(self, src, dest)
+        if fc.remote_file_exists():
             return True
         return False
 
-    def file_copy(self):
-        self.fc.send()
+    def file_copy(self, src, dest=None):
+        fc = EOSFileCopy(self, src, dest)
+        fc.send()
 
     def reboot(self, confirm=False):
         if confirm:
