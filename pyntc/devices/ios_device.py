@@ -2,7 +2,7 @@ import signal
 import os
 import re
 
-from .base_device import BaseDevice
+from .base_device import BaseDevice, SetBootImageError
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_template_dir, get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
@@ -147,9 +147,32 @@ class IOSDevice(BaseDevice):
         else:
             print('Need to confirm reboot with confirm=True')
 
-    def install_os(self, image_name, **vendor_specifics):
-        self.config('boot system flash' % image_name)
-        self.save()
+    def _is_catalyst(self):
+        return self.facts['model'].startswith('WS-')
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        if self._is_catalyst():
+            self.config('boot system flash:/%s' % image_name)
+        else:
+            self.config_list(['no boot system', 'boot system flash %s' % image_name])
+
+    def get_boot_options(self):
+        if self._is_catalyst():
+            show_boot_out = self.show('show boot')
+            boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
+            boot_path = re.search(boot_path_regex, show_boot_out).group(1)
+            boot_image = boot_path.replace('flash:/', '')
+            return dict(sys=boot_image)
+        else:
+            show_boot_out = self.show('show run | inc boot')
+            boot_path_regex = r'boot system flash (\S+)'
+
+            match = re.search(boot_path_regex, show_boot_out)
+            if match:
+                boot_image = match.group(1)
+            else:
+                boot_image = None
+            return dict(sys=boot_image)
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:

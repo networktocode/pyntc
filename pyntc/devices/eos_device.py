@@ -2,7 +2,7 @@ import signal
 import time
 
 from .base_device import BaseDevice
-from pyntc.errors import CommandError, NTCError
+from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
 from pyntc.features.file_copy.eos_file_copy import EOSFileCopy
@@ -45,7 +45,7 @@ class EOSDevice(BaseDevice):
         try:
             self.native.config(commands)
         except EOSCommandError as e:
-            raise CommandError(e.message)
+            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def show(self, command, raw_text=False):
         response_list = self.show_list([command], raw_text=raw_text)
@@ -60,7 +60,7 @@ class EOSDevice(BaseDevice):
         try:
             return strip_unicode(self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandError(e.message)
+            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def save(self, filename='startup-config'):
         self.show('copy running-config %s' % filename)
@@ -87,9 +87,13 @@ class EOSDevice(BaseDevice):
         else:
             print('Need to confirm reboot with confirm=True')
 
-    def set_image(self, image_name, **vendor_specifics):
-        self.show('install source' % image_name)
-        self.save()
+    def get_boot_options(self):
+        image = self.show('show boot-config')['softwareImage']
+        image = image.replace('flash:/', '')
+        return dict(sys=image)
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        self.show('install source %s' % image_name)
 
     def checkpoint(self, filename):
         self.show('copy running-config %s' % filename)

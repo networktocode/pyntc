@@ -1,6 +1,10 @@
 import importlib
 
-from pyntc.errors import FeatureNotFoundError
+from pyntc.errors import NTCError, FeatureNotFoundError
+
+def SetBootImageError(NTCError):
+    def __init__(self, message):
+        super(SetBootImageError, self).__init__(message)
 
 class BaseDevice(object):
     def __init__(self, host, username, password, vendor=None, device_type=None, **kwargs):

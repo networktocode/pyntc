@@ -21,6 +21,9 @@ class NXOSDevice(BaseDevice):
     def close(self):
         pass
 
+    def set_timeout(self, timeout):
+        self.native.timeout = timeout
+
     def config(self, command):
         try:
             self.native.config(command)
@@ -63,8 +66,11 @@ class NXOSDevice(BaseDevice):
     def reboot(self, timer=0, confirm=False):
         self.native.reboot(confirm=confirm)
 
-    def install_os(self, image_name, **vendor_specifics):
-        return self.native.install_os(image_name)
+    def get_boot_options(self):
+        return self.native.get_boot_options()
+
+    def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+        return self.native.set_boot_options(image_name, kickstart=kickstart)
 
     def checkpoint(self, filename):
         self.native.checkpoint(filename)
