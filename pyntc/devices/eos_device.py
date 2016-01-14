@@ -1,7 +1,7 @@
 import signal
 import time
 
-from .base_device import BaseDevice
+from .base_device import BaseDevice, RollbackError
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
@@ -66,10 +66,6 @@ class EOSDevice(BaseDevice):
         self.show('copy running-config %s' % filename)
         return True
 
-    def stage_file_copy(self, src, dest=None):
-        if dest is None:
-            dest = src
-        self.fc = EOSFileCopy(self, src, dest)
 
     def file_copy_remote_exists(self, src, dest=None):
         fc = EOSFileCopy(self, src, dest)
@@ -142,6 +138,15 @@ class EOSDevice(BaseDevice):
         seconds = uptime
 
         return '%02d:%02d:%02d:%02d' % (days, hours, mins, seconds)
+
+    def rollback(self, rollback_to):
+        try:
+            self.show('configure replace %s force' % rollback_to)
+        except (CommandError, CommandListError):
+            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
+
+    def checkpoint(self, checkpoint_file):
+        self.show('copy running-config %s' % checkpoint_file)
 
     @property
     def facts(self):

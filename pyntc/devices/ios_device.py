@@ -2,7 +2,7 @@ import signal
 import os
 import re
 
-from .base_device import BaseDevice, SetBootImageError
+from .base_device import BaseDevice, SetBootImageError, RollbackError
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_template_dir, get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
@@ -18,6 +18,7 @@ class FileTransferError(NTCError):
 
 class RebootSignal(NTCError):
     pass
+
 
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
@@ -54,7 +55,7 @@ class IOSDevice(BaseDevice):
 
     def _send_command(self, command):
         response = self.native.send_command(command)
-        if '% ' in response:
+        if '% ' in response or 'Error:' in response:
             raise CommandError(command, response)
 
         return response
@@ -228,6 +229,14 @@ class IOSDevice(BaseDevice):
 
         return show_version_facts
 
+    def rollback(self, rollback_to):
+        try:
+            self.show('configure replace flash:%s force' % rollback_to)
+        except CommandError:
+            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
+
+    def checkpoint(self, checkpoint_file):
+        self.save(filename=checkpoint_file)
 
     @property
     def facts(self):

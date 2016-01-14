@@ -1,4 +1,4 @@
-from .base_device import BaseDevice
+from .base_device import BaseDevice, RollbackError
 from pyntc.errors import CommandError
 from pyntc.data_model.converters import strip_unicode
 from pyntc.features.file_copy.base_file_copy import FileTransferError
@@ -51,9 +51,6 @@ class NXOSDevice(BaseDevice):
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
 
-    def stage_file_copy(self, src, dest=None):
-        return self.native.stage_file_copy(src, dest)
-
     def file_copy_remote_exists(self, src, dest):
         return self.native.file_copy_remote_exists(src, dest)
 
@@ -73,10 +70,16 @@ class NXOSDevice(BaseDevice):
         return self.native.set_boot_options(image_name, kickstart=kickstart)
 
     def checkpoint(self, filename):
-        self.native.checkpoint(filename)
+        try:
+            self.native.checkpoint(filename)
+        except CLIError:
+            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
 
     def rollback(self, filename):
-        self.native.rollback(filename)
+        try:
+            self.native.rollback(filename)
+        except CLIError:
+            raise RollbackError('Rollback unsuccessufl, %s may not exist.' % filename)
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)
