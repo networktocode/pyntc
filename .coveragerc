@@ -18,6 +18,12 @@ omit = *request*
        *http*
        *queue*
        *functools*
+       *Crypto*
+       *ecdsa*
+       *netmiko*
+       *paramiko*
+       *scp*
+       *textfsm*
 
 [report]
 exclude_lines =

@@ -2,7 +2,7 @@ import signal
 import os
 import re
 
-from .base_device import BaseDevice, SetBootImageError, RollbackError
+from .base_device import BaseDevice, SetBootImageError, RollbackError, FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_template_dir, get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
@@ -12,9 +12,6 @@ from pyntc.features.file_copy.base_file_copy import FileTransferError
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-
-class FileTransferError(NTCError):
-    pass
 
 class RebootSignal(NTCError):
     pass
@@ -31,18 +28,24 @@ class IOSDevice(BaseDevice):
         self.password = password
         self.secret = secret
         self.port = int(port)
+        self._connected = False
+        self.open()
 
     def open(self):
-        self.native = ConnectHandler(device_type='cisco_ios',
-                                     ip=self.host,
-                                     username=self.username,
-                                     password=self.password,
-                                     port=self.port,
-                                     secret=self.secret,
-                                     verbose=False)
+        if not self._connected:
+            self.native = ConnectHandler(device_type='cisco_ios',
+                                         ip=self.host,
+                                         username=self.username,
+                                         password=self.password,
+                                         port=self.port,
+                                         secret=self.secret,
+                                         verbose=False)
+            self._connected = True
 
     def close(self):
-        self.native.disconnect()
+        if self._connected:
+            self.native.disconnect()
+            self._connected = False
 
     def _enter_config(self):
         self._enable()
@@ -240,8 +243,6 @@ class IOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        '''
-        '''
         if hasattr(self, '_facts'):
             return self._facts
 

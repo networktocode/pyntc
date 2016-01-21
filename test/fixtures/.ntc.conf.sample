@@ -8,3 +8,8 @@ transport: http
 username: user
 password: arista
 transport: http
+
+[ios:test_ios]
+username: user
+password: pass
+secret: cisco

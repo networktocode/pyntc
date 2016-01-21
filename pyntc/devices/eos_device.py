@@ -1,9 +1,9 @@
-import signal
 import time
 
 from .base_device import BaseDevice, RollbackError
 from pyntc.errors import CommandError, CommandListError, NTCError
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
+from pyntc.data_model.converters import convert_dict_by_key, \
+    convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
 from pyntc.features.file_copy.eos_file_copy import EOSFileCopy
 from pyntc.features.vlans.eos_vlans import EOSVlans
@@ -12,8 +12,10 @@ from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
+
 class RebootSignal(NTCError):
     pass
+
 
 class EOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
@@ -45,7 +47,8 @@ class EOSDevice(BaseDevice):
         try:
             self.native.config(commands)
         except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+            raise CommandListError(
+                commands, e.commands[len(e.commands) - 1], e.message)
 
     def show(self, command, raw_text=False):
         response_list = self.show_list([command], raw_text=raw_text)
@@ -58,14 +61,18 @@ class EOSDevice(BaseDevice):
             encoding = 'json'
 
         try:
-            return strip_unicode(self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text))
+            return strip_unicode(
+                self._parse_response(
+                    self.native.enable(
+                        commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+            raise CommandListError(commands,
+                                   e.commands[len(e.commands) - 1],
+                                   e.message)
 
     def save(self, filename='startup-config'):
         self.show('copy running-config %s' % filename)
         return True
-
 
     def file_copy_remote_exists(self, src, dest=None):
         fc = EOSFileCopy(self, src, dest)
@@ -91,27 +98,23 @@ class EOSDevice(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         self.show('install source %s' % image_name)
 
-    def checkpoint(self, filename):
-        self.show('copy running-config %s' % filename)
-
-    def rollback(self, filename):
-        self.show('configure replace %s force' %
-            filename)
-
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
 
     def _interfaces_status_list(self):
         interfaces_list = []
-        interfaces_status_dictionary = self.show('show interfaces status')['interfaceStatuses']
+        interfaces_status_dictionary = self.show(
+            'show interfaces status')['interfaceStatuses']
         for key in interfaces_status_dictionary:
             interface_dictionary = interfaces_status_dictionary[key]
             interface_dictionary['interface'] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(
-            interfaces_list, eos_key_maps.INTERFACES_KM, fill_in=True, whitelist=['interface'])
+        return convert_list_by_key(interfaces_list,
+                                   eos_key_maps.INTERFACES_KM,
+                                   fill_in=True,
+                                   whitelist=['interface'])
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()

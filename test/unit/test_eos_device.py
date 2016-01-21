@@ -1,17 +1,23 @@
 import unittest
-from mock import Mock
+import mock
+
+from device_mocks.eos import enable, config
 
 from pyntc.devices import EOSDevice
 
+
 class TestEOSDevice(unittest.TestCase):
-    def setUp(self):
+
+    @mock.patch('pyeapi.client.Node', autospec=True)
+    def setUp(self, mock_node):
         self.device = EOSDevice('host', 'user', 'pass')
-        self.device.native = Mock()
+
+        mock_node.enable = enable
+        mock_node.config = config
+        self.device.native = mock_node
 
     def test_config(self):
         command = 'interface Eth 1'
-        self.device.native.config = Mock(return_value=[{}])
-
         result = self.device.config(command)
 
         self.assertIsNone(result)
@@ -19,8 +25,6 @@ class TestEOSDevice(unittest.TestCase):
 
     def test_config_list(self):
         commands = ['interface Eth1/2', 'no shutdown']
-        self.device.native.config = Mock(return_value=[{}, {}])
-
         result = self.device.config_list(commands)
 
         self.assertIsNone(result)

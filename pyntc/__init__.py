@@ -1,7 +1,7 @@
 import os
 
 from .devices import supported_devices, DEVICE_CLASS_KEY
-from .errors import UnsupportedDeviceError, DeviceNameNotFoundError
+from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
 
 try:
     from configparser import ConfigParser as SafeConfigParser
@@ -11,16 +11,53 @@ except ImportError:
 LIB_PATH_ENV_VAR = 'PYNTC_CONF'
 LIB_PATH_DEFAULT = '~/.ntc.conf'
 
+
 def ntc_device(device_type, *args, **kwargs):
+    """Instantiate and return an instance of a device subclassed
+    from ``pyntc.devices.BaseDevice``. ``*args`` and ``*kwargs`` are passed
+    directly to the device initializer.
+
+    Arguments:
+        device_type (string): A valid device_type
+            listed in ``pyntc.devices.supported_devices``
+
+    Returns:
+        An instance of a subclass of ``pyntc.devices.BaseDevice``.
+
+    Raises:
+        UnsupportedDeviceError: if the device_type is unsupported.
+    """
     try:
         device_class = supported_devices[device_type][DEVICE_CLASS_KEY]
         return device_class(*args, **kwargs)
     except KeyError:
         raise UnsupportedDeviceError(device_type)
 
+
 def ntc_device_by_name(name, filename=None):
+    """Instantiate and return an instance of a device subclassed
+    from ``pyntc.devices.BaseDevice`` based on its name in an
+    NTC configuration file.
+
+    If no filename is given the environment variable PYNTC_CONF is checked
+    for a path, and then ~/.ntc.conf.
+
+    Arguments:
+        name (string): Name of the device as listed in teh NTC configuration file.
+        filename (string): (Optional) Path to NTC configuration file that includes
+            the ``name`` argument as section header.
+
+    Raises:
+        DeviceNameNotFoundError: if the name is not found in the
+            NTC configuration file.
+        ConfFileNotFoundError: if no NTC configuration can be found.
+    """
     config, filename = _get_config_from_file(filename=filename)
     sections = config.sections()
+
+    if not sections:
+        raise ConfFileNotFoundError(filename)
+
     for section in sections:
         if ':' in section:
             device_type_and_conn_name = section.split(':')
@@ -35,6 +72,7 @@ def ntc_device_by_name(name, filename=None):
                 return ntc_device(device_type, **device_kwargs)
 
     raise DeviceNameNotFoundError(name, filename)
+
 
 def _get_config_from_file(filename=None):
     if filename is None:
