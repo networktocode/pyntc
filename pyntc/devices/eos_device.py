@@ -41,7 +41,10 @@ class EOSDevice(BaseDevice):
             return list(x['result'] for x in response)
 
     def config(self, command):
-        self.config_list([command])
+        try:
+            self.config_list([command])
+        except CommandListError as e:
+            raise CommandError(e.command, e.message)
 
     def config_list(self, commands):
         try:
@@ -51,8 +54,11 @@ class EOSDevice(BaseDevice):
                 commands, e.commands[len(e.commands) - 1], e.message)
 
     def show(self, command, raw_text=False):
-        response_list = self.show_list([command], raw_text=raw_text)
-        return response_list[0]
+        try:
+            response_list = self.show_list([command], raw_text=raw_text)
+            return response_list[0]
+        except CommandListError as e:
+            raise CommandError(e.command, e.message)
 
     def show_list(self, commands, raw_text=False):
         if raw_text:
@@ -66,7 +72,7 @@ class EOSDevice(BaseDevice):
                     self.native.enable(
                         commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandListEprror(commands,
+            raise CommandListError(commands,
                                    e.commands[len(e.commands) - 1],
                                    e.message)
 
@@ -92,7 +98,7 @@ class EOSDevice(BaseDevice):
 
     def get_boot_options(self):
         image = self.show('show boot-config')['softwareImage']
-        image = image.replace('flash:/', '')
+        image = image.replace('flash:', '')
         return dict(sys=image)
 
     def set_boot_options(self, image_name, **vendor_specifics):

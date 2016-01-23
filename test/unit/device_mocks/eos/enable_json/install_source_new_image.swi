@@ -1,0 +1,9 @@
+{
+    "command": "install source new_image.swi",
+    "result": {
+        "messages": [
+            "Preparing new boot-config... done.\nCommitting changes... done.\nInstallation succeeded.\n"
+        ]
+    },
+    "encoding": "json"
+}

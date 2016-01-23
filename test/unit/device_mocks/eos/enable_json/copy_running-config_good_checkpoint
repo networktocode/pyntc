@@ -1,0 +1,9 @@
+{
+    "command": "copy running-config good_checkpoint",
+    "result": {
+        "messages": [
+            "Copy completed successfully."
+        ]
+    },
+    "encoding": "json"
+}

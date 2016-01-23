@@ -35,6 +35,8 @@ class CommandError(NTCError):
 
 class CommandListError(NTCError):
     def __init__(self, commands, command, message):
+        self.commands = commands
+        self.command = command
         message = '\nCommand %s failed with message: %s' % (command, message)
         message += '\nCommand List: \n'
         for command in commands:
