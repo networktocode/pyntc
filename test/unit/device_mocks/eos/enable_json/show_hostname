@@ -1,0 +1,8 @@
+{
+    "command": "show hostname",
+    "result": {
+        "hostname": "eos-spine1",
+        "fqdn": "eos-spine1.ntc.com"
+    },
+    "encoding": "json"
+}

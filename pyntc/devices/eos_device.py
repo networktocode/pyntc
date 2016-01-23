@@ -66,7 +66,7 @@ class EOSDevice(BaseDevice):
                     self.native.enable(
                         commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandListError(commands,
+            raise CommandListEprror(commands,
                                    e.commands[len(e.commands) - 1],
                                    e.message)
 
@@ -146,15 +146,14 @@ class EOSDevice(BaseDevice):
         try:
             self.show('configure replace %s force' % rollback_to)
         except (CommandError, CommandListError):
-            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
+            raise RollbackError(
+                'Rollback unsuccessful. %s may not exist.' % rollback_to)
 
     def checkpoint(self, checkpoint_file):
         self.show('copy running-config %s' % checkpoint_file)
 
     @property
     def facts(self):
-        '''
-        '''
         if hasattr(self, '_facts'):
             return self._facts
 

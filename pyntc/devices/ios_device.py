@@ -76,7 +76,8 @@ class IOSDevice(BaseDevice):
             try:
                 self._send_command(command)
             except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+                raise CommandListError(
+                    entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
     def show(self, command):

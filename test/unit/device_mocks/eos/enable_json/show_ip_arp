@@ -1,0 +1,18 @@
+{
+    "command": "show ip arp",
+    "result": {
+        "ipV4Neighbors": [
+            {
+                "hwAddress": "2cc2.60ff.0011",
+                "interface": "Management1",
+                "age": 0,
+                "address": "10.0.0.2"
+            }
+        ],
+        "notLearnedEntries": 0,
+        "totalEntries": 1,
+        "dynamicEntries": 1,
+        "staticEntries": 0
+    },
+    "encoding": "json"
+}
