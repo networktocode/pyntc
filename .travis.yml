@@ -6,7 +6,7 @@ python:
     - "3.3"
 
 install:
-    - pip install --process-dependency-links pyntc
+    - pip install --process-dependency-links .pyntc/ --upgrade
 
 script:
     - coverage run -m unittest discover ./test/unit -v
