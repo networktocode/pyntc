@@ -1,3 +1,5 @@
+# Key maps for EOS devices are stored here.
+
 BASIC_FACTS_KM = {
     'model': 'modelName',
     'os_version': 'internalVersion',

@@ -14,7 +14,7 @@ install_requires = [
     'paramiko',
     'pynxos>=0.0.2',
     'coverage',
-    'mock',
+    'mock>=1.3',
 ]
 
 dependency_links = []
