@@ -19,6 +19,12 @@ install_requires = [
 
 dependency_links = []
 
+author = 'Network To Code'
+author_email = 'ntc@networktocode.com'
+url = 'https://github.com/networktocode/pyntc'
+download_url = 'https://github.com/networktocode/pyntc/tarball/master'
+description = 'A multi-vendor library for managing network devices.'
+
 if sys.version_info.major >= 3:
     install_requires.append('textfsm==1.0.1')
     install_requires.append('pyeapi==9.9.9')
@@ -38,4 +44,9 @@ setup(name=name,
       package_data=package_data,
       install_requires=install_requires,
       dependency_links=dependency_links,
+      url=url,
+      download_url=download_url,
+      author=author,
+      author_email=author_email,
+      description=description,
 )
