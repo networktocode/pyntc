@@ -1,21 +1,26 @@
-from .eos_device import EOSDevice
-from .nxos_device import NXOSDevice
-from .ios_device import IOSDevice
+"""Supported devices are stored here. Every supported device needs a
+device_type stored as a string, and a class subclassed from BaseDevice.
+"""
+
+from .eos_device import EOSDevice, EOS_API_DEVICE_TYPE
+from .nxos_device import NXOSDevice, NXOS_API_DEVICE_TYPE
+from .ios_device import IOSDevice, IOS_SSH_DEVICE_TYPE
 from .base_device import BaseDevice
 
 
 DEVICE_CLASS_KEY = 'device_class'
 
+
 supported_devices = {
-    'eos': {
+    EOS_API_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: EOSDevice,
     },
 
-    'nxos': {
+    NXOS_API_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: NXOSDevice,
     },
 
-    'ios': {
+    IOS_SSH_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: IOSDevice
     }
 }

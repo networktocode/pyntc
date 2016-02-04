@@ -1,3 +1,6 @@
+"""Kickoff functions for getting instancs of device objects.
+"""
+
 import os
 
 from .devices import supported_devices, DEVICE_CLASS_KEY

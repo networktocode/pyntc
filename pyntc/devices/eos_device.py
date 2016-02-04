@@ -1,16 +1,21 @@
+"""Module for using an Arista EOS device over the eAPI.
+"""
+
 import time
 
-from .base_device import BaseDevice, RollbackError
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.data_model.converters import convert_dict_by_key, \
     convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
-from pyntc.features.file_copy.eos_file_copy import EOSFileCopy
-from pyntc.features.vlans.eos_vlans import EOSVlans
+from .system_features.file_copy.eos_file_copy import EOSFileCopy
+from .system_features.vlans.eos_vlans import EOSVlans
+from .base_device import BaseDevice, RollbackError
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
+
+EOS_API_DEVICE_TYPE = 'arista_eos_eapi'
 
 
 class RebootSignal(NTCError):
@@ -19,7 +24,7 @@ class RebootSignal(NTCError):
 
 class EOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type='eos')
+        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type=EOS_API_DEVICE_TYPE)
         self.transport = transport
         self.timeout = timeout
 
@@ -124,7 +129,7 @@ class EOSDevice(BaseDevice):
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
-        iface_list = list(x['interface'] for x in iface_detailed_list)
+        iface_list = sorted(list(x['interface'] for x in iface_detailed_list))
 
         return iface_list
 
@@ -167,14 +172,18 @@ class EOSDevice(BaseDevice):
         facts['vendor'] = self.vendor
 
         sh_version_output = self.show('show version')
-        facts.update(convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM))
+        facts.update(
+            convert_dict_by_key(
+                sh_version_output, eos_key_maps.BASIC_FACTS_KM))
 
         uptime = int(time.time() - sh_version_output['bootupTimestamp'])
         facts['uptime'] = uptime
         facts['uptime_string'] = self._uptime_to_string(uptime)
 
         sh_hostname_output = self.show('show hostname')
-        facts.update(convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn']))
+        facts.update(
+            convert_dict_by_key(
+                sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn']))
 
         facts['interfaces'] = self._get_interface_list()
         facts['vlans'] = self._get_vlan_list()

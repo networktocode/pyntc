@@ -1,0 +1,403 @@
+!Command: show startup-config
+!Time: Wed Jan 27 18:23:01 2016
+!Startup config saved at: Thu Jan 14 15:46:08 2016
+version 7.0(3)I2(1)
+hostname n9k1
+vdc n9k1 id 1
+  limit-resource vlan minimum 16 maximum 4094
+  limit-resource vrf minimum 2 maximum 4096
+  limit-resource port-channel minimum 0 maximum 768
+  limit-resource u4route-mem minimum 248 maximum 248
+  limit-resource u6route-mem minimum 96 maximum 96
+  limit-resource m4route-mem minimum 58 maximum 58
+  limit-resource m6route-mem minimum 8 maximum 8
+feature nxapi
+feature bash-shell
+feature scp-server
+cfs eth distribute
+feature ospf
+feature interface-vlan
+feature hsrp
+feature lacp
+feature vpc
+feature lldp
+no mac address-table notification mac-move
+no password strength-check
+username admin password 5 $5$QV/nmT13$e7qNNulbvwMZSaLQHkB66X6eXGTjMvvUrQ2wFIVwq02  role network-admin
+username cisco password 5 $1$nGd5VWnS$LJ/a9ztNEt6xruMCG2Erl/  role network-admin
+nxapi https port 8443
+ip domain-lookup
+ip domain-name cisconxapi.com
+ip host pm.ntc.com 10.3.50.149
+ip access-list INBOUND_MGMT
+  statistics per-entry
+  20 permit tcp 63.118.185.0/24 10.1.100.20/32 eq 22
+  30 permit icmp any 10.1.100.20/32
+  40 permit tcp any 10.1.100.20/32 eq 443
+  50 permit tcp any 10.1.100.20/32 eq www
+  60 permit ip 10.1.100.0/24 10.1.100.20/32
+  70 permit tcp 89.101.202.0/24 10.1.100.20/32 eq 22
+  80 permit udp any 10.1.100.20/32 eq snmp
+ip access-list acl-test
+  10 permit ip 1.1.1.1/32 any
+  20 permit ip 1.1.1.1/24 any
+  30 permit tcp any neq finger any ack psh rst fin
+  40 permit tcp 1.1.1.1/32 any
+  50 permit tcp 1.1.1.1/32 range time bgp any
+  60 permit tcp 1.1.1.1/32 addrgroup ciao
+  70 permit tcp addrgroup ciao addrgroup ciao
+  80 permit tcp any range www talk any urg log
+mac access-list mac_acl_test
+  10 permit 000e.000e.000e 000e.000e.000e 00aa.00aa.00aa 00aa.00ae.00ac aarp cos 0
+ip access-list test
+ip access-list test-acl
+copp profile strict
+snmp-server source-interface trap port-channel10
+snmp-server source-interface inform port-channel10
+snmp-server user admin network-admin auth md5 0xb38774329b48afb669c81b39ef5073d0 priv 0xb38774329b48afb669c81b39ef5073d0 localizedkey
+snmp-server host 192.0.2.1 traps version 2c MYSTRING
+snmp-server host 192.0.100.1 traps version 2c two
+snmp-server host 192.0.100.1 source-interface mgmt0
+snmp-server host 1.1.1.1 informs version 3 auth JEDELMAN
+rmon event 1 log trap public description FATAL(1) owner PMON@FATAL
+rmon event 2 log trap public description CRITICAL(2) owner PMON@CRITICAL
+rmon event 3 log trap public description ERROR(3) owner PMON@ERROR
+rmon event 4 log trap public description WARNING(4) owner PMON@WARNING
+rmon event 5 log trap public description INFORMATION(5) owner PMON@INFO
+snmp-server enable traps callhome event-notify
+snmp-server enable traps callhome smtp-send-fail
+snmp-server enable traps cfs state-change-notif
+snmp-server enable traps lldp lldpRemTablesChange
+snmp-server enable traps cfs merge-failure
+snmp-server enable traps aaa server-state-change
+snmp-server enable traps hsrp state-change
+snmp-server enable traps feature-control FeatureOpStatusChange
+snmp-server enable traps sysmgr cseFailSwCoreNotifyExtended
+snmp-server enable traps config ccmCLIRunningConfigChanged
+snmp-server enable traps snmp authentication
+snmp-server enable traps link cisco-xcvr-mon-status-chg
+snmp-server enable traps vtp notifs
+snmp-server enable traps vtp vlancreate
+snmp-server enable traps vtp vlandelete
+snmp-server enable traps bridge newroot
+snmp-server enable traps storm-control
+snmp-server enable traps bridge topologychange
+snmp-server enable traps stpx inconsistency
+snmp-server enable traps stpx root-inconsistency
+snmp-server enable traps stpx loop-inconsistency
+snmp-server enable traps system Clock-change-notification
+snmp-server enable traps feature-control ciscoFeatOpStatusChange
+snmp-server context T3sT-Con_text
+snmp-server context T3sT-Con_text!!!!
+snmp-server context C0n_text!
+snmp-server community WEWORK group network-operator
+snmp-server community Community_test-1 group network-operator
+snmp-server community _Community_test-2 group network-operator
+snmp-server community RW group network-admin
+snmp-server community networktocode group network-operator
+snmp-server community YANKS group network-admin
+snmp-server mib community-map Community_test-1 context C0n_text!
+snmp-server community Community_test-1 use-acl T3st-ACL#$
+snmp-server community YANKS use-acl my_acl
+ip route 0.0.0.0/0 10.1.100.1 vrf management
+ip route 7.7.7.7/32 10.10.50.1
+vlan 1-50,55-56,60,100,110,120,256,2000,3000
+vlan 10
+  name WEB_VLAN
+vlan 11
+  name vlan_11
+vlan 12
+  name vlan_12
+vlan 20
+  name DB_VLAN
+vlan 120
+  name w*$$eb_vlan
+vlan 256
+  name flask_vlan
+vrf context keepalive
+vrf context management
+  ip domain-name cisconxapi.com
+  ip name-server 8.8.8.8
+  ip route 0.0.0.0/0 10.1.100.1
+hardware qos ns-buffer-profile burst
+vpc domain 100
+  role priority 1000
+  system-priority 2000
+  peer-keepalive destination 10.1.20.3 source 10.1.20.2 vrf keepalive
+interface Vlan1
+interface Vlan5
+  no shutdown
+  ip router ospf 10 area 0.0.0.5
+interface Vlan10
+  no shutdown
+  ip address 10.1.10.2/24
+  hsrp version 2
+  hsrp 10
+    priority 120 forwarding-threshold lower 1 upper 120
+    ip 10.1.10.1
+interface Vlan20
+  no shutdown
+  vrf member keepalive
+  ip address 10.1.20.2/24
+  hsrp version 2
+  hsrp 20
+    priority 120 forwarding-threshold lower 1 upper 120
+    ip 10.1.20.1
+interface Vlan66
+  ip address 66.66.66.66/24
+interface Vlan77
+  ip address 77.77.77.77/24
+interface Vlan146
+  description my vlan 146
+interface port-channel10
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+interface port-channel11
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+interface port-channel12
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  spanning-tree port type network
+  vpc peer-link
+interface Ethernet1/1
+  description Configured by Ansible
+  no switchport
+  no shutdown
+interface Ethernet1/2
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  ip address 192.168.56.1/24
+  no shutdown
+interface Ethernet1/3
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/4
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  channel-group 10 mode active
+interface Ethernet1/5
+  no switchport
+interface Ethernet1/6
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  channel-group 11 mode active
+interface Ethernet1/7
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  channel-group 11 mode active
+interface Ethernet1/8
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/9
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/10
+  description managed by puppet
+  no switchport
+  vrf member test
+  ip address 192.168.55.90/24
+interface Ethernet1/11
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/12
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/13
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/14
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/15
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/16
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/17
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/18
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/19
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/20
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/21
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/22
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/23
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/24
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/25
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/26
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/27
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/28
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/29
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/30
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/31
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/32
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/33
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/34
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/35
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/36
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/37
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/38
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/39
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/40
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/41
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/42
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/43
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/44
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/45
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/46
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/47
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet1/48
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet2/1
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  ip address 10.10.10.1/24
+  ip router ospf 10 area 0.0.0.5
+  no shutdown
+interface Ethernet2/2
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  ip address 10.10.30.1/24
+  ip router ospf 10 area 0.0.0.5
+  no shutdown
+interface Ethernet2/3
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  ip address 10.10.20.1/24
+  ip router ospf 10 area 0.0.0.5
+  no shutdown
+interface Ethernet2/4
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  ip address 10.10.40.1/24
+  ip router ospf 10 area 0.0.0.5
+  no shutdown
+interface Ethernet2/5
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  channel-group 12 mode active
+interface Ethernet2/6
+  switchport mode trunk
+  switchport trunk native vlan 2
+  switchport trunk allowed vlan 2-20
+  channel-group 12 mode active
+interface Ethernet2/7
+  description matched n9k1.ntc.com
+  no switchport
+  logging event port link-status
+  logging event port trunk-status
+  vrf member test
+  ip address 192.168.55.58/24
+  no shutdown
+interface Ethernet2/8
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet2/9
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet2/10
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet2/11
+  shutdown
+  logging event port link-status
+  logging event port trunk-status
+interface Ethernet2/12
+  shutdown
+  logging event port link-status
+  logging event port trunk-status
+interface mgmt0
+  ip access-group INBOUND_MGMT in
+  vrf member management
+  ip address 10.1.100.20/24
+interface loopback0
+  ip address 1.3.1.1/24
+interface loopback10
+  ip address 1.1.1.1/32
+  ip router ospf 10 area 0.0.0.5
+interface loopback100
+line console
+line vty
+  session-limit 16
+  exec-timeout 0
+boot nxos bootflash:/nxos.7.0.3.I2.1.bin
+router ospf 1
+router ospf 10
+router ospf myospf
+mac address-table static 000e.000e.000e vlan 10 drop
+no xml server exec-mode

@@ -1,0 +1,12 @@
+BOOT path-list      : flash:/c3560-advipservicesk9-mz.122-44.SE
+Config file         : flash:/config.text
+Private Config file : flash:/private-config.text
+Enable Break        : no
+Manual Boot         : no
+HELPER path-list    :
+Auto upgrade        : yes
+Auto upgrade path   :
+Timeout for Config
+          Download:    0 seconds
+Config Download
+       via DHCP:       disabled (next boot: disabled)

@@ -1,0 +1,34 @@
+{
+    "neigh_count": 3,
+    "TABLE_cdp_neighbor_brief_info": {
+        "ROW_cdp_neighbor_brief_info": [
+            {
+                "capability": "IGMP_cnd_filtering",
+                "intf_id": "mgmt0",
+                "platform_id": "cisco WS-C3750-48TS",
+                "ttl": 159,
+                "ifindex": 83886080,
+                "port_id": "FastEthernet1/0/9",
+                "device_id": "PERIMETER"
+            },
+            {
+                "capability": "Supports-STP-Dispute",
+                "intf_id": "Ethernet1/1",
+                "platform_id": "N9K-C9396PX",
+                "ttl": 127,
+                "ifindex": 436207616,
+                "port_id": "Ethernet1/1",
+                "device_id": "N9K2.lab.com(SAL1819S6BE)"
+            },
+            {
+                "capability": "Supports-STP-Dispute",
+                "intf_id": "Ethernet1/2",
+                "platform_id": "N9K-C9396PX",
+                "ttl": 127,
+                "ifindex": 436208128,
+                "port_id": "Ethernet1/2",
+                "device_id": "N9K2.lab.com(SAL1819S6BE)"
+            }
+        ]
+    }
+}

@@ -1,0 +1,49 @@
+Cisco IOS Software, 2800 Software (C2800NM-ADVENTERPRISEK9_IVS_LI-M), Version 15.1(3)T4, RELEASE SOFTWARE (fc1)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2012 by Cisco Systems, Inc.
+Compiled Thu 24-May-12 01:38 by prod_rel_team
+
+ROM: System Bootstrap, Version 12.4(13r)T, RELEASE SOFTWARE (fc1)
+
+rtr2811 uptime is 2 weeks, 4 days, 18 hours, 59 minutes
+System returned to ROM by reload at 21:42:02 UTC Thu Jan 7 2016
+System image file is "flash:c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin"
+Last reload type: Normal Reload
+
+
+This product contains cryptographic features and is subject to United
+States and local country laws governing import, export, transfer and
+use. Delivery of Cisco cryptographic products does not imply
+third-party authority to import, export, distribute or use encryption.
+Importers, exporters, distributors and users are responsible for
+compliance with U.S. and local country laws. By using this product you
+agree to comply with applicable laws and regulations. If you are unable
+to comply with U.S. and local laws, return this product immediately.
+
+A summary of U.S. laws governing Cisco cryptographic products may be found at:
+http://www.cisco.com/wwl/export/crypto/tool/stqrg.html
+
+If you require further assistance please contact us by sending email to
+export@cisco.com.
+
+Cisco 2811 (revision 53.51) with 774144K/12288K bytes of memory.
+Processor board ID FTX1316A0WK
+2 FastEthernet interfaces
+1 Virtual Private Network (VPN) Module
+DRAM configuration is 64 bits wide with parity enabled.
+239K bytes of non-volatile configuration memory.
+250880K bytes of ATA CompactFlash (Read/Write)
+
+
+License Info:
+
+License UDI:
+
+-------------------------------------------------
+Device#   PID           SN
+-------------------------------------------------
+*0        CISCO2811             FTX1316A0WK
+
+
+
+Configuration register is 0x2102
