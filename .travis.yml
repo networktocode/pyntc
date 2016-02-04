@@ -1,6 +1,5 @@
 ---
 
-
 language: python
 
 python:
@@ -8,7 +7,7 @@ python:
     - "3.3"
 
 install:
-    - python setup.py install
+    - pip install --process-dependency-links pyntc
 
 script:
     - coverage run -m unittest discover ./test/unit -v
