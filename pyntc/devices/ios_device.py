@@ -1,20 +1,23 @@
+"""Module for using a Cisco IOS device over SSH.
+"""
+
 import signal
 import os
 import re
 
-from .base_device import BaseDevice, SetBootImageError, RollbackError
 from pyntc.errors import CommandError, CommandListError, NTCError
-from pyntc.templates import get_template_dir, get_structured_data
+from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
-from pyntc.features.file_copy.base_file_copy import FileTransferError
+from .system_features.file_copy.base_file_copy import FileTransferError
+from .base_device import BaseDevice, RollbackError
+
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
+IOS_SSH_DEVICE_TYPE = 'cisco_ios_ssh'
 
-class FileTransferError(NTCError):
-    pass
 
 class RebootSignal(NTCError):
     pass
@@ -22,7 +25,7 @@ class RebootSignal(NTCError):
 
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='ios')
+        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=IOS_SSH_DEVICE_TYPE)
 
         self.native = None
 
@@ -31,18 +34,24 @@ class IOSDevice(BaseDevice):
         self.password = password
         self.secret = secret
         self.port = int(port)
+        self._connected = False
+        self.open()
 
     def open(self):
-        self.native = ConnectHandler(device_type='cisco_ios',
-                                     ip=self.host,
-                                     username=self.username,
-                                     password=self.password,
-                                     port=self.port,
-                                     secret=self.secret,
-                                     verbose=False)
+        if not self._connected:
+            self.native = ConnectHandler(device_type='cisco_ios',
+                                         ip=self.host,
+                                         username=self.username,
+                                         password=self.password,
+                                         port=self.port,
+                                         secret=self.secret,
+                                         verbose=False)
+            self._connected = True
 
     def close(self):
-        self.native.disconnect()
+        if self._connected:
+            self.native.disconnect()
+            self._connected = False
 
     def _enter_config(self):
         self._enable()
@@ -73,7 +82,8 @@ class IOSDevice(BaseDevice):
             try:
                 self._send_command(command)
             except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+                raise CommandListError(
+                    entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
     def show(self, command):
@@ -84,8 +94,14 @@ class IOSDevice(BaseDevice):
         self._enable()
 
         responses = []
+        entered_commands = []
         for command in commands:
-            responses.append(self._send_command(command))
+            entered_commands.append(command)
+            try:
+                responses.append(self._send_command(command))
+            except CommandError as e:
+                raise CommandListError(
+                    entered_commands, command, e.cli_error_msg)
 
         return responses
 
@@ -223,12 +239,6 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
 
-    def _show_version_facts(self):
-        version_data = self._raw_version_data()
-        show_version_facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
-
-        return show_version_facts
-
     def rollback(self, rollback_to):
         try:
             self.show('configure replace flash:%s force' % rollback_to)
@@ -240,8 +250,6 @@ class IOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        '''
-        '''
         if hasattr(self, '_facts'):
             return self._facts
 
@@ -261,17 +269,16 @@ class IOSDevice(BaseDevice):
         facts['interfaces'] = list(x['intf'] for x in self._interfaces_detailed_list())
 
         if show_version_facts['model'].startswith('WS'):
-            facts['vlans'] = list(x['vlan_id'] for x in self._show_vlan())
+            facts['vlans'] = list(str(x['vlan_id']) for x in self._show_vlan())
         else:
             facts['vlans'] = []
 
         # ios-specific facts
-        ios_facts = facts['ios'] = {}
+        ios_facts = facts[IOS_SSH_DEVICE_TYPE] = {}
         ios_facts['config_register'] = version_data['config_register']
 
         self._facts = facts
         return facts
-
 
     @property
     def running_config(self):

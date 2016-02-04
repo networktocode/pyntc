@@ -1,0 +1,10 @@
+{
+    "command": "show running-config",
+    "result": {
+        "output": "! Command: show running-config\n! device: eos-spine1 (vEOS, EOS-4.14.7M)\n!\n! boot system flash:/new_image.swi\n!\ntransceiver qsfp default-mode 4x10G\n!\nhostname eos-spine1\nip domain-name ntc.com\n!\nsnmp-server community networktocode ro\n!\nspanning-tree mode mstp\n!\nno aaa root\n!\nusername admin privilege 15 role network-admin secret 5 $1$7yUmRiH6$9F1Io4WMwAWSc2GMjeK3h/\nusername ntc privilege 15 role network-admin secret 5 $1$yLXNmzh4$eltlOr6yIb8IpRGCjp8Bj/\n!\ninterface Ethernet1\n!\ninterface Ethernet2\n!\ninterface Ethernet3\n!\ninterface Ethernet4\n!\ninterface Ethernet5\n!\ninterface Ethernet6\n!\ninterface Ethernet7\n!\ninterface Ethernet8\n!\ninterface Management1\n   ip address 10.0.0.11/24\n!\nip route 0.0.0.0/0 10.0.0.2\n!\nip routing\n!\nmanagement api http-commands\n   protocol http\n   no shutdown\n!\n!\nend\n",
+        "warnings": [
+            "Command: show running-config"
+        ]
+    },
+    "encoding": "text"
+}

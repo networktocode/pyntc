@@ -1,15 +1,22 @@
-from .base_device import BaseDevice, RollbackError
-from pyntc.errors import CommandError
+"""Module for using an NXOX device over NX-API.
+"""
+
+
+from pyntc.errors import CommandError, CommandListError
 from pyntc.data_model.converters import strip_unicode
-from pyntc.features.file_copy.base_file_copy import FileTransferError
+from .system_features.file_copy.base_file_copy import FileTransferError
+from .base_device import BaseDevice, RollbackError
 
 from pynxos.device import Device as NXOSNative
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
 
+NXOS_API_DEVICE_TYPE = 'cisco_nxos_nxapi'
+
+
 class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=30, port=None, **kwargs):
-        super(NXOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='nxos')
+        super(NXOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=NXOS_API_DEVICE_TYPE)
         self.transport = transport
         self.timeout = timeout
 
@@ -28,25 +35,25 @@ class NXOSDevice(BaseDevice):
         try:
             self.native.config(command)
         except CLIError as e:
-            raise CommandError(str(e))
+            raise CommandError(command, str(e))
 
     def config_list(self, commands):
         try:
             self.native.config_list(commands)
         except CLIError as e:
-            raise CommandError(str(e))
+            raise CommandListError(commands, e.command, str(e))
 
     def show(self, command, raw_text=False):
         try:
             return strip_unicode(self.native.show(command, raw_text=raw_text))
         except CLIError as e:
-            raise CommandError(str(e))
+            raise CommandError(command, str(e))
 
     def show_list(self, commands, raw_text=False):
         try:
             return strip_unicode(self.native.show_list(commands, raw_text=raw_text))
         except CLIError as e:
-            raise CommandError(str(e))
+            raise CommandListError(commands, e.command, str(e))
 
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
@@ -70,25 +77,27 @@ class NXOSDevice(BaseDevice):
         return self.native.set_boot_options(image_name, kickstart=kickstart)
 
     def checkpoint(self, filename):
-        try:
-            self.native.checkpoint(filename)
-        except CLIError:
-            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
+        return self.native.checkpoint(filename)
 
     def rollback(self, filename):
         try:
             self.native.rollback(filename)
         except CLIError:
-            raise RollbackError('Rollback unsuccessufl, %s may not exist.' % filename)
+            raise RollbackError('Rollback unsuccessful, %s may not exist.' % filename)
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)
 
     @property
     def facts(self):
-        facts = self.native.facts
+        if hasattr(self, '_facts'):
+            return self._facts
+
+        facts = strip_unicode(self.native.facts)
         facts['vendor'] = self.vendor
-        return facts
+
+        self._facts = facts
+        return self._facts
 
     @property
     def running_config(self):

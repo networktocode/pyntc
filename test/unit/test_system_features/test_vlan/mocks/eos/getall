@@ -1,0 +1,14 @@
+{
+    "1": {
+        "state": "active",
+        "name": "default",
+        "vlan_id": "1",
+        "trunk_groups": []
+    },
+    "10": {
+        "state": "active",
+        "name": "VLAN0010",
+        "vlan_id": "10",
+        "trunk_groups": []
+    }
+}

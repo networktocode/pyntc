@@ -1,0 +1,123 @@
+Using 1604 out of 245752 bytes
+!
+! Last configuration change at 23:28:50 UTC Wed Jan 6 2016
+!
+version 15.1
+service timestamps debug datetime msec
+service timestamps log datetime msec
+service password-encryption
+!
+hostname rtr2811
+!
+boot-start-marker
+boot system tftp c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin 255.255.255.255
+boot system tftp term11.default.loads 255.255.255.255
+boot system tftp term11.default.lo 255.255.255.255
+boot system tftp ldsjflkdsj 255.255.255.255
+boot system tftp ownckownd 255.255.255.255
+boot system flash c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin
+boot-end-marker
+!
+!
+enable secret 5 $1$EI4u$tgvrN/bbJ6Q09D1Vj0HjU.
+!
+no aaa new-model
+!
+!
+dot11 syslog
+ip source-route
+!
+!
+ip cef
+!
+!
+!
+ip domain name ntc.com
+no ipv6 cef
+!
+multilink bundle-name authenticated
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+voice-card 0
+!
+crypto pki token default removal timeout 0
+!
+!
+!
+!
+license udi pid CISCO2811 sn FTX1316A0WK
+username cisco password 7 100F0A1016141D5A5E576B
+username ntc privilege 15 password 7 141906085D5679
+!
+redundancy
+!
+!
+!
+!
+!
+!
+!
+!
+!
+!
+interface FastEthernet0/0
+ description MANAGEMENT INTERFACE - DO NOT CHANGE
+ ip address 10.1.100.45 255.255.255.0
+ duplex auto
+ speed auto
+!
+interface FastEthernet0/1
+ no ip address
+ shutdown
+ duplex auto
+ speed auto
+!
+ip forward-protocol nd
+no ip http server
+no ip http secure-server
+!
+!
+ip route 0.0.0.0 0.0.0.0 10.1.100.1
+!
+logging esm config
+nls resp-timeout 1
+cpd cr-id 1
+!
+!
+!
+!
+!
+!
+control-plane
+!
+!
+!
+!
+mgcp profile default
+!
+!
+!
+!
+!
+gatekeeper
+ shutdown
+!
+!
+!
+line con 0
+line aux 0
+line vty 0 4
+ login local
+ transport input all
+!
+scheduler allocate 20000 1000
+end

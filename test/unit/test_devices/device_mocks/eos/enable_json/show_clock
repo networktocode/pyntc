@@ -1,0 +1,7 @@
+{
+    "command": "show clock",
+    "result": {
+        "output": "Fri Jan 22 23:29:21 2016\nTimezone: UTC\nClock source: local\n"
+    },
+    "encoding": "text"
+}
