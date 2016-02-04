@@ -1,7 +1,7 @@
 import mock
 import unittest
 
-from mocks.eos import get, getall
+from .mocks.eos import get, getall
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.devices.system_features.vlans.base_vlans import VlanNotInRangeError
 
@@ -32,7 +32,7 @@ class TestEOSVlan(unittest.TestCase):
 
     def test_get_list(self):
         result = self.vlans.get_list()
-        self.assertEquals(result, ['1', '10'])
+        self.assertEqual(result, ['1', '10'])
 
     def test_remove(self):
         self.vlans.remove('10')

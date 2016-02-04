@@ -2,7 +2,7 @@ import unittest
 import mock
 import os
 
-from device_mocks.ios import send_command
+from .device_mocks.ios import send_command
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.ios_device import IOSDevice, FileTransferError, IOS_SSH_DEVICE_TYPE
 from pyntc.errors import CommandError, CommandListError

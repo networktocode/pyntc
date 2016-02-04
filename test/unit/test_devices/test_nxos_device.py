@@ -1,13 +1,14 @@
 import unittest
 import mock
 
-from device_mocks.nxos import show, show_list
+from .device_mocks.nxos import show, show_list
 
 from pyntc.devices import nxos_device
 from pyntc.devices.base_device import RollbackError
 from pyntc.errors import CommandError, CommandListError
 
 from pynxos.errors import CLIError
+
 
 class TestNXOSDevice(unittest.TestCase):
 
@@ -66,7 +67,7 @@ class TestNXOSDevice(unittest.TestCase):
         result = self.device.show(command, raw_text=True)
 
         self.assertIsInstance(result, str)
-        self.assertEquals(result, 'n9k1.cisconxapi.com')
+        self.assertEqual(result, 'n9k1.cisconxapi.com')
         self.device.native.show.assert_called_with(command, raw_text=True)
 
     def test_show_list(self):
@@ -172,7 +173,7 @@ class TestNXOSDevice(unittest.TestCase):
 
         facts = self.device.facts
         mock_facts.assert_called_with()
-        self.assertEquals(facts, expected)
+        self.assertEqual(facts, expected)
 
         mock_facts.reset_mock()
         facts = self.device.facts

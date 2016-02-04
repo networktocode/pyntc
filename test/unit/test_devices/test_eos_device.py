@@ -2,7 +2,7 @@ import unittest
 import mock
 import os
 
-from device_mocks.eos import enable, config
+from .device_mocks.eos import enable, config
 from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.system_features.file_copy.eos_file_copy import EOSFileCopy
@@ -68,7 +68,7 @@ class TestEOSDevice(unittest.TestCase):
         result = self.device.show(command, raw_text=True)
 
         self.assertIsInstance(result, str)
-        self.assertEquals(result,
+        self.assertEqual(result,
                           'Hostname: spine1\nFQDN:     spine1.ntc.com\n')
         self.device.native.enable.assert_called_with([command], encoding='text')
 
