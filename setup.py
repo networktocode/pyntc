@@ -12,8 +12,10 @@ install_requires = [
     'future',
     'netmiko',
     'paramiko',
-    'pynxos',
-    'pyeapi'
+    'pynxos>=0.0.2',
+    'pyeapi',
+    'coverage',
+    'mock',
 ]
 
 dependency_links = []
