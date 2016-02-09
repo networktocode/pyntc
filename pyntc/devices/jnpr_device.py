@@ -1,9 +1,11 @@
 import re
+from tempfile import NamedTemporaryFile
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.op.phyport import PhyPortTable
+from jnpr.junos.utils.scp import SCP
 
 from .base_device import BaseDevice
 
@@ -42,20 +44,20 @@ class JunosDevice(BaseDevice):
 
         return self.native.cli(command, warning=False)
 
+    def show_list(self):
+        pass
+
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
 
-    def checkpoint(self):
-        pass
-
-    def config(self, command):
-        self.cu.load(command, format='set')
+    def config(self, command, format='set'):
+        self.cu.load(command, format=format)
         self.cu.commit()
 
-    def config_list(self, commands):
+    def config_list(self, commands, format='set'):
         for command in commands:
-            self.cu.load(command, format='set')
+            self.cu.load(command, format=format)
 
         self.cu.commit()
 
@@ -90,6 +92,27 @@ class JunosDevice(BaseDevice):
         phys.get()
 
         return phys.keys()
+
+    def checkpoint(self, filename):
+        temp_file = NamedTemporaryFile()
+        temp_file.write(self.show('show config'))
+        temp_file.flush()
+
+        with SCP(self.native) as scp:
+            scp.put(temp_file.name, remote_path=filename)
+
+        temp_file.close()
+
+    def rollback(self, filename):
+        temp_file = NamedTemporaryFile()
+
+        with SCP(self.native) as scp:
+            scp.get(filename, local_path=temp_file.name)
+
+        self.cu.load(path=temp_file.name, format='text', overwrite=True)
+        self.cu.commit()
+
+        temp_file.close()
 
     @property
     def facts(self):
@@ -132,20 +155,14 @@ class JunosDevice(BaseDevice):
     def reboot(self):
         pass
 
-    def rollback(self):
-        pass
-
     @property
     def running_config(self):
         return self.show('show config')
 
-    def save(self):
-        pass
+    def save(self, filename):
+        self.native.cli('save %s' % filename)
 
     def set_boot_options(self):
-        pass
-
-    def show_list(self):
         pass
 
     @property
