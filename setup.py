@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import sys
 
 name = 'pyntc'
-version = '0.0.1'
+version = '0.0.2'
 packages = find_packages()
 package_data = {'pyntc': ['templates/*.template']}
 
