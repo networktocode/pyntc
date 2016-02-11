@@ -9,9 +9,12 @@ from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.sw import SW as JunosNativdSW
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.op.ethport import EthPortTable
+from jnpr.junos.exception import ConfigLoadError
 
 from .tables.jnpr.loopback import LoopbackTable
 from .base_device import BaseDevice
+
+from pyntc.errors import CommandError, CommandListError
 
 JNPR_DEVICE_TYPE = 'juniper_junos_netconf'
 
@@ -62,14 +65,22 @@ class JunosDevice(BaseDevice):
             f.write(self.running_config)
 
     def config(self, command, format='set'):
-        self.cu.load(command, format=format)
-        self.cu.commit()
+        try:
+            self.cu.load(command, format=format)
+            self.cu.commit()
+        except ConfigLoadError as e:
+            raise CommandError(command, e.message)
 
     def config_list(self, commands, format='set'):
-        for command in commands:
-            self.cu.load(command, format=format)
+        try:
+            for command in commands:
+                self.cu.load(command, format=format)
 
-        self.cu.commit()
+            self.cu.commit()
+        except ConfigLoadError as e:
+            e = CommandListError(commands, command, e.message)
+            print e
+            raise e
 
     def _uptime_components(self, uptime_full_string):
         match_days = re.search(r'(\d+) days?', uptime_full_string)
@@ -113,6 +124,8 @@ class JunosDevice(BaseDevice):
         self.save(filename)
 
     def rollback(self, filename):
+        self.native.timeout = 60
+
         temp_file = NamedTemporaryFile()
 
         with SCP(self.native) as scp:
@@ -122,6 +135,8 @@ class JunosDevice(BaseDevice):
         self.cu.commit()
 
         temp_file.close()
+
+        self.native.timeout = 30
 
     @property
     def facts(self):
@@ -203,7 +218,11 @@ class JunosDevice(BaseDevice):
     def running_config(self):
         return self.show('show config')
 
-    def save(self, filename):
+    def save(self, filename=None):
+        if filename is None:
+            self.cu.commit()
+            return
+
         temp_file = NamedTemporaryFile()
         temp_file.write(self.show('show config'))
         temp_file.flush()

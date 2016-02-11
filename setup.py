@@ -4,7 +4,7 @@ import sys
 name = 'pyntc'
 version = '0.0.2'
 packages = find_packages()
-package_data = {'pyntc': ['templates/*.template']}
+package_data = {'pyntc': ['templates/*.template', 'devices/tables/jnpr/*.yml']}
 
 install_requires = [
     'requests>=2.7.0',
