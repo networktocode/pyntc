@@ -1,12 +1,16 @@
+import os
 import re
+import hashlib
 from tempfile import NamedTemporaryFile
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
-from jnpr.junos.op.ethport import EthPortTable
-from jnpr.junos.op.phyport import PhyPortTable
+from jnpr.junos.utils.fs import FS as JunosNativeFS
+from jnpr.junos.utils.sw import SW as JunosNativdSW
 from jnpr.junos.utils.scp import SCP
+from jnpr.junos.op.ethport import EthPortTable
 
+from .tables.jnpr.loopback import LoopbackTable
 from .base_device import BaseDevice
 
 JNPR_DEVICE_TYPE = 'juniper_junos_netconf'
@@ -27,6 +31,8 @@ class JunosDevice(BaseDevice):
         self.open()
 
         self.cu = JunosNativeConfig(self.native)
+        self.fs = JunosNativeFS(self.native)
+        self.sw = JunosNativdSW(self.native)
 
     def open(self):
         if not self.connected:
@@ -44,8 +50,12 @@ class JunosDevice(BaseDevice):
 
         return self.native.cli(command, warning=False)
 
-    def show_list(self):
-        pass
+    def show_list(self, commands, raw_text=True):
+        responses = []
+        for command in commands:
+            responses.append(self.show(command))
+
+        return responses
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
@@ -88,20 +98,19 @@ class JunosDevice(BaseDevice):
         return seconds
 
     def _get_interfaces(self):
-        phys = PhyPortTable(self.native)
-        phys.get()
+        eth_ifaces = EthPortTable(self.native)
+        eth_ifaces.get()
 
-        return phys.keys()
+        loop_ifaces = LoopbackTable(self.native)
+        loop_ifaces.get()
+
+        ifaces = eth_ifaces.keys()
+        ifaces.extend(loop_ifaces.keys())
+
+        return ifaces
 
     def checkpoint(self, filename):
-        temp_file = NamedTemporaryFile()
-        temp_file.write(self.show('show config'))
-        temp_file.flush()
-
-        with SCP(self.native) as scp:
-            scp.put(temp_file.name, remote_path=filename)
-
-        temp_file.close()
+        self.save(filename)
 
     def rollback(self, filename):
         temp_file = NamedTemporaryFile()
@@ -143,27 +152,66 @@ class JunosDevice(BaseDevice):
         self._facts = facts
         return self._facts
 
-    def file_copy(self):
-        pass
+    def _file_copy_local_file_exists(self, filepath):
+        return os.path.isfile(filepath)
 
-    def file_copy_remote_exists(self):
-        pass
+    def _file_copy_local_md5(self, filepath, blocksize=2**20):
+        if self._file_copy_local_file_exists(filepath):
+            m = hashlib.md5()
+            with open(filepath, "rb") as f:
+                buf = f.read(blocksize)
+                while buf:
+                    m.update(buf)
+                    buf = f.read(blocksize)
+            return m.hexdigest()
+
+    def _file_copy_remote_md5(self, filename):
+        return self.fs.checksum(filename)
+
+    def file_copy_remote_exists(self, src, dest=None):
+        if dest is None:
+            dest = os.path.basename(src)
+
+        local_hash = self._file_copy_local_md5(src)
+        remote_hash = self._file_copy_remote_md5(dest)
+        if local_hash is not None:
+            if local_hash == remote_hash:
+                return True
+
+        return False
+
+    def file_copy(self, src, dest=None):
+        if dest is None:
+            dest = os.path.basename(src)
+
+        with SCP(self.native) as scp:
+            scp.put(src, remote_path=dest)
 
     def get_boot_options(self):
-        pass
+        return self.facts['os_version']
 
-    def reboot(self):
-        pass
+    def set_boot_options(self, sys):
+        raise NotImplementedError
+
+    def reboot(self, timer=0, confirm=False):
+        if confirm:
+            self.sw.reboot(in_min=timer)
+        else:
+            print('Need to confirm reboot with confirm=True')
 
     @property
     def running_config(self):
         return self.show('show config')
 
     def save(self, filename):
-        self.native.cli('save %s' % filename)
+        temp_file = NamedTemporaryFile()
+        temp_file.write(self.show('show config'))
+        temp_file.flush()
 
-    def set_boot_options(self):
-        pass
+        with SCP(self.native) as scp:
+            scp.put(temp_file.name, remote_path=filename)
+
+        temp_file.close()
 
     @property
     def startup_config(self):

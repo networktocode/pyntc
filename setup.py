@@ -37,6 +37,7 @@ if sys.version_info.major >= 3:
 else:
     install_requires.append('gtextfsm')
     install_requires.append('pyeapi')
+    install_requires.append('junos-eznc')
 
 setup(name=name,
       version=version,

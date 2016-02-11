@@ -14,8 +14,9 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), '..', 'fixtures')
 
 class TestInfra(unittest.TestCase):
 
-    @mock.patch.object(IOSDevice, 'open')
-    def test_device_creation(self, my_open):
+    @mock.patch('pyntc.devices.ios_device.IOSDevice.open')
+    @mock.patch('pyntc.devices.jnpr_device.JunosDevice.open')
+    def test_device_creation(self, j_open, i_open):
         for device_type in supported_devices:
             device = ntc_device(device_type, 'host', 'user', 'pass')
             self.assertIsInstance(
@@ -25,8 +26,9 @@ class TestInfra(unittest.TestCase):
         with self.assertRaises(UnsupportedDeviceError):
             ntc_device(BAD_DEVICE_TYPE)
 
-    @mock.patch.object(IOSDevice, 'open')
-    def test_device_by_name(self, my_open):
+    @mock.patch('pyntc.devices.ios_device.IOSDevice.open')
+    @mock.patch('pyntc.devices.jnpr_device.JunosDevice.open')
+    def test_device_by_name(self, j_open, i_open):
         config_filepath = os.path.join(FIXTURES_DIR, '.ntc.conf.sample')
 
         nxos_device = ntc_device_by_name('test_nxos', filename=config_filepath)
