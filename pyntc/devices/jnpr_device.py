@@ -48,15 +48,21 @@ class JunosDevice(BaseDevice):
             self.connected = False
 
     def show(self, command, raw_text=True):
+        if not raw_text:
+            raise ValueError('Juniper only supports raw text output. \
+                Append " | display xml" to your commands for a structured string.')
+
         if not command.startswith('show'):
-            return ''
+            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+
 
         return self.native.cli(command, warning=False)
+
 
     def show_list(self, commands, raw_text=True):
         responses = []
         for command in commands:
-            responses.append(self.show(command))
+            responses.append(self.show(command, raw_text=raw_text))
 
         return responses
 
@@ -78,9 +84,8 @@ class JunosDevice(BaseDevice):
 
             self.cu.commit()
         except ConfigLoadError as e:
-            e = CommandListError(commands, command, e.message)
-            print e
-            raise e
+            raise CommandListError(commands, command, e.message)
+
 
     def _uptime_components(self, uptime_full_string):
         match_days = re.search(r'(\d+) days?', uptime_full_string)
@@ -231,6 +236,7 @@ class JunosDevice(BaseDevice):
             scp.put(temp_file.name, remote_path=filename)
 
         temp_file.close()
+        return True
 
     @property
     def startup_config(self):
