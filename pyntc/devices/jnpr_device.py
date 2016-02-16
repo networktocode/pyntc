@@ -30,7 +30,6 @@ class JunosDevice(BaseDevice):
                                           **kwargs)
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
-        self.connected = False
         self.open()
 
         self.cu = JunosNativeConfig(self.native)
