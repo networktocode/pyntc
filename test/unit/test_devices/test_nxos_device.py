@@ -119,6 +119,10 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.reboot()
         self.device.native.reboot.assert_called_with(confirm=False)
 
+    def test_reboot_with_timer(self):
+        with self.assertRaises(RebootTimerError):
+            self.device.reboot(confirm=True, timer=3)
+
     def test_get_boot_options(self):
         expected = {'sys': 'my_sys', 'boot': 'my_boot'}
         self.device.native.get_boot_options.return_value = expected

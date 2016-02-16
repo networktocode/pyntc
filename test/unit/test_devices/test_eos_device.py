@@ -4,7 +4,7 @@ import os
 
 from .device_mocks.eos import enable, config
 from pyntc.devices import EOSDevice
-from pyntc.devices.base_device import RollbackError
+from pyntc.devices.base_device import RollbackError, RebootTimerError
 from pyntc.devices.system_features.file_copy.eos_file_copy import EOSFileCopy
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
@@ -122,6 +122,10 @@ class TestEOSDevice(unittest.TestCase):
     def test_reboot_no_confirm(self):
         self.device.reboot()
         assert not self.device.native.enable.called
+
+    def test_reboot_with_timer(self):
+        with self.assertRaises(RebootTimerError):
+            self.device.reboot(confirm=True, timer=3)
 
     def test_get_boot_options(self):
         boot_options = self.device.get_boot_options()
