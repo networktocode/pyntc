@@ -44,12 +44,10 @@ class JunosDevice(BaseDevice):
     def open(self):
         if not self.connected:
             self.native.open()
-            self.connected = True
 
     def close(self):
         if self.connected:
             self.native.close()
-            self.connected = False
 
     def show(self, command, raw_text=True):
         if not raw_text:
