@@ -4,7 +4,7 @@ import mock
 from .device_mocks.nxos import show, show_list
 
 from pyntc.devices import nxos_device
-from pyntc.devices.base_device import RollbackError
+from pyntc.devices.base_device import RollbackError, RebootTimerError
 from pyntc.errors import CommandError, CommandListError
 
 from pynxos.errors import CLIError

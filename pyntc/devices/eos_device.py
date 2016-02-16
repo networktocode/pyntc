@@ -98,7 +98,7 @@ class EOSDevice(BaseDevice):
 
     def reboot(self, confirm=False, timer=0):
         if timer != 0:
-            raise RebootTimerError
+            raise RebootTimerError(self.device_type)
 
         if confirm:
             self.show('reload now')
