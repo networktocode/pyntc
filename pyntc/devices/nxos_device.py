@@ -5,7 +5,7 @@
 from pyntc.errors import CommandError, CommandListError
 from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
-from .base_device import BaseDevice, RollbackError
+from .base_device import BaseDevice, RollbackError, RebootTimerError
 
 from pynxos.device import Device as NXOSNative
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
@@ -67,7 +67,10 @@ class NXOSDevice(BaseDevice):
         except NXOSFileTransferError:
             raise FileTransferError
 
-    def reboot(self, timer=0, confirm=False):
+    def reboot(self, confirm=False, timer=0):
+        if timer != 0:
+            raise RebootTimerError
+
         self.native.reboot(confirm=confirm)
 
     def get_boot_options(self):

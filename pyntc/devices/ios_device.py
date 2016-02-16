@@ -38,6 +38,12 @@ class IOSDevice(BaseDevice):
         self.open()
 
     def open(self):
+        if self._connected:
+            try:
+                self.native.find_prompt()
+            except:
+                self._connected = False
+
         if not self._connected:
             self.native = ConnectHandler(device_type='cisco_ios',
                                          ip=self.host,

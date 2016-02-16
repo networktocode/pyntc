@@ -18,6 +18,11 @@ class RollbackError(NTCError):
 class FileTransferError(NTCError):
     pass
 
+class RebootTimerError(NTCError):
+    def __init__(self):
+        super(RebootTimerError, self).__init__(
+            'Reboot timer not supported on %s' % self.device_type)
+
 
 class BaseDevice(object):
     __metaclass__ = abc.ABCMeta

@@ -9,7 +9,7 @@ from pyntc.data_model.converters import convert_dict_by_key, \
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
-from .base_device import BaseDevice, RollbackError
+from .base_device import BaseDevice, RollbackError, RebootTimerError
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
@@ -96,7 +96,10 @@ class EOSDevice(BaseDevice):
         fc = EOSFileCopy(self, src, dest)
         fc.send()
 
-    def reboot(self, confirm=False):
+    def reboot(self, confirm=False, timer=0):
+        if timer != 0:
+            raise RebootTimerError
+
         if confirm:
             self.show('reload now')
         else:

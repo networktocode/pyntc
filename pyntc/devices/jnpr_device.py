@@ -37,6 +37,10 @@ class JunosDevice(BaseDevice):
         self.fs = JunosNativeFS(self.native)
         self.sw = JunosNativdSW(self.native)
 
+    @property
+    def connected(self):
+        return self.native.connected
+
     def open(self):
         if not self.connected:
             self.native.open()
