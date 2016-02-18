@@ -68,8 +68,15 @@ class IOSDevice(BaseDevice):
         if not self.native.check_enable_mode():
             self.native.enable()
 
-    def _send_command(self, command):
-        response = self.native.send_command(command)
+    def _send_command(self, command, expect=False, expect_string=''):
+        if expect:
+            if expect_string:
+                response = self.native.send_command_expect(command, expect_string=expect_string)
+            else:
+                response = self.native.send_command_expect(command)
+        else:
+            response = self.native.send_command(command)
+
         if '% ' in response or 'Error:' in response:
             raise CommandError(command, response)
 
@@ -92,9 +99,9 @@ class IOSDevice(BaseDevice):
                     entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
-    def show(self, command):
+    def show(self, command, expect=False, expect_string=''):
         self._enable()
-        return self._send_command(command)
+        return self._send_command(command, expect=expect, expect_string=expect_string)
 
     def show_list(self, commands):
         self._enable()
@@ -288,7 +295,7 @@ class IOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show running-config')
+        return self.show('show running-config', expect=True)
 
     @property
     def startup_config(self):
