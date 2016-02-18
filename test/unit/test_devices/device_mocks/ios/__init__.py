@@ -1,9 +1,10 @@
 import os
+import re
 
 CURRNENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def send_command(command):
+def send_command(command, **kwargs):
     command = command.replace(' ', '_')
     command = command.replace('/', '_')
 
@@ -20,4 +21,11 @@ def send_command(command):
 
     return response
 
+def send_command_expect(command, expect_string=None, **kwargs):
+    response = send_command(command)
 
+    if expect_string:
+        if not re.search(expect_string, response):
+            raise IOError('Search pattern never detected.')
+
+    return response

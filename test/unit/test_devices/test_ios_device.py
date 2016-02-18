@@ -2,7 +2,7 @@ import unittest
 import mock
 import os
 
-from .device_mocks.ios import send_command
+from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.ios_device import IOSDevice, FileTransferError, IOS_SSH_DEVICE_TYPE
 from pyntc.errors import CommandError, CommandListError
@@ -17,6 +17,7 @@ class TestIOSDevice(unittest.TestCase):
         self.device = IOSDevice('host', 'user', 'pass')
 
         mock_miko.send_command.side_effect = send_command
+        mock_miko.send_command_expect.side_effect = send_command_expect
         self.device.native = mock_miko
 
     def test_config(self):

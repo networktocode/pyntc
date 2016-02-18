@@ -15,6 +15,7 @@ install_requires = [
     'pynxos>=0.0.2',
     'coverage',
     'mock>=1.3',
+    'terminal',
 ]
 
 dependency_links = []
