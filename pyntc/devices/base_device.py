@@ -116,7 +116,7 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def file_copy(self, src, dest=None):
+    def file_copy(self, src, dest=None, **kwargs):
         """Send a local file to the device.
 
         Args:
@@ -130,7 +130,7 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def file_copy_remote_exists(self, src, dest=None):
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
         """Check if a remote file exists. A remote file exists if it has the same name
         as supplied dest, and the same md5 hash as the source.
 

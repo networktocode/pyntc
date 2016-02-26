@@ -86,13 +86,13 @@ class EOSDevice(BaseDevice):
         self.show('copy running-config %s' % filename)
         return True
 
-    def file_copy_remote_exists(self, src, dest=None):
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
         if fc.remote_file_exists():
             return True
         return False
 
-    def file_copy(self, src, dest=None):
+    def file_copy(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
         fc.send()
 
