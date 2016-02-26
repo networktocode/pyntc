@@ -122,23 +122,23 @@ class IOSDevice(BaseDevice):
         self.show_list(['copy running-config %s' % filename, '\n', '\n'])
         return True
 
-    def _file_copy_instance(self, src, dest=None):
+    def _file_copy_instance(self, src, dest=None, file_system='flash:'):
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = FileTransfer(self.native, src, dest)
+        fc = FileTransfer(self.native, src, dest, file_system=file_system)
         return fc
 
-    def file_copy_remote_exists(self, src, dest=None):
-        fc = self._file_copy_instance(src, dest)
+    def file_copy_remote_exists(self, src, dest=None, file_system='flash:'):
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
 
         self._enable()
         if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
 
-    def file_copy(self, src, dest=None):
-        fc = self._file_copy_instance(src, dest)
+    def file_copy(self, src, dest=None, file_system='flash:'):
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
         self._enable()
 #        if not self.fc.verify_space_available():
 #            raise FileTransferError('Not enough space available.')
