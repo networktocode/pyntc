@@ -121,7 +121,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.file_copy('path/to/source_file')
 
-        mock_ft.assert_called_with(self.device.native, 'path/to/source_file', 'source_file')
+        mock_ft.assert_called_with(self.device.native, 'path/to/source_file', 'source_file', file_system='flash:')
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
@@ -132,7 +132,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.file_copy('source_file', 'dest_file')
 
-        mock_ft.assert_called_with(self.device.native, 'source_file', 'dest_file')
+        mock_ft.assert_called_with(self.device.native, 'source_file', 'dest_file', file_system='flash:')
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()

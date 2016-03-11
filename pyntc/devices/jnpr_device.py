@@ -189,7 +189,7 @@ class JunosDevice(BaseDevice):
     def _file_copy_remote_md5(self, filename):
         return self.fs.checksum(filename)
 
-    def file_copy_remote_exists(self, src, dest=None):
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
         if dest is None:
             dest = os.path.basename(src)
 
@@ -201,7 +201,7 @@ class JunosDevice(BaseDevice):
 
         return False
 
-    def file_copy(self, src, dest=None):
+    def file_copy(self, src, dest=None, **kwargs):
         if dest is None:
             dest = os.path.basename(src)
 

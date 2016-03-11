@@ -58,10 +58,10 @@ class NXOSDevice(BaseDevice):
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
 
-    def file_copy_remote_exists(self, src, dest):
+    def file_copy_remote_exists(self, src, dest, **kwargs):
         return self.native.file_copy_remote_exists(src, dest)
 
-    def file_copy(self, src, dest):
+    def file_copy(self, src, dest, **kwargs):
         try:
             return self.native.file_copy(src, dest)
         except NXOSFileTransferError:
