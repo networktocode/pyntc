@@ -12,7 +12,7 @@ install_requires = [
     'future',
     'netmiko',
     'paramiko',
-    'pynxos>=0.0.2',
+    'pynxos>=0.0.3',
     'coverage',
     'mock>=1.3',
     'terminal',
