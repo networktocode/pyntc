@@ -1,6 +1,6 @@
 """Module for using an NXOX device over NX-API.
 """
-
+import os
 
 from pyntc.errors import CommandError, CommandListError
 from pyntc.data_model.converters import strip_unicode
@@ -58,13 +58,16 @@ class NXOSDevice(BaseDevice):
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
 
-    def file_copy_remote_exists(self, src, dest, **kwargs):
-        return self.native.file_copy_remote_exists(src, dest)
+    def file_copy_remote_exists(self, src, dest=None, file_system='bootflash:'):
+        dest = dest or os.path.basename(src)
+        return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
 
-    def file_copy(self, src, dest, **kwargs):
+    def file_copy(self, src, dest=None, file_system='bootflash:'):
+        dest = dest or os.path.basename(src)
         try:
-            return self.native.file_copy(src, dest)
-        except NXOSFileTransferError:
+            return self.native.file_copy(src, dest, file_system=file_system)
+        except NXOSFileTransferError as e:
+            print str(e)
             raise FileTransferError
 
     def reboot(self, confirm=False, timer=0):
