@@ -23,6 +23,16 @@ class RebootTimerError(NTCError):
         super(RebootTimerError, self).__init__(
             'Reboot timer not supported on %s.' % device_type)
 
+def fix_docs(cls):
+    for name, func in vars(cls).items():
+        if hasattr(func, '__call__') and not func.__doc__:
+            #print func, 'needs doc'
+            for parent in cls.__bases__:
+                parfunc = getattr(parent, name, None)
+                if parfunc and getattr(parfunc, '__doc__', None):
+                    func.__doc__ = parfunc.__doc__
+                    break
+    return cls
 
 class BaseDevice(object):
     __metaclass__ = abc.ABCMeta
@@ -123,9 +133,11 @@ class BaseDevice(object):
             src (str): Path to the local file to send.
 
         Keyword Args:
-            dest (str): The destination file name to be saved on remote flash.
+            dest (str): The destination file path to be saved on remote flash.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
         """
         raise NotImplementedError
 
@@ -138,9 +150,11 @@ class BaseDevice(object):
             src (str): Path to local file to check.
 
         Keyword Args:
-            dest (str): The destination file name to be saved on remote flash.
+            dest (str): The destination file path to be saved on remote the remote device.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
 
         Returns:
             True if the remote file exists, False if it doesn't.

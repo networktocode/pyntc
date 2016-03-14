@@ -10,7 +10,7 @@ from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
 from .system_features.file_copy.base_file_copy import FileTransferError
-from .base_device import BaseDevice, RollbackError
+from .base_device import BaseDevice, RollbackError, fix_docs
 
 
 from netmiko import ConnectHandler
@@ -22,7 +22,7 @@ IOS_SSH_DEVICE_TYPE = 'cisco_ios_ssh'
 class RebootSignal(NTCError):
     pass
 
-
+@fix_docs
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
         super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=IOS_SSH_DEVICE_TYPE)

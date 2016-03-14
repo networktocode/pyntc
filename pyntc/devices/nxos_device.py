@@ -5,7 +5,7 @@ import os
 from pyntc.errors import CommandError, CommandListError
 from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
-from .base_device import BaseDevice, RollbackError, RebootTimerError
+from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 
 from pynxos.device import Device as NXOSNative
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
@@ -13,7 +13,7 @@ from pynxos.errors import CLIError
 
 NXOS_API_DEVICE_TYPE = 'cisco_nxos_nxapi'
 
-
+@fix_docs
 class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=30, port=None, **kwargs):
         super(NXOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=NXOS_API_DEVICE_TYPE)
