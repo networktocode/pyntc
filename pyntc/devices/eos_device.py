@@ -9,7 +9,7 @@ from pyntc.data_model.converters import convert_dict_by_key, \
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
-from .base_device import BaseDevice, RollbackError, RebootTimerError
+from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
@@ -22,6 +22,7 @@ class RebootSignal(NTCError):
     pass
 
 
+@fix_docs
 class EOSDevice(BaseDevice):
 
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):

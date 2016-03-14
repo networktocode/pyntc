@@ -12,12 +12,13 @@ from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.exception import ConfigLoadError
 
 from .tables.jnpr.loopback import LoopbackTable
-from .base_device import BaseDevice
+from .base_device import BaseDevice, fix_docs
 
 from pyntc.errors import CommandError, CommandListError
 
 JNPR_DEVICE_TYPE = 'juniper_junos_netconf'
 
+@fix_docs
 class JunosDevice(BaseDevice):
 
     def __init__(self, host, username, password, *args, **kwargs):

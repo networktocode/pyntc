@@ -98,18 +98,18 @@ class TestNXOSDevice(unittest.TestCase):
         result = self.device.file_copy_remote_exists('source_file', 'dest_file')
 
         self.assertTrue(result)
-        self.device.native.file_copy_remote_exists.assert_called_with('source_file', 'dest_file')
+        self.device.native.file_copy_remote_exists.assert_called_with('source_file', 'dest_file', file_system='bootflash:')
 
     def test_file_copy_remote_exists_failure(self):
         self.device.native.file_copy_remote_exists.return_value = False
         result = self.device.file_copy_remote_exists('source_file', 'dest_file')
 
         self.assertFalse(result)
-        self.device.native.file_copy_remote_exists.assert_called_with('source_file', 'dest_file')
+        self.device.native.file_copy_remote_exists.assert_called_with('source_file', 'dest_file', file_system='bootflash:')
 
     def test_file_copy(self):
         self.device.file_copy('source_file', 'dest_file')
-        self.device.native.file_copy.assert_called_with('source_file', 'dest_file')
+        self.device.native.file_copy.assert_called_with('source_file', 'dest_file', file_system='bootflash:')
 
     def test_reboot(self):
         self.device.reboot(confirm=True)
