@@ -52,5 +52,3 @@ setup(name=name,
       author_email=author_email,
       description=description,
 )
-
-
