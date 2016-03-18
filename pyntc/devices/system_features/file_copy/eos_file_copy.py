@@ -85,14 +85,13 @@ class EOSFileCopy(BaseFileCopy):
             allow_agent=False,
             look_for_keys=False)
 
-        scp = SCPClient(ssh.get_transport())
+        scp = SCPClient(ssh.get_transport(), socket_timeout=30.0)
         try:
             if pull:
                 scp.get(self.remote, self.local)
             else:
                 scp.put(self.local, self.remote)
         except Exception as e:
-            print(e)
             raise FileTransferError
         finally:
             scp.close()
