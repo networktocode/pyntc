@@ -1,340 +1,415 @@
 [![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=master)](https://travis-ci.org/networktocode/pyntc) [![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=master)](https://coveralls.io/github/networktocode/pyntc?branch=master)
 
-# Introduction
-This Python library was built for as a multi-vendor abstraction for interacting with network devices 
+# pyntc
 
-## Vendor Support
-- Cisco IOS = cisco_ios_ssh
-- Cisco NXOS = cisco_ns_nxapi
-- Arista EOS = arista_eos_eapi
-- Juniper JUNOS = juniper_junos_netconf
+- Open source multi-vendor Python library
+- Freely provided to the open source community
 
-## Install
-To install the package and all of it's depedencies:
+**The purposes of the library are the following:**
+
+- Successfully establish a common framework for working with different API & device types (including IOS devices)
+- Simplify the execution of common tasks including
+  - Executing commands
+  - Copying files
+  - Upgrading devices
+  - Rebooting devices
+  - Saving / Backing Up Configs
+
+
+
+# Supported Platforms
+
+* Cisco IOS platforms
+* Cisco NX-OS
+* Arista EOS
+* Juniper Junos
+
+
+
+# Installing pyntc
+
+- Option 1:
+  - `sudo pip install ntc` or `pip install ntc --upgrade)`
+- Option 2:
+  - `git clone https://github.com/networktocode/pyntc.git`
+  - `cd pyntc`
+  - `sudo python setup.py install`
+
+
+# Getting Started with pyntc - Option 1
+
+**Using the `ntc_device` object** and supplying all parameters within your code
+
+Step 1. Import Device Object
+
 ```
-pip install pyntc
-```
-## Config File
-Configure your .ntc.conf file, as shown in the example below in your current directory. The "host" value can include either and IP or FQDN. 
-```
-[<cisco_ios_ssh|cisco_nxos_nxapi|arista_eos_eapi|juniper_junos_netconf>:<name>]
-host: <dns_or_ip>
-username: <username>
-password: <password>
-transport <http|https|ssh>p
+>>> from pyntc import ntc_device as NTC
+>>> 
 ```
 
-E.g. 
+Step 2. Create Device Object(s)
+  * Key parameter is `device_type`
+
+```
+>>> # CREATE DEVICE OBJECT FOR AN IOS DEVICE
+>>> 
+>>> csr1 = NTC(host='csr1', username='ntc', password='ntc123', device_type='cisco_ios_ssh')
+>>>
 ```
 
-[arista_eos_eapi:eos-spine1]
-host: eos-spine1.ntc.com
-username: ntc
-password: ntc123
-transport: http
+```
+>>> # CREATE DEVICE OBJECT FOR A NEXUS DEVICE
+>>> 
+>>> nxs1 = NTC(host='nxos-spine1', username='ntc', password='ntc123', device_type='cisco_nxos_nxapi')
+>>> 
+```
 
-[arista_eos_eapi:eos-spine2]
-host: 10.1.1.1
-username: ntc
-password: ntc123
-transport: http
-
-[arista_eos_eapi:eos-leaf1]
-host: eos-leaf1
-username: ntc
-password: ntc123
-transport: http
-
-[arista_eos_eapi:eos-leaf2]
-host: eos-leaf2
-username: ntc
-password: ntc123
-transport: http
+# pyntc Configration File
 
 
+- Simplify creating device objects
+- filename:  `.ntc.conf`
+- Priority:
+  - `filename` param in `ntc_device_by_name()` 
+  - Environment Variable = `PYNTC_CONF`
+  - Home directory (`.ntc.conf`)
+- Specific device_type and a name 
+- host is not required if the name is the device's FQDN
+- Four supported device types: `cisco_nxos_nxapi`, `cisco_ios_ssh`, `arista_eos_eapi`, and `juniper_junos_netconf`
+
+```bash
 [cisco_nxos_nxapi:nxos-spine1]
-host: nxos-spine1
-username: ntc
-password: ntc123
-transport: http
-
-[cisco_nxos_nxapi:nxos-spine2]
-host: nxos-spine2
-username: ntc
-password: ntc123
-transport: http
-
-[cisco_nxos_nxapi:nxos-leaf1]
-host: nxos-leaf1
-username: ntc
-password: ntc123
-transport: http
-
-[cisco_nxos_nxapi:nxos-leaf2]
-host: nxos-leaf2
+host: 31.220.64.117
 username: ntc
 password: ntc123
 transport: http
 
 [cisco_ios_ssh:csr1]
-host: csr1
+host: 176.126.88.94
 username: ntc
 password: ntc123
 port: 22
 
-[cisco_ios_ssh:csr2]
-host: csr2
+[juniper_junos_netconf:vmx1]
+host: 176.126.88.99
 username: ntc
 password: ntc123
-port: 22
 
-[cisco_ios_ssh:csr3]
-host: csr3
-username: ntc
-password: ntc123
-port: 22
-
-[juniper_junos_netconf:junos1]
-host: junos1
-username: ntc
-password: ntc123
-port: 22
-
-[juniper_junos_netconf:junos2]
-host: junos2
-username: ntc
-password: ntc123
-port: 22
 ```
-## Test in python
 
-Ensuring you are in the same directoy as the .net.conf file, you can test:
-Import Library, taking in devices from the .net.conf file as NTCNAME is this scenario
+
 ```
-Python 2.7.11+ (default, Apr 17 2016, 14:00:29) 
-[GCC 5.3.1 20160413] on linux2
-Type "help", "copyright", "credits" or "license" for more information.
+>>> csr1 = NTCNAME('csr1')
+>>>
+>>> nxs1 = NTCNAME('nxos-spine1')
 >>> 
+>>> vmx1 = NTCNAME('vmx1')
+```
+
+
+# Getting Started with pyntc - Option 2
+
+**Using the `ntc_device_by_name` object** and the `.ntc.conf` file
+
+Step 1. Import Device Object
+
+```
 >>> from pyntc import ntc_device_by_name as NTCNAME
 >>> 
 ```
-Assign devices to python usable variables, and into a list
- 
-#### Cisco IOS usage 
+
+Step 2. Create Device Object(s)
+  * No need to specify credentials, etc. when using `ntc_device_by_name` and the conf file
 
 ```
->>> r1 = NTCNAME('csr1')
->>> r3 = NTCNAME('csr3')
+>>> # CREATE DEVICE OBJECT FOR AN IOS DEVICE
 >>> 
->>> csr_devices = [r1, r3]
->>>  
->>>  
+>>> rtr = NTCNAME('csr1')
+>>> 
 ```
-Open the connection, and grab some data. The following attributes are predefined: facts, running_config and startup_config
 
-Configs ommitted for brevity sake
 ```
-... for csr in csr_devices:
-...     csr.open()
-... 
+>>> # CREATE DEVICE OBJECT FOR A NEXUS DEVICE
 >>> 
->>> import json
->>> print json.dumps(r1.facts,indent=4)
+>>> nxs1 = NTCNAME('nxos-spine1')
+>>> 
+```
+
+# Gathering Facts
+
+- Use `facts` device property
+
+On a Nexus device:
+
+```
+>>> nxs1.facts
+{'vendor': 'cisco', 'interfaces': [], u'hostname': 'nxos-spine1', u'os_version': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', u'serial_number': 'TM600C2833B', u'model': 'NX-OSv Chassis', 'vlans': ['1']}
+>>> 
+>>> print json.dumps(nxs1.facts, indent=4)
 {
-    "uptime": 7380, 
     "vendor": "cisco", 
-    "uptime_string": "00:02:03:00", 
-    "interfaces": [
-        "GigabitEthernet1", 
-        "GigabitEthernet2", 
-        "GigabitEthernet3", 
-        "GigabitEthernet4"
-    ], 
-    "hostname": "csr1", 
-    "fqdn": "N/A", 
-    "cisco_ios_ssh": {
-        "config_register": "0x2102"
-    }, 
-    "os_version": "15.5(3)S2", 
-    "serial_number": "", 
-    "model": "CSR1000V", 
-    "vlans": []
-}
->>> print r1.running_config
-Building configuration...
-
-Current configuration : 1744 bytes
-!
-! Last configuration change at 19:56:01 UTC Tue May 3 2016
-!
-version 15.5
-service timestamps debug datetime msec
-service timestamps log datetime msec
-no platform punt-keepalive disable-kernel-core
-platform console virtual
-!
-hostname csr1
-----ommitted-----
-line vty 2 4
- privilege level 15
- login local
- transport input ssh
-!
-!
-end
-
->>> print r1.startup_config
-Using 1745 out of 33554432 bytes
-!
-! Last configuration change at 00:38:38 UTC Thu Apr 21 2016
-!
-version 15.5
-service timestamps debug datetime msec
-service timestamps log datetime msec
-no platform punt-keepalive disable-kernel-core
-platform console virtual
-!
-hostname csr1
-----ommitted-----
-line vty 2 4
- privilege level 15
- login local
- transport input ssh
-!
-!
-end
-```
-#### Arista EOS usage 
- 
-```
-
->>> 
->>> s1 = NTCNAME('eos-leaf1')
->>> s2 = NTCNAME('eos-leaf2')
->>> 
->>> eos_devices = [s1, s2]
->>> 
->>> for eos in eos_devices:
-...     eos.open()
-... 
->>> print json.dumps(s1.facts,indent=4)
-{
-    "uptime": 7558, 
-    "vendor": "arista", 
-    "os_version": "4.15.5M-3054042.4155M", 
-    "interfaces": [
-        "Ethernet1", 
-        "Ethernet2", 
-        "Ethernet3", 
-        "Ethernet4", 
-        "Ethernet5", 
-        "Ethernet6", 
-        "Ethernet7", 
-        "Management1"
-    ], 
-    "hostname": "eos-leaf1", 
-    "fqdn": "eos-leaf1.ntc.com", 
-    "uptime_string": "00:02:05:58", 
-    "serial_number": "", 
-    "model": "vEOS", 
-    "vlans": [
-        "1"
-    ]
-}
-
-```
-#### Cisco NXOS usage 
-
- 
-```
->>> 
->>> nx1 = NTCNAME('nxos-spine1')
->>> nx2 = NTCNAME('nxos-spine2')
->>> 
->>> nxos_devices = [nx1, nx2]
->>> 
->>> for nxos in nxos_devices:
-...     nxos.open()
-... 
->>> print json.dumps(nx1.facts,indent=4)
-{
-    "uptime": 7585, 
-    "vendor": "cisco", 
-    "os_version": "7.3(1)D1(1) [build 7.3(1)D1(0.10)]", 
-    "interfaces": [
-        "mgmt0", 
-        "Ethernet2/1", 
-----ommitted-----
-        "Ethernet4/48", 
-        "Vlan1"
-    ], 
+    "interfaces": [], 
     "hostname": "nxos-spine1", 
-    "fqdn": "N/A", 
-    "uptime_string": "00:02:06:25", 
-    "serial_number": "TM29D1D533B", 
+    "os_version": "7.1(0)D1(1) [build 7.2(0)ZD(0.17)]", 
+    "serial_number": "TM600C2833B", 
     "model": "NX-OSv Chassis", 
     "vlans": [
         "1"
     ]
 }
->>> 
-``` 
-
-## Standard Methods
-The following defined methods provide standard functions: backup_running_config, file_copy, save, reboot. 
-
-```
->>>r1.backup_running_config('backups/csr1.cfg')
->>>r1.file_copy('cisco-ios-fake-image.bin')
->>>r1.save()
-True
->>>r1.reboot(confirm=True)
 ```
 
-There are four methods that can be used to send commands directly to the device: show, show_list, config, config_list.
+# Gathering Facts (cont'd)
 
-show and show_list can be used to send show commands. show is used to send a single show command and show_list is used to send a list of show commands.
+- Use `facts` device property
 
-config and config_list can be used to send show commands. config is used to send a single show command and config_list is used to send a list of show commands.
+On an IOS device:
 
-Examples:
 ```
->>> print r1.show('show ip int brief')
+>>> print json.dumps(csr1.facts, indent=4)
+{
+    "uptime": 87060, 
+    "vendor": "cisco", 
+    "uptime_string": "01:00:11:00", 
+    "interfaces": [
+        "GigabitEthernet1", 
+        "GigabitEthernet2", 
+        "GigabitEthernet3", 
+        "GigabitEthernet4", 
+        "Loopback100"
+    ], 
+    "hostname": "csr1", 
+    "ios": {
+        "config_register": "0x2102"
+    }, 
+    "fqdn": "N/A", 
+    "os_version": "15.5(1)S1", 
+    "serial_number": "", 
+    "model": "CSR1000V", 
+    "vlans": []
+}
+
+```
+
+# Sending Show Commands
+
+- `show` method
+- API enabled devices return JSON by default
+
+```
+>>> nxs1.show('show hostname')
+{'hostname': 'nxos-spine1'}
 >>>
-You should this output:
+```
 
-Interface              IP-Address      OK? Method Status                Protocol
-GigabitEthernet1       10.0.0.50       YES NVRAM  up                    up      
-GigabitEthernet2       10.254.13.1     YES NVRAM  up                    up      
-GigabitEthernet3       unassigned      YES NVRAM  administratively down down    
-GigabitEthernet4       10.254.12.1     YES NVRAM  up                    up      
-Loopback100            1.1.1.1         YES NVRAM  up                    up      
+```
+>>> nxs1.show('show hostname', raw_text=True)
+'nxos-spine1 \n'
 >>> 
 ```
+
+- Use `raw_text=True` to get unstructured data from the device
+
+
 ```
->>> commands = ['show run interface Gi1', 'show run | inc route']
+>>> nxs1.show('show version')
+{'kern_uptm_secs': 42, 'kick_file_name': 'bootflash:///titanium-d1-kickstart.7.2.0.ZD.0.17.bin', 'loader_ver_str': 'N/A', 'module_id': 'NX-OSv Supervisor Module', 'kick_tmstmp': '11/08/2014 04:03:27', 'isan_file_name': 'bootflash:///titanium-d1.7.2.0.ZD.0.17.bin', 'sys_ver_str': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', 'bootflash_size': 1582402, 'kickstart_ver_str': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', 'kick_cmpl_time': ' 11/7/2014 18:00:00', 'chassis_id': 'NX-OSv Chassis', 'proc_board_id': 'TM600C2833B', 'memory': 2042024, 'kern_uptm_mins': 17, 'cpu_name': 'Intel(R) Xeon(R) CPU @ 2.50G', 'kern_uptm_hrs': 2, 'isan_tmstmp': '11/08/2014 11:54:08', 'manufacturer': 'Cisco Systems, Inc.', 'header_str': 'Cisco Nexus Operating System (NX-OS) Software\nTAC support: http://www.cisco.com/tac\nDocuments: http://www.cisco.com/en/US/products/ps9372/tsd_products_support_series_home.html\nCopyright (c) 2002-2014, Cisco Systems, Inc. All rights reserved.\nThe copyrights to certain works contained herein are owned by\nother third parties and are used and distributed under license.\nSome parts of this software are covered under the GNU Public\nLicense. A copy of the license is available at\nhttp://www.gnu.org/licenses/gpl.html.\nTitanium is a demo version of the Nexus Operating System\n', 'isan_cmpl_time': ' 11/7/2014 18:00:00', 'host_name': 'nxos-spine1', 'mem_type': 'kB', 'kern_uptm_days': 1}
 >>> 
->>> output = r1.show_list(commands)
->>> 
->>> for out in output:
-...     print out
+```
+
+
+
+```
+>>> print nxs1.show('show version', raw_text=True)
+Cisco Nexus Operating System (NX-OS) Software
+TAC support: http://www.cisco.com/tac
+Documents: http://www.cisco.com/en/US/products/ps9372/tsd_products_support_series_home.html
+Copyright (c) 2002-2014, Cisco Systems, Inc. All rights reserved.
+The copyrights to certain works contained herein are owned by
+http://www.gnu.org/licenses/gpl.html.
+Titanium is a demo version of the Nexus Operating System
+Software
+  loader:    version N/A
+  kickstart: version 7.1(0)D1(1) [build 7.2(0)ZD(0.17)]
+  system:    version 7.1(0)D1(1) [build 7.2(0)ZD(0.17)]
+  kickstart image file is: bootflash:///titanium-d1-kickstart.7.2.0.ZD.0.17.bin
+  kickstart compile time:  11/7/2014 18:00:00 [11/08/2014 04:03:27]
+  system image file is:    bootflash:///titanium-d1.7.2.0.ZD.0.17.bin
+  system compile time:     11/7/2014 18:00:00 [11/08/2014 11:54:08]
+Hardware
+  cisco NX-OSv Chassis ("NX-OSv Supervisor Module")
+  Intel(R) Xeon(R) CPU @ 2.50G with 2042024 kB of memory.
+  Processor Board ID TM600C2833B
+  Device name: nxos-spine1
+  bootflash:    1582402 kB
+Kernel uptime is 1 day(s), 2 hour(s), 21 minute(s), 3 second(s)
+plugin
+  Core Plugin, Ethernet Plugin
+
+
+```
+
+# Sending Multiple Commands
+
+- `show_list` method
+
+```
+>>> cmds = ['show hostname', 'show run int Eth2/1']
+
+>>> data = nxs1.show_list(cmds, raw_text=True)
+```
+
+```
+>>> print data
+['nxos-spine1 \n', '!Command: show running-config interface Ethernet2/1\n!Time: Wed Jan  6 18:10:01 2016\nversion 7.1(0)D1(1)\ninterface Ethernet2/1\n  switchport\n  no shutdown\n']
+```
+
+```
+>>> for d in data:
+...   print d
 ... 
+nxos-spine1 
+
+!Command: show running-config interface Ethernet2/1
+!Time: Wed Jan  6 18:10:01 2016
+version 7.1(0)D1(1)
+interface Ethernet2/1
+  switchport
+  no shutdown
+```
+
+# Config Commands
+
+- Use `config` and `config_list`
+
+```
+>>> csr1.config('hostname testname')
+>>> 
+```
+
+Verification
+
+```
+>>> print csr1.show('show run | inc hostname')
+hostname testname
+testname#
+>>>
+```
+
+
+```
+>>> csr1.config_list(['interface Gi3', 'shutdown'])
+>>> 
+```
+
+# Viewing Running/Startup Configs
+
+- Use `running_config` and `start_up` device properties
+  - Only showing partial config (manually shortened for this slide)
+
+```
+>>> run = csr1.running_config
+>>> 
+>>> print run
 Building configuration...
 
-Current configuration : 150 bytes
+Current configuration : 2062 bytes
+!
+! Last configuration change at 18:26:59 UTC Wed Jan 6 2016 by ntc
+!
+version 15.5
+service timestamps debug datetime msec
+
+lldp run
+cdp run
+!
+ip scp server enable
 !
 interface GigabitEthernet1
- description MANAGEMENT
- vrf forwarding Mgmt-intf
  ip address 10.0.0.50 255.255.255.0
- negotiation auto
  cdp enable
-end
-
-router ospf 100
- router-id 1.1.1.1
-ip route vrf Mgmt-intf 0.0.0.0 0.0.0.0 10.0.0.2
 ```
+
+# Copying files
+
+- `file_copy` method
+
+```
+>>> devices = [csr1, nxs1]
+>>> 
+>>> for device in devices:
+...   device.file_copy('newconfig.cfg')
+...
+>>>
+```
+
+# Save Configs
+
+- `save` method
+
+`copy run start` for Cisco/Arista and `commit` for Juniper
+
+```
+>>> csr1.save()
+True
+
+```
+
+`copy running-config <filename>`
+
+```
+>>> csr1.save('mynewconfig.cfg')
+True
+```
+
+# Backup Configs
+
+Backup current running configuration and store it locally
+
+```
+>>> csr1.backup_running_config('csr1.cfg')
+>>> 
+```
+
+# Reboot
+
+Reboot target device
+
+Parameters:
+  - `timer=0` by default
+  - `confirm=False` by default
+
+```
+>>> csr1.reboot(confirm=True)
+>>> 
+```
+
+# Installing Operating Systems
+
+Backup current running configuration and store it locally
+
+Note: not currently supported on Juniper
+
+```
+>>> device.install_os('nxos.7.0.3.I2.1.bin')
+>>> 
+```
+
+Full workflow example:
+
+```
+>>> device.file_copy('nxos.7.0.3.I2.1.bin')
+>>> device.install_os('nxos.7.0.3.I2.1.bin')
+>>> device.save()
+>>> device.reboot()          # IF NEEDED
+>>> 
+```
+
+# Summary
+
+- pyntc is a multi-vendor library that currently supports system level tasks
+- *getters* coming in the future
+- Feature level tasks coming in the future
 
 
 
