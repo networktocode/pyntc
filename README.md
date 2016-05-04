@@ -18,7 +18,7 @@ It's main purpose to is to simplify the execution of common tasks including:
 * Arista EOS - uses pyeapi (eAPI)
 * Juniper Junos - uses PyEz (NETCONF)
 
-As you can see it's multi-vendor and multi-API library.
+It is a multi-vendor AND multi-API library.
 
 # Installing pyntc
 
