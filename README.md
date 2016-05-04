@@ -1,54 +1,62 @@
 [![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=master)](https://travis-ci.org/networktocode/pyntc) [![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=master)](https://coveralls.io/github/networktocode/pyntc?branch=master)
 
-# pyntc
+# Introduction
 
-- Open source multi-vendor Python library
-- Freely provided to the open source community
+pyntc is an open source multi-vendor Python library that establishes a common framework for working with different network APIs & device types (including IOS devices)
 
-**The purposes of the library are the following:**
-
-- Successfully establish a common framework for working with different API & device types (including IOS devices)
-- Simplify the execution of common tasks including
+It's main purpose to is to simplify the execution of common tasks including:
   - Executing commands
   - Copying files
   - Upgrading devices
   - Rebooting devices
   - Saving / Backing Up Configs
 
-
-
 # Supported Platforms
 
-* Cisco IOS platforms
-* Cisco NX-OS
-* Arista EOS
-* Juniper Junos
+* Cisco IOS platforms - uses SSH (netmiko)
+* Cisco NX-OS - uses pynxos (NX-API)
+* Arista EOS - uses pyeapi (eAPI)
+* Juniper Junos - uses PyEz (NETCONF)
 
-
+As you can see it's multi-vendor and multi-API library.
 
 # Installing pyntc
 
-- Option 1:
-  - `sudo pip install ntc` or `pip install ntc --upgrade)`
-- Option 2:
-  - `git clone https://github.com/networktocode/pyntc.git`
-  - `cd pyntc`
-  - `sudo python setup.py install`
+Option 1:
+
+```
+sudo pip install ntc` or `pip install ntc --upgrade)
+```
+
+Option 2:
+
+```
+git clone https://github.com/networktocode/pyntc.git
+cd pyntc
+sudo python setup.py install
+```
 
 
-# Getting Started with pyntc - Option 1
+# Getting Started with pyntc
 
-**Using the `ntc_device` object** and supplying all parameters within your code
+There are two ways to get started with pyntc.  
 
-Step 1. Import Device Object
+The first way is to use the `ntc_device` object.  Just pass in all required parameters to the object to initialize your device.  Here we are showing the import, but renaming the object to `NTC`.
 
 ```
 >>> from pyntc import ntc_device as NTC
 >>> 
 ```
 
-Step 2. Create Device Object(s)
-  * Key parameter is `device_type`
+Like many libraries, we need to pass in the host/IP and credentials.  Because this is a multi-vendor/API library, we also use the `device_type` parameter to identify which device we are building an instance of.
+
+pyntc currently supports four device types:
+* cisco_ios_ssh
+* cisco_nxos_nxapi
+* arista_eos_eapi
+* juniper_junos_netconf
+
+The example below shows how to build a device object when working with a Cisco IOS router.
 
 ```
 >>> # CREATE DEVICE OBJECT FOR AN IOS DEVICE
@@ -57,6 +65,8 @@ Step 2. Create Device Object(s)
 >>>
 ```
 
+And here is an object for a Cisco Nexus device:
+
 ```
 >>> # CREATE DEVICE OBJECT FOR A NEXUS DEVICE
 >>> 
@@ -64,18 +74,23 @@ Step 2. Create Device Object(s)
 >>> 
 ```
 
+The second way to get started with pyntc is to use the pyntc configuration file.  This was modeled after Arista's `.eapi.conf` file.  Our file is called `.ntc.conf`
+
+This simplifies creating device objects since you no longer need to specify credentials and other device specific parameters when you build the device object.  Instead, they are stored in the conf file.
+
+
 # pyntc Configration File
 
-
-- Simplify creating device objects
 - filename:  `.ntc.conf`
-- Priority:
-  - `filename` param in `ntc_device_by_name()` 
-  - Environment Variable = `PYNTC_CONF`
-  - Home directory (`.ntc.conf`)
-- Specific device_type and a name 
+- Priority of locating the conf file:
+  - `filename` param in `ntc_device_by_name` 
+  - Environment Variable aka `PYNTC_CONF`
+  - Home directory `.ntc.conf`
+- Specify device_type and a name 
 - host is not required if the name is the device's FQDN
 - Four supported device types: `cisco_nxos_nxapi`, `cisco_ios_ssh`, `arista_eos_eapi`, and `juniper_junos_netconf`
+
+Here is an example `.ntc.conf` file:
 
 ```bash
 [cisco_nxos_nxapi:nxos-spine1]
@@ -97,8 +112,11 @@ password: ntc123
 
 ```
 
+We can now build device objects just by referencing the name of the device from the conf file.
 
 ```
+>>> from pyntc import ntc_device_by_name as NTCNAME
+>>> 
 >>> csr1 = NTCNAME('csr1')
 >>>
 >>> nxs1 = NTCNAME('nxos-spine1')
@@ -107,41 +125,19 @@ password: ntc123
 ```
 
 
-# Getting Started with pyntc - Option 2
+Once the device object is creating using either `ntc_device` or `ntc_device_by_name`, you can start using the built-in device methods in pyntc.
 
-**Using the `ntc_device_by_name` object** and the `.ntc.conf` file
+Note: the only method and property not supported on all devices is `install_os`.  It is not supported on Juniper Junos devices.
 
-Step 1. Import Device Object
-
-```
->>> from pyntc import ntc_device_by_name as NTCNAME
->>> 
-```
-
-Step 2. Create Device Object(s)
-  * No need to specify credentials, etc. when using `ntc_device_by_name` and the conf file
-
-```
->>> # CREATE DEVICE OBJECT FOR AN IOS DEVICE
->>> 
->>> rtr = NTCNAME('csr1')
->>> 
-```
-
-```
->>> # CREATE DEVICE OBJECT FOR A NEXUS DEVICE
->>> 
->>> nxs1 = NTCNAME('nxos-spine1')
->>> 
-```
-
-# Gathering Facts
+### Gathering Facts
 
 - Use `facts` device property
 
 On a Nexus device:
 
 ```
+>>> nxs1 = NTCNAME('nxos-spine1')
+>>> 
 >>> nxs1.facts
 {'vendor': 'cisco', 'interfaces': [], u'hostname': 'nxos-spine1', u'os_version': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', u'serial_number': 'TM600C2833B', u'model': 'NX-OSv Chassis', 'vlans': ['1']}
 >>> 
@@ -159,13 +155,11 @@ On a Nexus device:
 }
 ```
 
-# Gathering Facts (cont'd)
-
-- Use `facts` device property
-
 On an IOS device:
 
 ```
+>>> csr1 = NTCNAME('csr1')
+>>> 
 >>> print json.dumps(csr1.facts, indent=4)
 {
     "uptime": 87060, 
@@ -191,10 +185,10 @@ On an IOS device:
 
 ```
 
-# Sending Show Commands
+### Sending Show Commands
 
 - `show` method
-- API enabled devices return JSON by default
+- Note: API enabled devices return JSON by default
 
 ```
 >>> nxs1.show('show hostname')
@@ -202,54 +196,15 @@ On an IOS device:
 >>>
 ```
 
+- Use `raw_text=True` to get unstructured data from the device
+
 ```
 >>> nxs1.show('show hostname', raw_text=True)
 'nxos-spine1 \n'
 >>> 
 ```
 
-- Use `raw_text=True` to get unstructured data from the device
-
-
-```
->>> nxs1.show('show version')
-{'kern_uptm_secs': 42, 'kick_file_name': 'bootflash:///titanium-d1-kickstart.7.2.0.ZD.0.17.bin', 'loader_ver_str': 'N/A', 'module_id': 'NX-OSv Supervisor Module', 'kick_tmstmp': '11/08/2014 04:03:27', 'isan_file_name': 'bootflash:///titanium-d1.7.2.0.ZD.0.17.bin', 'sys_ver_str': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', 'bootflash_size': 1582402, 'kickstart_ver_str': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', 'kick_cmpl_time': ' 11/7/2014 18:00:00', 'chassis_id': 'NX-OSv Chassis', 'proc_board_id': 'TM600C2833B', 'memory': 2042024, 'kern_uptm_mins': 17, 'cpu_name': 'Intel(R) Xeon(R) CPU @ 2.50G', 'kern_uptm_hrs': 2, 'isan_tmstmp': '11/08/2014 11:54:08', 'manufacturer': 'Cisco Systems, Inc.', 'header_str': 'Cisco Nexus Operating System (NX-OS) Software\nTAC support: http://www.cisco.com/tac\nDocuments: http://www.cisco.com/en/US/products/ps9372/tsd_products_support_series_home.html\nCopyright (c) 2002-2014, Cisco Systems, Inc. All rights reserved.\nThe copyrights to certain works contained herein are owned by\nother third parties and are used and distributed under license.\nSome parts of this software are covered under the GNU Public\nLicense. A copy of the license is available at\nhttp://www.gnu.org/licenses/gpl.html.\nTitanium is a demo version of the Nexus Operating System\n', 'isan_cmpl_time': ' 11/7/2014 18:00:00', 'host_name': 'nxos-spine1', 'mem_type': 'kB', 'kern_uptm_days': 1}
->>> 
-```
-
-
-
-```
->>> print nxs1.show('show version', raw_text=True)
-Cisco Nexus Operating System (NX-OS) Software
-TAC support: http://www.cisco.com/tac
-Documents: http://www.cisco.com/en/US/products/ps9372/tsd_products_support_series_home.html
-Copyright (c) 2002-2014, Cisco Systems, Inc. All rights reserved.
-The copyrights to certain works contained herein are owned by
-http://www.gnu.org/licenses/gpl.html.
-Titanium is a demo version of the Nexus Operating System
-Software
-  loader:    version N/A
-  kickstart: version 7.1(0)D1(1) [build 7.2(0)ZD(0.17)]
-  system:    version 7.1(0)D1(1) [build 7.2(0)ZD(0.17)]
-  kickstart image file is: bootflash:///titanium-d1-kickstart.7.2.0.ZD.0.17.bin
-  kickstart compile time:  11/7/2014 18:00:00 [11/08/2014 04:03:27]
-  system image file is:    bootflash:///titanium-d1.7.2.0.ZD.0.17.bin
-  system compile time:     11/7/2014 18:00:00 [11/08/2014 11:54:08]
-Hardware
-  cisco NX-OSv Chassis ("NX-OSv Supervisor Module")
-  Intel(R) Xeon(R) CPU @ 2.50G with 2042024 kB of memory.
-  Processor Board ID TM600C2833B
-  Device name: nxos-spine1
-  bootflash:    1582402 kB
-Kernel uptime is 1 day(s), 2 hour(s), 21 minute(s), 3 second(s)
-plugin
-  Core Plugin, Ethernet Plugin
-
-
-```
-
-# Sending Multiple Commands
+### Sending Multiple Commands
 
 - `show_list` method
 
@@ -257,11 +212,6 @@ plugin
 >>> cmds = ['show hostname', 'show run int Eth2/1']
 
 >>> data = nxs1.show_list(cmds, raw_text=True)
-```
-
-```
->>> print data
-['nxos-spine1 \n', '!Command: show running-config interface Ethernet2/1\n!Time: Wed Jan  6 18:10:01 2016\nversion 7.1(0)D1(1)\ninterface Ethernet2/1\n  switchport\n  no shutdown\n']
 ```
 
 ```
@@ -278,7 +228,7 @@ interface Ethernet2/1
   no shutdown
 ```
 
-# Config Commands
+### Config Commands
 
 - Use `config` and `config_list`
 
@@ -287,22 +237,12 @@ interface Ethernet2/1
 >>> 
 ```
 
-Verification
-
-```
->>> print csr1.show('show run | inc hostname')
-hostname testname
-testname#
->>>
-```
-
-
 ```
 >>> csr1.config_list(['interface Gi3', 'shutdown'])
 >>> 
 ```
 
-# Viewing Running/Startup Configs
+### Viewing Running/Startup Configs
 
 - Use `running_config` and `start_up` device properties
   - Only showing partial config (manually shortened for this slide)
@@ -330,7 +270,7 @@ interface GigabitEthernet1
  cdp enable
 ```
 
-# Copying files
+### Copying files
 
 - `file_copy` method
 
@@ -343,7 +283,7 @@ interface GigabitEthernet1
 >>>
 ```
 
-# Save Configs
+### Save Configs
 
 - `save` method
 
@@ -355,14 +295,14 @@ True
 
 ```
 
-`copy running-config <filename>`
+You can also do the equivalent of `copy running-config <filename>` by specifying a filename:
 
 ```
 >>> csr1.save('mynewconfig.cfg')
 True
 ```
 
-# Backup Configs
+### Backup Configs
 
 Backup current running configuration and store it locally
 
@@ -371,7 +311,7 @@ Backup current running configuration and store it locally
 >>> 
 ```
 
-# Reboot
+### Reboot
 
 Reboot target device
 
@@ -384,11 +324,7 @@ Parameters:
 >>> 
 ```
 
-# Installing Operating Systems
-
-Backup current running configuration and store it locally
-
-Note: not currently supported on Juniper
+### Installing Operating Systems
 
 ```
 >>> device.install_os('nxos.7.0.3.I2.1.bin')
@@ -401,15 +337,10 @@ Full workflow example:
 >>> device.file_copy('nxos.7.0.3.I2.1.bin')
 >>> device.install_os('nxos.7.0.3.I2.1.bin')
 >>> device.save()
->>> device.reboot()          # IF NEEDED
+>>> device.reboot()          # IF NEEDED, NXOS automatically reboots
 >>> 
 ```
 
-# Summary
-
-- pyntc is a multi-vendor library that currently supports system level tasks
-- *getters* coming in the future
-- Feature level tasks coming in the future
 
 
 
