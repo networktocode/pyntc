@@ -4,6 +4,7 @@
 import signal
 import os
 import re
+import time
 
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_structured_data
@@ -119,7 +120,11 @@ class IOSDevice(BaseDevice):
         return responses
 
     def save(self, filename='startup-config'):
-        self.show_list(['copy running-config %s' % filename, '\n', '\n'])
+        command = 'copy running-config %s' % filename
+        expect_string = '\[%s\]' % filename
+        self.show(command, expect=True, expect_string=expect_string)
+        time.sleep(5)
+        self.show('\n')
         return True
 
     def _file_copy_instance(self, src, dest=None, file_system='flash:'):
