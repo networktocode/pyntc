@@ -76,7 +76,7 @@ class IOSDevice(BaseDevice):
             else:
                 response = self.native.send_command_expect(command)
         else:
-            response = self.native.send_command(command)
+            response = self.native.send_command_timing(command)
 
         if '% ' in response or 'Error:' in response:
             raise CommandError(command, response)
@@ -160,7 +160,7 @@ class IOSDevice(BaseDevice):
     def reboot(self, timer=0, confirm=False):
         if confirm:
             def handler(signum, frame):
-                raise RebootSignal('Interupting after reload')
+                raise RebootSignal('Interrupting after reload')
 
             signal.signal(signal.SIGALRM, handler)
             signal.alarm(10)
@@ -172,9 +172,9 @@ class IOSDevice(BaseDevice):
                     first_response = self.show('reload')
 
                 if 'System configuration' in first_response:
-                    self.native.send_command('no')
+                    self.native.send_command_timing('no')
 
-                self.native.send_command('\n')
+                self.native.send_command_timing('\n')
             except RebootSignal:
                 signal.alarm(0)
 
