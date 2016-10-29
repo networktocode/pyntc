@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import sys
 
 name = 'pyntc'
-version = '0.0.4'
+version = '0.0.5'
 packages = find_packages()
 package_data = {'pyntc': ['templates/*.template', 'devices/tables/jnpr/*.yml']}
 
@@ -23,7 +23,7 @@ dependency_links = []
 author = 'Network To Code'
 author_email = 'ntc@networktocode.com'
 url = 'https://github.com/networktocode/pyntc'
-download_url = 'https://github.com/networktocode/pyntc/tarball/master'
+download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.5'
 description = 'A multi-vendor library for managing network devices.'
 
 if sys.version_info.major >= 3:
