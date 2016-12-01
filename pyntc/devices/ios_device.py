@@ -123,8 +123,8 @@ class IOSDevice(BaseDevice):
         command = 'copy running-config %s' % filename
         expect_string = '\[%s\]' % filename
         self.show(command, expect=True, expect_string=expect_string)
-        time.sleep(5)
-        self.show('\n')
+        expect_string = '\[OK\]'
+        self._send_command('\n', expect=True, expect_string=expect_string)
         return True
 
     def _file_copy_instance(self, src, dest=None, file_system='flash:'):
