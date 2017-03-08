@@ -25,7 +25,7 @@ It is a multi-vendor AND multi-API library.
 Option 1:
 
 ```
-sudo pip install ntc` or `pip install ntc --upgrade)
+"sudo pip install pyntc" or "sudo pip install pyntc --upgrade"
 ```
 
 Option 2:
