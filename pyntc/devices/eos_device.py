@@ -90,7 +90,8 @@ class EOSDevice(BaseDevice):
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
         if fc.remote_file_exists():
-            return True
+            if fc.already_transfered():
+                return True
         return False
 
     def file_copy(self, src, dest=None, **kwargs):
