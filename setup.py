@@ -26,7 +26,7 @@ url = 'https://github.com/networktocode/pyntc'
 download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.5'
 description = 'A multi-vendor library for managing network devices.'
 
-if sys.version_info.major >= 3:
+if sys.version[0] >= 3:
     install_requires.append('textfsm==1.0.1')
     install_requires.append('pyeapi==9.9.9')
     dependency_links.append(
