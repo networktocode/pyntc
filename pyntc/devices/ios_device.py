@@ -88,7 +88,13 @@ class IOSDevice(BaseDevice):
         self._send_command(command)
         self.native.exit_config_mode()
 
-    def config_list(self, commands):
+    def config_list(self, commands, ignore_status = r''):
+        """
+            ignore_status : Union(regex,callable)
+                If the command matches the regex [or the function returns True], the non-zero
+                exit status of certain commands will be ignored.
+        """
+        import re, types
         self._enter_config()
         entered_commands = []
         for command in commands:
@@ -96,8 +102,11 @@ class IOSDevice(BaseDevice):
             try:
                 self._send_command(command)
             except CommandError as e:
-                raise CommandListError(
-                    entered_commands, command, e.cli_error_msg)
+                if (type(ignore_status) is str and re.match(ignore_status,command)) or (type(ignore_status) == types.FunctionType and ignore_status(command)):
+                    print "Ignoring non-zero return status"
+                    print "\t"+str(e).replace("\n","\n\t")
+                else:
+                    raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
     def show(self, command, expect=False, expect_string=''):
