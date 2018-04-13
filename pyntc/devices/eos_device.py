@@ -24,14 +24,31 @@ class RebootSignal(NTCError):
 
 @fix_docs
 class EOSDevice(BaseDevice):
-
-    def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type=EOS_API_DEVICE_TYPE)
+    def __init__(self,
+                 host,
+                 username,
+                 password,
+                 transport='http',
+                 port=None,
+                 timeout=60,
+                 **kwargs):
+        super(EOSDevice, self).__init__(
+            host,
+            username,
+            password,
+            vendor='arista',
+            device_type=EOS_API_DEVICE_TYPE)
         self.transport = transport
         self.timeout = timeout
+        self.port = port
 
         self.connection = eos_connect(
-            transport, host=host, username=username, password=password, timeout=timeout)
+            transport,
+            host=host,
+            username=username,
+            password=password,
+            port=port,
+            timeout=timeout)
 
         self.native = EOSNative(self.connection)
 
