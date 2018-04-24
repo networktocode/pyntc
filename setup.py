@@ -17,8 +17,14 @@ install_requires = [
     'coverage',
     'mock>=1.3',
     'terminal',
-    'textfsm',
 ]
+
+if sys.version_info.major >= 3:
+    install_requires.append('textfsm')
+else:
+    install_requires.append('gtextfsm')
+    install_requires.append('pyeapi')
+    install_requires.append('junos-eznc')
 
 dependency_links = []
 
