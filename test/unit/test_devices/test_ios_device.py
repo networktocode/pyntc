@@ -12,7 +12,7 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, 'open')
     @mock.patch.object(IOSDevice, 'close')
-    @mock.patch('netmiko.cisco.cisco_ios_ssh.CiscoIosSSH', autospec=True)
+    @mock.patch('netmiko.cisco.cisco_ios.CiscoIosSSH', autospec=True)
     def setUp(self, mock_miko, mock_close, mock_open):
         self.device = IOSDevice('host', 'user', 'pass')
 
