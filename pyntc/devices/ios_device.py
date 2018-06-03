@@ -35,7 +35,7 @@ class IOSDevice(BaseDevice):
         self.password = password
         self.secret = secret
         self.port = int(port)
-        self.global_delay_factor = kwargs.get('global_delay_factor')
+        self.global_delay_factor = kwargs.get('global_delay_factor', 1)
         self._connected = False
         self.open()
 
