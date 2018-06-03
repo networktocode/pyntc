@@ -35,6 +35,7 @@ class IOSDevice(BaseDevice):
         self.password = password
         self.secret = secret
         self.port = int(port)
+        self.global_delay_factor = kwargs.get('global_delay_factor')
         self._connected = False
         self.open()
 
@@ -51,6 +52,7 @@ class IOSDevice(BaseDevice):
                                          username=self.username,
                                          password=self.password,
                                          port=self.port,
+                                         global_delay_factor=self.global_delay_factor,
                                          secret=self.secret,
                                          verbose=False)
             self._connected = True
@@ -121,13 +123,10 @@ class IOSDevice(BaseDevice):
 
     def save(self, filename='startup-config'):
         command = 'copy running-config %s' % filename
-        # Changed to send_command_timing to not require a direct prompt return.
-        self.native.send_command_timing(command)
-        # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback. This will send return without requiring an OK.
-        # Send a return to pass the [OK]? message - Incease delay_factor for looking for response.
-        self.native.send_command_timing('\n',delay_factor=2)
-        # Confirm that we have a valid prompt again before returning.
-        self.native.find_prompt()
+        expect_string = '\[%s\]' % filename
+        self.show(command, expect=True, expect_string=expect_string)
+        time.sleep(5)
+        self.show('\n')
         return True
 
     def _file_copy_instance(self, src, dest=None, file_system='flash:'):
