@@ -6,3 +6,4 @@ coverage_html_report/
 *.egg-info
 .coverage
 dist/
+.cache/

@@ -10,7 +10,14 @@ from pyntc.errors import CommandError, CommandListError
 from jnpr.junos.exception import ConfigLoadError
 
 
+class MockType:
+    def __init__(self, *args):
+        self.mock = mock.Mock()
+    def __call__(self, *args):
+        return self.mock
+
 class TestJnprDevice(unittest.TestCase):
+    __metaclass__ = MockType
 
     @mock.patch('jnpr.junos.device.Device', autospec=True)
     @mock.patch('jnpr.junos.utils.config', autospec=True)
@@ -65,12 +72,14 @@ class TestJnprDevice(unittest.TestCase):
     def test_show(self):
         command = 'show configuration snmp'
 
-        expected = """community public {
-    authorization read-only;
-}
-community networktocode {
-    authorization read-only;
-}"""
+        expected = """
+            community public {
+                authorization read-only;
+            }
+            community networktocode {
+                authorization read-only;
+            }
+        """
 
         self.device.native.cli.return_value = expected
         result = self.device.show(command)
