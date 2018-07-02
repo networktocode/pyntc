@@ -54,7 +54,6 @@ class IOSDevice(BaseDevice):
                                          password=self.password,
                                          port=self.port,
                                          global_delay_factor=self.global_delay_factor,
-                                         delay_factor=self.delay_factor,
                                          secret=self.secret,
                                          verbose=False)
             self._connected = True
