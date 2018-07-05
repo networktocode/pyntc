@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import sys
 
 name = 'pyntc'
-version = '0.0.5'
+version = '0.0.6'
 packages = find_packages()
 package_data = {'pyntc': ['templates/*.template', 'devices/tables/jnpr/*.yml']}
 
@@ -15,6 +15,7 @@ install_requires = [
     'pynxos>=0.0.3',
     'coverage',
     'mock>=1.3',
+    'textfsm',
     'terminal',
 ]
 
@@ -23,20 +24,15 @@ dependency_links = []
 author = 'Network To Code'
 author_email = 'ntc@networktocode.com'
 url = 'https://github.com/networktocode/pyntc'
-download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.5'
+download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.6'
 description = 'A multi-vendor library for managing network devices.'
 
 if sys.version_info.major >= 3:
-    install_requires.append('textfsm==1.0.1')
     install_requires.append('pyeapi==9.9.9')
-    dependency_links.append(
-        'https://github.com/jonathanslenders/textfsm/tarball/master#egg=textfsm-1.0.1'
-    )
     dependency_links.append(
         'https://github.com/arista-eosplus/pyeapi/tarball/develop#egg=pyeapi-9.9.9'
       )
 else:
-    install_requires.append('gtextfsm')
     install_requires.append('pyeapi')
     install_requires.append('junos-eznc')
 
