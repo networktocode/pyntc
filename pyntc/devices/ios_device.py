@@ -200,7 +200,7 @@ class IOSDevice(BaseDevice):
     def get_boot_options(self):
         if self._is_catalyst():
             show_boot_out = self.show('show boot')
-            boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
+            boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
             boot_path = re.search(boot_path_regex, show_boot_out).group(1)
             boot_image = boot_path.replace('flash:/', '')
             return dict(sys=boot_image)
