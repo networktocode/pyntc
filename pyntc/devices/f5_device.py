@@ -14,7 +14,6 @@ F5_API_DEVICE_TYPE = 'f5_tmos_rest'
 
 
 class F5Device(BaseDevice):
-
     def __init__(self, host, username, password, **kwargs):
         super(F5Device, self).__init__(host, username, password, vendor='f5',
                                        device_type=F5_API_DEVICE_TYPE)
@@ -300,3 +299,57 @@ class F5Device(BaseDevice):
                                      verify=False)
 
                 start += len(payload)
+
+    def open(self):
+        raise NotImplementedError
+
+    def close(self):
+        raise NotImplementedError
+
+    def config(self, command):
+        raise NotImplementedError
+
+    def config_list(self, commands):
+        raise NotImplementedError
+
+    def show(self, command, raw_text=False):
+        raise NotImplementedError
+
+    def show_list(self, commands, raw_text=False):
+        raise NotImplementedError
+
+    def save(self, filename=None):
+        raise NotImplementedError
+
+    def file_copy(self, src, dest=None, **kwargs):
+        raise NotImplementedError
+
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        raise NotImplementedError
+
+    def reboot(self, timer=0, confirm=False):
+        raise NotImplementedError
+
+    def get_boot_options(self):
+        raise NotImplementedError
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+
+    def checkpoint(self, filename):
+        raise NotImplementedError
+
+    def rollback(self, checkpoint_file):
+        raise NotImplementedError
+
+    def backup_running_config(self, filename):
+        raise NotImplementedError
+
+    def facts(self):
+        raise NotImplementedError
+
+    def running_config(self):
+        raise NotImplementedError
+
+    def startup_config(self):
+        raise NotImplementedError
