@@ -1,6 +1,7 @@
 """Module for using an F5 TMOS device over the REST.
 """
 
+import hashlib
 import os
 import re
 import time
@@ -70,7 +71,7 @@ class F5Device(BaseDevice):
         elif min_space >= free_space:
             return True
 
-    def _get_md5sum(self, filename):
+    def _file_copy_remote_md5(self, filepath):
         """Gets md5 checksum of the filename
 
         Example of 'md5sum' command:
@@ -84,12 +85,26 @@ class F5Device(BaseDevice):
         md5sum_result = None
         md5sum_output = self.api_handler.tm.util.bash.exec_cmd('run',
                                                                utilCmdArgs='-c "md5sum {}"'.format(
-                                                                   filename))
+                                                                   filepath))
         if md5sum_output:
             md5sum_result = md5sum_output.commandResult
             md5sum_result = md5sum_result.split()[0]
 
         return md5sum_result
+
+    @staticmethod
+    def _file_copy_local_file_exists(filepath):
+        return os.path.isfile(filepath)
+
+    def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
+        if self._file_copy_local_file_exists(filepath):
+            m = hashlib.md5()
+            with open(filepath, "rb") as f:
+                buf = f.read(blocksize)
+                while buf:
+                    m.update(buf)
+                    buf = f.read(blocksize)
+            return m.hexdigest()
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct
@@ -97,7 +112,7 @@ class F5Device(BaseDevice):
         Returns:
             bool - True / False if checksums match
         """
-        md5sum = self._get_md5sum(filename)
+        md5sum = self._file_copy_remote_md5(filename)
 
         if checksum == md5sum:
             return True
@@ -267,22 +282,22 @@ class F5Device(BaseDevice):
                 pass
         return False
 
-    def _upload_image(self, image):
+    def _upload_image(self, image_filepath):
         """Uploads an iso image to the device
 
         Returns:
             None
         """
-        filename = os.path.basename(image)
+        image_filename = os.path.basename(image_filepath)
         _URI = 'https://{hostname}/mgmt/cm/autodeploy/software-image-uploads/{filename}'.format(
-            hostname=self.hostname, filename=filename)
+            hostname=self.hostname, filename=image_filename)
         chunk_size = 512 * 1024
-        size = os.path.getsize(image)
+        size = os.path.getsize(image_filepath)
         headers = {'Content-Type': 'application/octet-stream'}
         requests.packages.urllib3.disable_warnings()
         start = 0
 
-        with open(image, 'rb') as fileobj:
+        with open(image_filepath, 'rb') as fileobj:
             while True:
                 payload = fileobj.read(chunk_size)
                 if not payload:
@@ -322,13 +337,36 @@ class F5Device(BaseDevice):
         raise NotImplementedError
 
     def file_copy(self, src, dest=None, **kwargs):
-        raise NotImplementedError
+        if dest:
+            raise NotImplementedError(
+                "Support only for images - destination is always /shared/images")
+
+        self._upload_image(image_filepath=src)
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        raise NotImplementedError
+        if dest:
+            raise NotImplementedError(
+                "Support only for images - destination is always /shared/images")
 
-    def reboot(self, timer=0, confirm=False):
-        raise NotImplementedError
+        local_md5sum = self._file_copy_local_md5(filepath=src)
+        file_basename = os.path.basename(src)
+
+        if not self._image_match(image_name=file_basename,
+                                 checksum=local_md5sum):
+            return False
+        else:
+            return True
+
+    def reboot(self, volume):
+        if self._get_active_volume() == volume:
+            volume_name = None
+        else:
+            volume_name = volume
+
+        self._reboot_to_volume(volume_name=volume_name)
+
+        if not self._wait_for_device_reboot(volume_name=volume):
+            raise Exception("Reboot to volume {} did not happen".format(volume))
 
     def get_boot_options(self):
         raise NotImplementedError
