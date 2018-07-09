@@ -316,10 +316,10 @@ class F5Device(BaseDevice):
                 start += len(payload)
 
     def open(self):
-        raise NotImplementedError
+        pass
 
     def close(self):
-        raise NotImplementedError
+        pass
 
     def config(self, command):
         raise NotImplementedError
@@ -366,7 +366,7 @@ class F5Device(BaseDevice):
         self._reboot_to_volume(volume_name=volume_name)
 
         if not self._wait_for_device_reboot(volume_name=volume):
-            raise Exception("Reboot to volume {} did not happen".format(volume))
+            raise RuntimeError("Reboot to volume {} did not happen".format(volume))
 
     def get_boot_options(self):
         raise NotImplementedError
