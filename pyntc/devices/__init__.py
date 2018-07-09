@@ -29,6 +29,7 @@ supported_devices = {
     JNPR_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: JunosDevice,
     },
+
     F5_API_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: F5Device,
     },
