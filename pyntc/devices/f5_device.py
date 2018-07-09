@@ -19,7 +19,7 @@ class F5Device(BaseDevice):
         super(F5Device, self).__init__(host, username, password, vendor='f5',
                                        device_type=F5_API_DEVICE_TYPE)
 
-        self.hostname = hostname
+        self.hostname = host
         self.username = username
         self.password = password
         self.api_handler = ManagementRoot(self.hostname, self.username,
