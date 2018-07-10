@@ -66,10 +66,10 @@ class F5Device(BaseDevice):
 
         if not free_space:
             raise ValueError('Could not get free space')
-        elif min_space < free_space:
-            return False
-        elif min_space >= free_space:
+        elif free_space >= min_space:
             return True
+        elif free_space < min_space:
+            return False
 
     def _file_copy_remote_md5(self, filepath):
         """Gets md5 checksum of the filename
