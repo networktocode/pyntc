@@ -366,13 +366,27 @@ class F5Device(BaseDevice):
         self._reboot_to_volume(volume_name=volume_name)
 
         if not self._wait_for_device_reboot(volume_name=volume):
-            raise RuntimeError("Reboot to volume {} did not happen".format(volume))
+            raise RuntimeError("Reboot to volume {} failed".format(volume))
 
     def get_boot_options(self):
-        raise NotImplementedError
+        active_volume = self._get_active_volume()
+
+        return {'active_volume': active_volume}
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        raise NotImplementedError
+        volume = vendor_specifics.get('volume')
+
+        free_space = self._check_free_space(min_space=6)
+
+        if not free_space:
+            raise RuntimeError(
+                "Not enough free space to install OS".format(volume))
+
+        self._image_install(image_name=image_name, volume=volume)
+
+        if not self._wait_for_image_installed(image_name=image_name,
+                                              volume=volume):
+            raise RuntimeError("Installation of {} failed".format(volume))
 
     def checkpoint(self, filename):
         raise NotImplementedError
