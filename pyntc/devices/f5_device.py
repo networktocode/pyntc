@@ -357,7 +357,7 @@ class F5Device(BaseDevice):
         else:
             return True
 
-    def reboot(self, volume):
+    def reboot(self, timer=0, confirm=False, volume=None):
         if self._get_active_volume() == volume:
             volume_name = None
         else:
