@@ -199,7 +199,7 @@ class F5Device(BaseDevice):
                                                          volume=volume,
                                                          options=options)
 
-    def _image_installed(self, image_name, volume):
+    def image_installed(self, image_name, volume):
         """Checks if image is installed on a specified volume
 
         Returns:
@@ -232,7 +232,7 @@ class F5Device(BaseDevice):
 
         while time.time() < end_time:
             time.sleep(20)
-            if self._image_installed(image_name=image_name, volume=volume):
+            if self.image_installed(image_name=image_name, volume=volume):
                 return True
 
         return False
