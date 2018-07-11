@@ -358,15 +358,18 @@ class F5Device(BaseDevice):
             return True
 
     def reboot(self, timer=0, confirm=False, volume=None):
-        if self._get_active_volume() == volume:
-            volume_name = None
+        if confirm:
+            if self._get_active_volume() == volume:
+                volume_name = None
+            else:
+                volume_name = volume
+
+            self._reboot_to_volume(volume_name=volume_name)
+
+            if not self._wait_for_device_reboot(volume_name=volume):
+                raise RuntimeError("Reboot to volume {} failed".format(volume))
         else:
-            volume_name = volume
-
-        self._reboot_to_volume(volume_name=volume_name)
-
-        if not self._wait_for_device_reboot(volume_name=volume):
-            raise RuntimeError("Reboot to volume {} failed".format(volume))
+            print('Need to confirm reboot with confirm=True')
 
     def get_boot_options(self):
         active_volume = self._get_active_volume()
