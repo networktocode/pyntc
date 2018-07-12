@@ -260,7 +260,10 @@ class F5Device(BaseDevice):
             self.api_handler.tm.sys.software.volumes.exec_cmd('reboot',
                                                               volume=volume_name)
         else:
-            self.api_handler.tm.sys.software.volumes.exec_cmd('reboot')
+            # F5 SDK API does not support reboot to the current volume.
+            # This is a workaround by issuing reboot command from bash directly.
+            self.api_handler.tm.util.bash.exec_cmd('run',
+                                                   utilCmdArgs='-c "reboot"')
 
     def _wait_for_device_reboot(self, volume_name, timeout=600):
         """Waits for the device to be booted into a specified volume
