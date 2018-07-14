@@ -2,16 +2,16 @@
 device_type stored as a string, and a class subclassed from BaseDevice.
 """
 
-from .eos_device import EOSDevice, EOS_API_DEVICE_TYPE
-from .nxos_device import NXOSDevice, NXOS_API_DEVICE_TYPE
-from .ios_device import IOSDevice, IOS_SSH_DEVICE_TYPE
-from .jnpr_device import JunosDevice, JNPR_DEVICE_TYPE
+from .eos_device import EOSDevice
+from .nxos_device import NXOSDevice
+from .ios_device import IOSDevice
+from .jnpr_device import JunosDevice
 from .base_device import BaseDevice
 
 
 supported_devices = {
-    EOS_API_DEVICE_TYPE: EOSDevice,
-    NXOS_API_DEVICE_TYPE: NXOSDevice,
-    IOS_SSH_DEVICE_TYPE: IOSDevice,
-    JNPR_DEVICE_TYPE: JunosDevice,
+    'arista_eos_eapi': EOSDevice,
+    'cisco_nxos_nxapi': NXOSDevice,
+    'cisc_ios': IOSDevice,
+    'juniper_junos_netconf': JunosDevice,
 }
