@@ -26,7 +26,7 @@ class RebootTimerError(NTCError):
 def fix_docs(cls):
     for name, func in vars(cls).items():
         if hasattr(func, '__call__') and not func.__doc__:
-            #print func, 'needs doc'
+            #print(func, 'needs doc')
             for parent in cls.__bases__:
                 parfunc = getattr(parent, name, None)
                 if parfunc and getattr(parfunc, '__doc__', None):

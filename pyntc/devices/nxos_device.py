@@ -67,7 +67,7 @@ class NXOSDevice(BaseDevice):
         try:
             return self.native.file_copy(src, dest, file_system=file_system)
         except NXOSFileTransferError as e:
-            print str(e)
+            print(str(e))
             raise FileTransferError
 
     def reboot(self, confirm=False, timer=0):
