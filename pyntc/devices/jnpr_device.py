@@ -37,40 +37,70 @@ class JunosDevice(BaseDevice):
         self.fs = JunosNativeFS(self.native)
         self.sw = JunosNativdSW(self.native)
 
-    @property
-    def connected(self):
-        return self.native.connected
+    def _file_copy_local_file_exists(self, filepath):
+        return os.path.isfile(filepath)
 
-    def open(self):
-        if not self.connected:
-            self.native.open()
+    def _file_copy_local_md5(self, filepath, blocksize=2**20):
+        if self._file_copy_local_file_exists(filepath):
+            m = hashlib.md5()
+            with open(filepath, "rb") as f:
+                buf = f.read(blocksize)
+                while buf:
+                    m.update(buf)
+                    buf = f.read(blocksize)
+            return m.hexdigest()
 
-    def close(self):
-        if self.connected:
-            self.native.close()
+    def _file_copy_remote_md5(self, filename):
+        return self.fs.checksum(filename)
 
-    def show(self, command, raw_text=True):
-        if not raw_text:
-            raise ValueError('Juniper only supports raw text output. \
-                Append " | display xml" to your commands for a structured string.')
+    def _get_interfaces(self):
+        eth_ifaces = EthPortTable(self.native)
+        eth_ifaces.get()
 
-        if not command.startswith('show'):
-            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+        loop_ifaces = LoopbackTable(self.native)
+        loop_ifaces.get()
 
+        ifaces = eth_ifaces.keys()
+        ifaces.extend(loop_ifaces.keys())
 
-        return self.native.cli(command, warning=False)
+        return ifaces
 
+    def _uptime_components(self, uptime_full_string):
+        match_days = re.search(r'(\d+) days?', uptime_full_string)
+        match_hours = re.search(r'(\d+) hours?', uptime_full_string)
+        match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
+        match_seconds = re.search(r'(\d+) seconds?', uptime_full_string)
 
-    def show_list(self, commands, raw_text=True):
-        responses = []
-        for command in commands:
-            responses.append(self.show(command, raw_text=raw_text))
+        days = int(match_days.group(1)) if match_days else 0
+        hours = int(match_hours.group(1)) if match_hours else 0
+        minutes = int(match_minutes.group(1)) if match_minutes else 0
+        seconds = int(match_seconds.group(1)) if match_seconds else 0
 
-        return responses
+        return days, hours, minutes, seconds
+
+    def _uptime_to_seconds(self, uptime_full_string):
+        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
+
+        seconds += days * 24 * 60 * 60
+        seconds += hours * 60 * 60
+        seconds += minutes * 60
+
+        return seconds
+
+    def _uptime_to_string(self, uptime_full_string):
+        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
+        return '%02d:%02d:%02d:%02d' % (days, hours, minutes, seconds)
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
+
+    def checkpoint(self, filename):
+        self.save(filename)
+
+    def close(self):
+        if self.connected:
+            self.native.close()
 
     def config(self, command, format='set'):
         try:
@@ -88,62 +118,9 @@ class JunosDevice(BaseDevice):
         except ConfigLoadError as e:
             raise CommandListError(commands, command, e.message)
 
-
-    def _uptime_components(self, uptime_full_string):
-        match_days = re.search(r'(\d+) days?', uptime_full_string)
-        match_hours = re.search(r'(\d+) hours?', uptime_full_string)
-        match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
-        match_seconds = re.search(r'(\d+) seconds?', uptime_full_string)
-
-        days = int(match_days.group(1)) if match_days else 0
-        hours = int(match_hours.group(1)) if match_hours else 0
-        minutes = int(match_minutes.group(1)) if match_minutes else 0
-        seconds = int(match_seconds.group(1)) if match_seconds else 0
-
-        return days, hours, minutes, seconds
-
-    def _uptime_to_string(self, uptime_full_string):
-        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
-        return '%02d:%02d:%02d:%02d' % (days, hours, minutes, seconds)
-
-    def _uptime_to_seconds(self, uptime_full_string):
-        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
-
-        seconds += days * 24 * 60 * 60
-        seconds += hours * 60 * 60
-        seconds += minutes * 60
-
-        return seconds
-
-    def _get_interfaces(self):
-        eth_ifaces = EthPortTable(self.native)
-        eth_ifaces.get()
-
-        loop_ifaces = LoopbackTable(self.native)
-        loop_ifaces.get()
-
-        ifaces = eth_ifaces.keys()
-        ifaces.extend(loop_ifaces.keys())
-
-        return ifaces
-
-    def checkpoint(self, filename):
-        self.save(filename)
-
-    def rollback(self, filename):
-        self.native.timeout = 60
-
-        temp_file = NamedTemporaryFile()
-
-        with SCP(self.native) as scp:
-            scp.get(filename, local_path=temp_file.name)
-
-        self.cu.load(path=temp_file.name, format='text', overwrite=True)
-        self.cu.commit()
-
-        temp_file.close()
-
-        self.native.timeout = 30
+    @property
+    def connected(self):
+        return self.native.connected
 
     @property
     def facts(self):
@@ -174,21 +151,12 @@ class JunosDevice(BaseDevice):
         self._facts = facts
         return self._facts
 
-    def _file_copy_local_file_exists(self, filepath):
-        return os.path.isfile(filepath)
+    def file_copy(self, src, dest=None, **kwargs):
+        if dest is None:
+            dest = os.path.basename(src)
 
-    def _file_copy_local_md5(self, filepath, blocksize=2**20):
-        if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()
-            with open(filepath, "rb") as f:
-                buf = f.read(blocksize)
-                while buf:
-                    m.update(buf)
-                    buf = f.read(blocksize)
-            return m.hexdigest()
-
-    def _file_copy_remote_md5(self, filename):
-        return self.fs.checksum(filename)
+        with SCP(self.native) as scp:
+            scp.put(src, remote_path=dest)
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         if dest is None:
@@ -202,18 +170,12 @@ class JunosDevice(BaseDevice):
 
         return False
 
-    def file_copy(self, src, dest=None, **kwargs):
-        if dest is None:
-            dest = os.path.basename(src)
-
-        with SCP(self.native) as scp:
-            scp.put(src, remote_path=dest)
-
     def get_boot_options(self):
         return self.facts['os_version']
 
-    def set_boot_options(self, sys):
-        raise NotImplementedError
+    def open(self):
+        if not self.connected:
+            self.native.open()
 
     def reboot(self, timer=0, confirm=False):
         if confirm:
@@ -224,6 +186,21 @@ class JunosDevice(BaseDevice):
     @property
     def running_config(self):
         return self.show('show config')
+
+    def rollback(self, filename):
+        self.native.timeout = 60
+
+        temp_file = NamedTemporaryFile()
+
+        with SCP(self.native) as scp:
+            scp.get(filename, local_path=temp_file.name)
+
+        self.cu.load(path=temp_file.name, format='text', overwrite=True)
+        self.cu.commit()
+
+        temp_file.close()
+
+        self.native.timeout = 30
 
     def save(self, filename=None):
         if filename is None:
@@ -239,6 +216,26 @@ class JunosDevice(BaseDevice):
 
         temp_file.close()
         return True
+
+    def set_boot_options(self, sys):
+        raise NotImplementedError
+
+    def show(self, command, raw_text=True):
+        if not raw_text:
+            raise ValueError('Juniper only supports raw text output. \
+                Append " | display xml" to your commands for a structured string.')
+
+        if not command.startswith('show'):
+            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+
+        return self.native.cli(command, warning=False)
+
+    def show_list(self, commands, raw_text=True):
+        responses = []
+        for command in commands:
+            responses.append(self.show(command, raw_text=raw_text))
+
+        return responses
 
     @property
     def startup_config(self):

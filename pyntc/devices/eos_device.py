@@ -35,89 +35,17 @@ class EOSDevice(BaseDevice):
 
         self.native = EOSNative(self.connection)
 
-    def open(self):
-        pass
+    def _get_interface_list(self):
+        iface_detailed_list = self._interfaces_status_list()
+        iface_list = sorted(list(x['interface'] for x in iface_detailed_list))
 
-    def close(self):
-        pass
+        return iface_list
 
-    def _parse_response(self, response, raw_text):
-        if raw_text:
-            return list(x['result']['output'] for x in response)
-        else:
-            return list(x['result'] for x in response)
+    def _get_vlan_list(self):
+        vlans = EOSVlans(self)
+        vlan_list = vlans.get_list()
 
-    def config(self, command):
-        try:
-            self.config_list([command])
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
-
-    def config_list(self, commands):
-        try:
-            self.native.config(commands)
-        except EOSCommandError as e:
-            raise CommandListError(
-                commands, e.commands[len(e.commands) - 1], e.message)
-
-    def show(self, command, raw_text=False):
-        try:
-            response_list = self.show_list([command], raw_text=raw_text)
-            return response_list[0]
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
-
-    def show_list(self, commands, raw_text=False):
-        if raw_text:
-            encoding = 'text'
-        else:
-            encoding = 'json'
-
-        try:
-            return strip_unicode(
-                self._parse_response(
-                    self.native.enable(
-                        commands, encoding=encoding), raw_text=raw_text))
-        except EOSCommandError as e:
-            raise CommandListError(commands,
-                                   e.commands[len(e.commands) - 1],
-                                   e.message)
-
-    def save(self, filename='startup-config'):
-        self.show('copy running-config %s' % filename)
-        return True
-
-    def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        fc = EOSFileCopy(self, src, dest)
-        if fc.remote_file_exists():
-            if fc.already_transfered():
-                return True
-        return False
-
-    def file_copy(self, src, dest=None, **kwargs):
-        fc = EOSFileCopy(self, src, dest)
-        fc.send()
-
-    def reboot(self, confirm=False, timer=0):
-        if timer != 0:
-            raise RebootTimerError(self.device_type)
-
-        if confirm:
-            self.show('reload now')
-        else:
-            print('Need to confirm reboot with confirm=True')
-
-    def get_boot_options(self):
-        image = self.show('show boot-config')['softwareImage']
-        image = image.replace('flash:', '')
-        return dict(sys=image)
-
-    def set_boot_options(self, image_name, **vendor_specifics):
-        self.show('install source %s' % image_name)
-
-    def backup_running_config(self, filename):
-        with open(filename, 'w') as f:
-            f.write(self.running_config)
+        return vlan_list
 
     def _interfaces_status_list(self):
         interfaces_list = []
@@ -133,18 +61,6 @@ class EOSDevice(BaseDevice):
                                    fill_in=True,
                                    whitelist=['interface'])
 
-    def _get_interface_list(self):
-        iface_detailed_list = self._interfaces_status_list()
-        iface_list = sorted(list(x['interface'] for x in iface_detailed_list))
-
-        return iface_list
-
-    def _get_vlan_list(self):
-        vlans = EOSVlans(self)
-        vlan_list = vlans.get_list()
-
-        return vlan_list
-
     def _uptime_to_string(self, uptime):
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
@@ -159,16 +75,34 @@ class EOSDevice(BaseDevice):
 
         return '%02d:%02d:%02d:%02d' % (days, hours, mins, seconds)
 
-    def rollback(self, rollback_to):
-        try:
-            self.show('configure replace %s force' % rollback_to)
-        except (CommandError, CommandListError):
-            raise RollbackError(
-                'Rollback unsuccessful. %s may not exist.' % rollback_to)
+    def _parse_response(self, response, raw_text):
+        if raw_text:
+            return list(x['result']['output'] for x in response)
+        else:
+            return list(x['result'] for x in response)
+
+    def backup_running_config(self, filename):
+        with open(filename, 'w') as f:
+            f.write(self.running_config)
 
     def checkpoint(self, checkpoint_file):
         self.show('copy running-config %s' % checkpoint_file)
 
+    def close(self):
+        pass
+
+    def config(self, command):
+        try:
+            self.config_list([command])
+        except CommandListError as e:
+            raise CommandError(e.command, e.message)
+
+    def config_list(self, commands):
+        try:
+            self.native.config(commands)
+        except EOSCommandError as e:
+            raise CommandListError(
+                commands, e.commands[len(e.commands) - 1], e.message)
     @property
     def facts(self):
         if hasattr(self, '_facts'):
@@ -197,9 +131,74 @@ class EOSDevice(BaseDevice):
         self._facts = facts
         return facts
 
+    def file_copy(self, src, dest=None, **kwargs):
+        fc = EOSFileCopy(self, src, dest)
+        fc.send()
+
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        fc = EOSFileCopy(self, src, dest)
+        if fc.remote_file_exists():
+            if fc.already_transfered():
+                return True
+        return False
+
+    def get_boot_options(self):
+        image = self.show('show boot-config')['softwareImage']
+        image = image.replace('flash:', '')
+        return dict(sys=image)
+
+    def open(self):
+        pass
+
+    def reboot(self, confirm=False, timer=0):
+        if timer != 0:
+            raise RebootTimerError(self.device_type)
+
+        if confirm:
+            self.show('reload now')
+        else:
+            print('Need to confirm reboot with confirm=True')
+
+    def rollback(self, rollback_to):
+        try:
+            self.show('configure replace %s force' % rollback_to)
+        except (CommandError, CommandListError):
+            raise RollbackError(
+                'Rollback unsuccessful. %s may not exist.' % rollback_to)
+
     @property
     def running_config(self):
         return self.show('show running-config', raw_text=True)
+
+    def save(self, filename='startup-config'):
+        self.show('copy running-config %s' % filename)
+        return True
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        self.show('install source %s' % image_name)
+
+    def show(self, command, raw_text=False):
+        try:
+            response_list = self.show_list([command], raw_text=raw_text)
+            return response_list[0]
+        except CommandListError as e:
+            raise CommandError(e.command, e.message)
+
+    def show_list(self, commands, raw_text=False):
+        if raw_text:
+            encoding = 'text'
+        else:
+            encoding = 'json'
+
+        try:
+            return strip_unicode(
+                self._parse_response(
+                    self.native.enable(
+                        commands, encoding=encoding), raw_text=raw_text))
+        except EOSCommandError as e:
+            raise CommandListError(commands,
+                                   e.commands[len(e.commands) - 1],
+                                   e.message)
 
     @property
     def startup_config(self):
