@@ -180,11 +180,8 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, timer=0, confirm=False):
-        if confirm:
-            self.sw.reboot(in_min=timer)
-        else:
-            print('Need to confirm reboot with confirm=True')
+    def reboot(self, timer=0):
+        self.sw.reboot(in_min=timer)
 
     @property
     def running_config(self):

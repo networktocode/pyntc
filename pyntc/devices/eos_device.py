@@ -139,14 +139,11 @@ class EOSDevice(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, confirm=False, timer=0):
+    def reboot(self, timer=0):
         if timer != 0:
             raise RebootTimerError(self.device_type)
 
-        if confirm:
-            self.show('reload now')
-        else:
-            print('Need to confirm reboot with confirm=True')
+        self.show('reload now')
 
     def rollback(self, rollback_to):
         try:

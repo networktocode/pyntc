@@ -70,11 +70,11 @@ class NXOSDevice(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, confirm=False, timer=0):
+    def reboot(self, timer=0):
         if timer != 0:
             raise RebootTimerError(self.device_type)
 
-        self.native.reboot(confirm=confirm)
+        self.native.reboot(confirm=True)
 
     def rollback(self, filename):
         try:

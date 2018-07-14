@@ -204,11 +204,10 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def reboot(self, timer=0, confirm=False):
+    def reboot(self, timer=0):
         """Reboot the device.
 
         Args:
-            confirm(bool): if False, this method has no effect.
             timer(int): number of seconds to wait before rebooting.
         """
         raise NotImplementedError

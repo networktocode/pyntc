@@ -237,30 +237,27 @@ class IOSDevice(BaseDevice):
                                          verbose=False)
             self._connected = True
 
-    def reboot(self, timer=0, confirm=False):
-        if confirm:
-            def handler():
-                raise RebootSignal('Interrupting after reload')
+    def reboot(self, timer=0):
+        def handler():
+            raise RebootSignal('Interrupting after reload')
 
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(10)
 
-            try:
-                if timer > 0:
-                    first_response = self.show('reload in %d' % timer)
-                else:
-                    first_response = self.show('reload')
+        try:
+            if timer > 0:
+                first_response = self.show('reload in %d' % timer)
+            else:
+                first_response = self.show('reload')
 
-                if 'System configuration' in first_response:
-                    self.native.send_command_timing('no')
+            if 'System configuration' in first_response:
+                self.native.send_command_timing('no')
 
-                self.native.send_command_timing('\n')
-            except RebootSignal:
-                signal.alarm(0)
-
+            self.native.send_command_timing('\n')
+        except RebootSignal:
             signal.alarm(0)
-        else:
-            print('Need to confirm reboot with confirm=True')
+
+        signal.alarm(0)
 
     def rollback(self, rollback_to):
         try:
