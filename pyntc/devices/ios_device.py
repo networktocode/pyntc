@@ -4,7 +4,6 @@
 import signal
 import os
 import re
-import time
 
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_structured_data
@@ -17,19 +16,17 @@ from .base_device import BaseDevice, RollbackError, fix_docs
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-IOS_SSH_DEVICE_TYPE = 'cisco_ios_ssh'
 
-
+# TODO: Understand purpose and make class do something
 class RebootSignal(NTCError):
     pass
+
 
 @fix_docs
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=IOS_SSH_DEVICE_TYPE)
-
+        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='cisco_ios_ssh')
         self.native = None
-
         self.host = host
         self.username = username
         self.password = password
@@ -54,6 +51,7 @@ class IOSDevice(BaseDevice):
             dest = os.path.basename(src)
 
         fc = FileTransfer(self.native, src, dest, file_system=file_system)
+
         return fc
 
     def _interfaces_detailed_list(self):
@@ -93,7 +91,8 @@ class IOSDevice(BaseDevice):
 
         return show_vlan_data
 
-    def _uptime_components(self, uptime_full_string):
+    @staticmethod
+    def _uptime_components(uptime_full_string):
         match_days = re.search(r'(\d+) days?', uptime_full_string)
         match_hours = re.search(r'(\d+) hours?', uptime_full_string)
         match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
@@ -142,8 +141,7 @@ class IOSDevice(BaseDevice):
             try:
                 self._send_command(command)
             except CommandError as e:
-                raise CommandListError(
-                    entered_commands, command, e.cli_error_msg)
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
     @property
@@ -172,10 +170,11 @@ class IOSDevice(BaseDevice):
             facts['vlans'] = []
 
         # ios-specific facts
-        ios_facts = facts[IOS_SSH_DEVICE_TYPE] = {}
+        ios_facts = facts['cisco_ios_ssh'] = {}
         ios_facts['config_register'] = version_data['config_register']
 
         self._facts = facts
+
         return facts
 
     def file_copy(self, src, dest=None, file_system='flash:'):
@@ -188,6 +187,7 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
+            # TODO: Discover expected exceptions and raise appropriately
             except:
                 raise FileTransferError
             finally:
@@ -195,10 +195,10 @@ class IOSDevice(BaseDevice):
 
     def file_copy_remote_exists(self, src, dest=None, file_system='flash:'):
         fc = self._file_copy_instance(src, dest, file_system=file_system)
-
         self._enable()
         if fc.check_file_exists() and fc.compare_md5():
             return True
+
         return False
 
     def get_boot_options(self):
@@ -207,22 +207,22 @@ class IOSDevice(BaseDevice):
             boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
             boot_path = re.search(boot_path_regex, show_boot_out).group(1)
             boot_image = boot_path.replace('flash:/', '')
-            return dict(sys=boot_image)
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
-
             match = re.search(boot_path_regex, show_boot_out)
             if match:
                 boot_image = match.group(1)
             else:
                 boot_image = None
-            return dict(sys=boot_image)
+
+        return {'sys': boot_image}
 
     def open(self):
         if self._connected:
             try:
                 self.native.find_prompt()
+            # TODO: Discover expected exceptions and raise appropriately
             except:
                 self._connected = False
 
@@ -239,7 +239,7 @@ class IOSDevice(BaseDevice):
 
     def reboot(self, timer=0, confirm=False):
         if confirm:
-            def handler(signum, frame):
+            def handler():
                 raise RebootSignal('Interrupting after reload')
 
             signal.signal(signal.SIGALRM, handler)
@@ -282,7 +282,6 @@ class IOSDevice(BaseDevice):
         self.native.send_command_timing('\n',delay_factor=2)
         # Confirm that we have a valid prompt again before returning.
         self.native.find_prompt()
-        return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
         if self._is_catalyst():
@@ -294,7 +293,7 @@ class IOSDevice(BaseDevice):
         self._enable()
         return self._send_command(command, expect=expect, expect_string=expect_string)
 
-    def show_list(self, commands):
+    def show_list(self, commands, raw_text=False):
         self._enable()
 
         responses = []
@@ -304,8 +303,7 @@ class IOSDevice(BaseDevice):
             try:
                 responses.append(self._send_command(command))
             except CommandError as e:
-                raise CommandListError(
-                    entered_commands, command, e.cli_error_msg)
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
 
         return responses
 

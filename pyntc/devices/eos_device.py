@@ -3,9 +3,8 @@
 
 import time
 
-from pyntc.errors import CommandError, CommandListError, NTCError
-from pyntc.data_model.converters import convert_dict_by_key, \
-    convert_list_by_key, strip_unicode
+from pyntc.errors import CommandError, CommandListError
+from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
@@ -15,24 +14,15 @@ from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
-EOS_API_DEVICE_TYPE = 'arista_eos_eapi'
-
-
-class RebootSignal(NTCError):
-    pass
-
 
 @fix_docs
 class EOSDevice(BaseDevice):
 
-    def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type=EOS_API_DEVICE_TYPE)
+    def __init__(self, host, username, password, transport='http', timeout=60):
+        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type='arista_eos_eapi')
         self.transport = transport
         self.timeout = timeout
-
-        self.connection = eos_connect(
-            transport, host=host, username=username, password=password, timeout=timeout)
-
+        self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
         self.native = EOSNative(self.connection)
 
     def _get_interface_list(self):
@@ -49,19 +39,16 @@ class EOSDevice(BaseDevice):
 
     def _interfaces_status_list(self):
         interfaces_list = []
-        interfaces_status_dictionary = self.show(
-            'show interfaces status')['interfaceStatuses']
+        interfaces_status_dictionary = self.show('show interfaces status')['interfaceStatuses']
         for key in interfaces_status_dictionary:
             interface_dictionary = interfaces_status_dictionary[key]
             interface_dictionary['interface'] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(interfaces_list,
-                                   eos_key_maps.INTERFACES_KM,
-                                   fill_in=True,
-                                   whitelist=['interface'])
+        return convert_list_by_key(interfaces_list, eos_key_maps.INTERFACES_KM, fill_in=True,  whitelist=['interface'])
 
-    def _uptime_to_string(self, uptime):
+    @staticmethod
+    def _uptime_to_string(uptime):
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
 
@@ -75,11 +62,12 @@ class EOSDevice(BaseDevice):
 
         return '%02d:%02d:%02d:%02d' % (days, hours, mins, seconds)
 
-    def _parse_response(self, response, raw_text):
+    @staticmethod
+    def _parse_response(response, raw_text):
         if raw_text:
-            return list(x['result']['output'] for x in response)
+            return [x['result']['output'] for x in response]
         else:
-            return list(x['result'] for x in response)
+            return [x['result'] for x in response]
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
@@ -101,8 +89,8 @@ class EOSDevice(BaseDevice):
         try:
             self.native.config(commands)
         except EOSCommandError as e:
-            raise CommandListError(
-                commands, e.commands[len(e.commands) - 1], e.message)
+            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+
     @property
     def facts(self):
         if hasattr(self, '_facts'):
@@ -137,14 +125,15 @@ class EOSDevice(BaseDevice):
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
-        if fc.remote_file_exists():
-            if fc.already_transfered():
-                return True
+        if fc.remote_file_exists() and fc.already_transfered():
+            return True
+
         return False
 
     def get_boot_options(self):
         image = self.show('show boot-config')['softwareImage']
         image = image.replace('flash:', '')
+
         return dict(sys=image)
 
     def open(self):
@@ -163,8 +152,7 @@ class EOSDevice(BaseDevice):
         try:
             self.show('configure replace %s force' % rollback_to)
         except (CommandError, CommandListError):
-            raise RollbackError(
-                'Rollback unsuccessful. %s may not exist.' % rollback_to)
+            raise RollbackError('Rollback unsuccessful. %s may not exist.' % rollback_to)
 
     @property
     def running_config(self):
@@ -172,7 +160,6 @@ class EOSDevice(BaseDevice):
 
     def save(self, filename='startup-config'):
         self.show('copy running-config %s' % filename)
-        return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
         self.show('install source %s' % image_name)
@@ -180,25 +167,21 @@ class EOSDevice(BaseDevice):
     def show(self, command, raw_text=False):
         try:
             response_list = self.show_list([command], raw_text=raw_text)
-            return response_list[0]
         except CommandListError as e:
             raise CommandError(e.command, e.message)
 
+        return response_list[0]
+
     def show_list(self, commands, raw_text=False):
-        if raw_text:
-            encoding = 'text'
-        else:
-            encoding = 'json'
+        encoding = 'text' if raw_text else 'json'
 
         try:
-            return strip_unicode(
-                self._parse_response(
-                    self.native.enable(
-                        commands, encoding=encoding), raw_text=raw_text))
+            data = strip_unicode(
+                self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandListError(commands,
-                                   e.commands[len(e.commands) - 1],
-                                   e.message)
+            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+
+        return data
 
     @property
     def startup_config(self):

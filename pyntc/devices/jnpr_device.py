@@ -16,7 +16,6 @@ from .base_device import BaseDevice, fix_docs
 
 from pyntc.errors import CommandError, CommandListError
 
-JNPR_DEVICE_TYPE = 'juniper_junos_netconf'
 
 @fix_docs
 class JunosDevice(BaseDevice):
@@ -27,17 +26,17 @@ class JunosDevice(BaseDevice):
                                           password,
                                           *args,
                                           vendor='juniper',
-                                          device_type=JNPR_DEVICE_TYPE,
+                                          device_type='juniper_junos_netconf',
                                           **kwargs)
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
         self.open()
-
         self.cu = JunosNativeConfig(self.native)
         self.fs = JunosNativeFS(self.native)
         self.sw = JunosNativdSW(self.native)
 
-    def _file_copy_local_file_exists(self, filepath):
+    @staticmethod
+    def _file_copy_local_file_exists(filepath):
         return os.path.isfile(filepath)
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
@@ -48,6 +47,7 @@ class JunosDevice(BaseDevice):
                 while buf:
                     m.update(buf)
                     buf = f.read(blocksize)
+
             return m.hexdigest()
 
     def _file_copy_remote_md5(self, filename):
@@ -65,7 +65,8 @@ class JunosDevice(BaseDevice):
 
         return ifaces
 
-    def _uptime_components(self, uptime_full_string):
+    @staticmethod
+    def _uptime_components(uptime_full_string):
         match_days = re.search(r'(\d+) days?', uptime_full_string)
         match_hours = re.search(r'(\d+) hours?', uptime_full_string)
         match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
@@ -89,6 +90,7 @@ class JunosDevice(BaseDevice):
 
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
+
         return '%02d:%02d:%02d:%02d' % (days, hours, minutes, seconds)
 
     def backup_running_config(self, filename):
@@ -101,6 +103,7 @@ class JunosDevice(BaseDevice):
     def close(self):
         if self.connected:
             self.native.close()
+            # TODO: Set self.connected to False
 
     def config(self, command, format='set'):
         try:
@@ -120,6 +123,7 @@ class JunosDevice(BaseDevice):
 
     @property
     def connected(self):
+        # TODO: Manage property independent of native
         return self.native.connected
 
     @property
@@ -164,9 +168,8 @@ class JunosDevice(BaseDevice):
 
         local_hash = self._file_copy_local_md5(src)
         remote_hash = self._file_copy_remote_md5(dest)
-        if local_hash is not None:
-            if local_hash == remote_hash:
-                return True
+        if local_hash is not None and local_hash == remote_hash:
+            return True
 
         return False
 
@@ -205,20 +208,15 @@ class JunosDevice(BaseDevice):
     def save(self, filename=None):
         if filename is None:
             self.cu.commit()
-            return
+        else:
+            temp_file = NamedTemporaryFile()
+            temp_file.write(self.show('show config'))
+            temp_file.flush()
 
-        temp_file = NamedTemporaryFile()
-        temp_file.write(self.show('show config'))
-        temp_file.flush()
+            with SCP(self.native) as scp:
+                scp.put(temp_file.name, remote_path=filename)
 
-        with SCP(self.native) as scp:
-            scp.put(temp_file.name, remote_path=filename)
-
-        temp_file.close()
-        return True
-
-    def set_boot_options(self, sys):
-        raise NotImplementedError
+            temp_file.close()
 
     def show(self, command, raw_text=True):
         if not raw_text:

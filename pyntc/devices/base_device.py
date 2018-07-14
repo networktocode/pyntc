@@ -3,7 +3,6 @@
 
 import abc
 import importlib
-
 from pyntc.errors import NTCError, FeatureNotFoundError
 
 
@@ -18,10 +17,12 @@ class RollbackError(NTCError):
 class FileTransferError(NTCError):
     pass
 
+
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
         super(RebootTimerError, self).__init__(
             'Reboot timer not supported on %s.' % device_type)
+
 
 def fix_docs(cls):
     for name, func in vars(cls).items():
@@ -33,6 +34,7 @@ def fix_docs(cls):
                     func.__doc__ = parfunc.__doc__
                     break
     return cls
+
 
 class BaseDevice(object):
     __metaclass__ = abc.ABCMeta
@@ -159,11 +161,10 @@ class BaseDevice(object):
 
         Args:
             src (str): Path to the local file to send.
+            dest (str): The destination file path to be saved on remote flash.
+                If none is supplied, the implementing class should use the basename of the source path.
 
         Keyword Args:
-            dest (str): The destination file path to be saved on remote flash.
-                If none is supplied, the implementing class should use the basename
-                of the source path.
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
         """
@@ -176,11 +177,10 @@ class BaseDevice(object):
 
         Args:
             src (str): Path to local file to check.
+            dest (str): The destination file path to be saved on remote the remote device.
+                If none is supplied, the implementing class should use the basename of the source path.
 
         Keyword Args:
-            dest (str): The destination file path to be saved on remote the remote device.
-                If none is supplied, the implementing class should use the basename
-                of the source path.
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
 
@@ -190,8 +190,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def get_boot_options(self):
-        """Get current boot variables
-        like system image and kickstart image.
+        """Get current boot variables ike system image and kickstart image.
 
         Returns:
             A dictionary, e.g. { 'kick': router_kick.img, 'sys': 'router_sys.img'}
@@ -246,21 +245,18 @@ class BaseDevice(object):
 
         Args:
             filename (str): The filename on the remote device.
-                If none is supplied, the implementing class should
-                save to the "startup configuration".
+                If none is supplied, the implementing class should save to the "startup configuration".
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def set_boot_options(self, image_name, **vendor_specifics):
-        """Set boot variables
-        like system image and kickstart image.
+        """Set boot variables like system image and kickstart image.
 
         Args:
-            The main system image file name.
+            image_name (str): The main system image file name.
 
-        Keyword Args: many implementors may choose
-            to supply a kickstart parameter to specicify a kickstart image.
+        Keyword Args: many implementors may choose to supply a kickstart parameter to specify a kickstart image.
         """
         raise NotImplementedError
 
@@ -270,8 +266,6 @@ class BaseDevice(object):
 
         Args:
             command (str): The command to send to the device.
-
-        Keyword Args:
             raw_text (bool): Whether to return raw text or structured data.
 
         Returns:
@@ -285,17 +279,15 @@ class BaseDevice(object):
 
         Args:
             commands (list): A list of commands to send to the device.
-
-        Keyword Args:
             raw_text (bool): Whether to return raw text or structured data.
 
         Returns:
-            A list of outputs for each show command
+            A list of outputs for each show command.
         """
         raise NotImplementedError
 
     @abc.abstractproperty
     def startup_config(self):
-        """Return the starup configuration of the device.
+        """Return the startup configuration of the device.
         """
         raise NotImplementedError
