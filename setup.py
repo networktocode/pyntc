@@ -18,6 +18,7 @@ install_requires = [
     'terminal',
     'pyeapi',
     'junos-eznc',
+    'scp',
 ]
 
 dependency_links = []
