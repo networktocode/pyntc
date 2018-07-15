@@ -204,8 +204,7 @@ class JunosDevice(BaseDevice):
         else:
             temp_file = NamedTemporaryFile()
             temp_file.write(self.show('show config'))
-            temp_file.flush()            self._facts['vendor'] = self.vendor
-
+            temp_file.flush()
 
             with SCP(self.native) as scp:
                 scp.put(temp_file.name, remote_path=filename)
