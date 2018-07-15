@@ -37,14 +37,13 @@ def recursive_key_lookup(keys, obj):
     return obj
 
 
-
 def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklist=[]):
     """Use a key map to convert a dictionary to desired keys.
 
     Args:
         original (dict): Original dictionary to be converted.
         key_map (dict): Key map to use to convert dictionary.
-        fill_in (dict): Whether the returned dictionary should contain
+        fill_in (bool): Whether the returned dictionary should contain
             keys and values from the original dictionary if not specified in the key map.
         whitelist: If fill_in is True, and whitelist isn't empty, only fill in the keys
             in the whitelist in the returned dictionary.
