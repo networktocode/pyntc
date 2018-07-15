@@ -45,6 +45,9 @@ class BaseDevice(object):
         self.password = password
         self.vendor = vendor
         self.device_type = device_type
+        self._facts = None
+        self._running_config = None
+        self._startup_config = None
 
     @abc.abstractmethod
     def backup_running_config(self, filename):
@@ -140,6 +143,10 @@ class BaseDevice(object):
                     "3",
                 ]
             }
+
+        The setter method has not been enabled since the property is a dictionary. Custom facts can be added to
+        the property using your preferred method of updating a dictionary. All custom facts will persist unaltered
+        after calling the ``refresh_facts`` method.
         """
         raise NotImplementedError
 
@@ -209,27 +216,51 @@ class BaseDevice(object):
         """Reboot the device.
 
         Args:
-            timer(int): number of seconds to wait before rebooting.
+            timer (int): number of seconds to wait before rebooting.
         """
         raise NotImplementedError
 
-    def refresh(self):
-        """Refresh caches on device instance.
-        """
-        self.refresh_facts()
-
     def refresh_facts(self):
         """Refresh cached facts.
+
+        Any fact data added to the facts property from another means will persist after calling this method, but will
+        remain as it was before the fact cache refresh.
+
+        Returns:
+            dict: The fact property is updated with current data and returned.
         """
-        del self._facts
-        self.facts
+        # Persist values that were not added by facts getter
+        if isinstance(self._facts, dict):
+            facts_backup = self._facts.copy()
+            self._facts = None
+            facts_backup.update(self.facts)
+            self._facts = facts_backup.copy()
+        else:
+            self._facts = None
+            self.facts
+
+        return self._facts
+
+    def refresh_running_config(self):
+        """Refresh cached running-config
+        """
+        self._running_config = None
+
+        return self.running_config
+
+    def refresh_startup_config(self):
+        """Refresh cached starting-config
+        """
+        self._startup_config = None
+
+        return self.startup_config
 
     @abc.abstractmethod
     def rollback(self, checkpoint_file):
         """Rollback to a checkpoint file.
 
         Args:
-            filename (str): The filename of the checkpoint file to load into the running configuration.
+            checkpoint_file (str): The filename of the checkpoint file to load into the running configuration.
         """
         raise NotImplementedError
 

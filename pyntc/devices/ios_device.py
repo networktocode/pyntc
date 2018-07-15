@@ -146,36 +146,24 @@ class IOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            version_data = self._raw_version_data()
+            self._facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+            self._facts['uptime'] = self._uptime_to_seconds(version_data['uptime'])
+            self._facts['uptime_string'] = self._uptime_to_string(version_data['uptime'])
+            self._facts['interfaces'] = [x['intf'] for x in self._interfaces_detailed_list()]
+            if self._facts['model'].startswith('WS'):
+                self._facts['vlans'] = [str(x['vlan_id']) for x in self._show_vlan()]
+            else:
+                self._facts['vlans'] = []
 
-        facts = {}
-        facts['vendor'] = self.vendor
+            self._facts['fqdn'] = 'N/A'
+            self._facts['vendor'] = self.vendor
 
-        version_data = self._raw_version_data()
-        show_version_facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+            # ios-specific facts
+            self._facts['cisco_ios_ssh'] = {'config_register': version_data['config_register']}
 
-        facts.update(show_version_facts)
-
-        uptime_full_string = version_data['uptime']
-        facts['uptime'] = self._uptime_to_seconds(uptime_full_string)
-        facts['uptime_string'] = self._uptime_to_string(uptime_full_string)
-
-        facts['fqdn'] = 'N/A'
-        facts['interfaces'] = list(x['intf'] for x in self._interfaces_detailed_list())
-
-        if show_version_facts['model'].startswith('WS'):
-            facts['vlans'] = list(str(x['vlan_id']) for x in self._show_vlan())
-        else:
-            facts['vlans'] = []
-
-        # ios-specific facts
-        ios_facts = facts['cisco_ios_ssh'] = {}
-        ios_facts['config_register'] = version_data['config_register']
-
-        self._facts = facts
-
-        return facts
+        return self._facts
 
     def file_copy(self, src, dest=None, file_system='flash:'):
             fc = self._file_copy_instance(src, dest, file_system=file_system)
@@ -267,7 +255,10 @@ class IOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show running-config', expect=True)
+        if self._running_config is None:
+            self._running_config = self.show('show running-config', expect=True)
+
+        return self._running_config
 
     def save(self, filename='startup-config'):
         command = 'copy running-config %s' % filename
@@ -306,4 +297,7 @@ class IOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show('show startup-config')
+        if self._startup_config is None:
+            self._startup_config = self.show('show startup-config')
+
+        return self._startup_config

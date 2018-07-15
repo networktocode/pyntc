@@ -123,36 +123,29 @@ class JunosDevice(BaseDevice):
 
     @property
     def connected(self):
-        # TODO: Manage property independent of native
         return self.native.connected
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            native_facts = self.native.facts
+            self._facts = {'hostname': native_facts['hostname']}
+            self._facts['model'] = native_facts['model']
+            self._facts['serial_number'] = native_facts['serialnumber']
+            self._facts['interfaces'] = self._get_interfaces()
+            self._facts['fqdn'] = native_facts['fqdn']
 
-        native_facts = self.native.facts
+            native_uptime_string = native_facts['RE0']['up_time']
+            self._facts['uptime'] = self._uptime_to_seconds(native_uptime_string)
+            self._facts['uptime_string'] = self._uptime_to_string(native_uptime_string)
 
-        facts = {}
-        facts['hostname'] = native_facts['hostname']
-        facts['fqdn'] = native_facts['fqdn']
-        facts['model'] = native_facts['model']
+            for fact_key in native_facts:
+                if fact_key.startswith('version') and fact_key != 'version_info':
+                    self._facts['os_version'] = native_facts[fact_key]
+                    break
 
-        native_uptime_string = native_facts['RE0']['up_time']
-        facts['uptime'] = self._uptime_to_seconds(native_uptime_string)
-        facts['uptime_string'] = self._uptime_to_string(native_uptime_string)
+            self._facts['vendor'] = self.vendor
 
-        facts['serial_number'] = native_facts['serialnumber']
-
-        facts['interfaces'] = self._get_interfaces()
-
-        for fact_key in native_facts:
-            if fact_key.startswith('version') and fact_key != 'version_info':
-                facts['os_version'] = native_facts[fact_key]
-                break
-
-        facts['vendor'] = self.vendor
-        self._facts = facts
         return self._facts
 
     def file_copy(self, src, dest=None, **kwargs):
@@ -185,7 +178,10 @@ class JunosDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show config')
+        if self._running_config is None:
+            self._running_config = self.show('show config')
+
+        return self._running_config
 
     def rollback(self, filename):
         self.native.timeout = 60
@@ -208,7 +204,8 @@ class JunosDevice(BaseDevice):
         else:
             temp_file = NamedTemporaryFile()
             temp_file.write(self.show('show config'))
-            temp_file.flush()
+            temp_file.flush()            self._facts['vendor'] = self.vendor
+
 
             with SCP(self.native) as scp:
                 scp.put(temp_file.name, remote_path=filename)
@@ -234,4 +231,7 @@ class JunosDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show('show config')
+        if self._startup_config is None:
+            self._startup_config = self.show('show config')
+
+        return self._startup_config

@@ -17,7 +17,7 @@ class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=30, port=None):
         super(NXOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='cisco_nxos_nxapi')
         self.transport = transport
-        self.timeout = timeout
+        self._timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
 
     def backup_running_config(self, filename):
@@ -43,13 +43,16 @@ class NXOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            # TODO: Fix pynxos to properly handle property; currently unable to refresh fact data
+            self._facts = self.native._get_show_version_facts()
+            self._facts['interfaces'] = self.native._get_interface_list()
+            self._facts['vlans'] = self.native._get_vlan_list()
+            self._facts['fqdn'] = 'N/A'
 
-        facts = strip_unicode(self.native.facts)
-        facts['vendor'] = self.vendor
+            facts = strip_unicode(self._facts)
+            facts['vendor'] = self.vendor
 
-        self._facts = facts
         return self._facts
 
     def get_boot_options(self):
@@ -84,7 +87,10 @@ class NXOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.native.running_config
+        if self._running_config is None:
+            self._running_config = self.native.running_config
+
+        return self._running_config
 
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
@@ -92,8 +98,14 @@ class NXOSDevice(BaseDevice):
     def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
         return self.native.set_boot_options(image_name, kickstart=kickstart)
 
-    def set_timeout(self, timeout):
-        self.native.timeout = timeout
+    @property
+    def timeout(self):
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, seconds):
+        self._timeout = seconds
+        self.native.timeout = seconds
 
     def show(self, command, raw_text=False):
         try:
@@ -109,4 +121,7 @@ class NXOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show('show startup-config', raw_text=True)
+        if self._startup_config is None:
+            self._startup_config = self.show('show startup-config', raw_text=True)
+
+        return self._startup_config

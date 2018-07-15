@@ -93,31 +93,21 @@ class EOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            sh_version_output = self.show('show version')
+            self._facts = convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM)
+            self._facts['uptime'] = int(time.time() - sh_version_output['bootupTimestamp'])
+            self._facts['uptime_string'] = self._uptime_to_string(self._facts['uptime'])
 
-        facts = {}
-        facts['vendor'] = self.vendor
+            sh_hostname_output = self.show('show hostname')
+            self._facts.update(convert_dict_by_key(
+                    sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn']))
 
-        sh_version_output = self.show('show version')
-        facts.update(
-            convert_dict_by_key(
-                sh_version_output, eos_key_maps.BASIC_FACTS_KM))
+            self._facts['interfaces'] = self._get_interface_list()
+            self._facts['vlans'] = self._get_vlan_list()
+            self._facts['vendor'] = self.vendor
 
-        uptime = int(time.time() - sh_version_output['bootupTimestamp'])
-        facts['uptime'] = uptime
-        facts['uptime_string'] = self._uptime_to_string(uptime)
-
-        sh_hostname_output = self.show('show hostname')
-        facts.update(
-            convert_dict_by_key(
-                sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn']))
-
-        facts['interfaces'] = self._get_interface_list()
-        facts['vlans'] = self._get_vlan_list()
-
-        self._facts = facts
-        return facts
+        return self._facts
 
     def file_copy(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
@@ -153,7 +143,10 @@ class EOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show running-config', raw_text=True)
+        if self._running_config is None:
+            self._running_config = self.show('show running-config', raw_text=True)
+
+        return self._running_config
 
     def save(self, filename='startup-config'):
         self.show('copy running-config %s' % filename)
@@ -182,4 +175,7 @@ class EOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show('show startup-config', raw_text=True)
+        if self._startup_config is None:
+            self._startup_config = self.show('show startup-config', raw_text=True)
+
+        return self._startup_config
