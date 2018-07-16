@@ -12,6 +12,6 @@ from .base_device import BaseDevice
 supported_devices = {
     'arista_eos_eapi': EOSDevice,
     'cisco_nxos_nxapi': NXOSDevice,
-    'cisc_ios': IOSDevice,
+    'cisco_ios_ssh': IOSDevice,
     'juniper_junos_netconf': JunosDevice,
 }
