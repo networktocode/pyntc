@@ -444,6 +444,18 @@ class F5Device(BaseDevice):
 
         return rd_vlan_list
 
+    @staticmethod
+    def _uptime_to_string(uptime):
+        days = uptime / (24 * 60 * 60)
+        uptime = uptime % (24 * 60 * 60)
+        hours = uptime / (60 * 60)
+        uptime = uptime % (60 * 60)
+        mins = uptime / 60
+        uptime = uptime % 60
+        seconds = uptime
+
+        return '%02d:%02d:%02d:%02d' % (days, hours, mins, seconds)
+
     @property
     def facts(self):
         facts = {
@@ -456,6 +468,7 @@ class F5Device(BaseDevice):
             'serial_number': self._get_serial_number(),
             'interfaces': self._get_interfaces_list(),
             'vlans': self._get_vlans(),
+            'uptime_string': self._uptime_to_string(self._get_uptime()),
         }
 
         return facts
