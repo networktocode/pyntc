@@ -89,7 +89,7 @@ class EOSDevice(BaseDevice):
         try:
             self.native.config(commands)
         except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+            raise CommandListError(commands, e.commands[-1], e.message)
 
     @property
     def facts(self):
@@ -175,7 +175,7 @@ class EOSDevice(BaseDevice):
             data = strip_unicode(
                 self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text))
         except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+            raise CommandListError(commands, e.commands[-1], e.message)
 
         return data
 
