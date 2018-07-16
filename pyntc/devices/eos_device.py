@@ -126,6 +126,12 @@ class EOSDevice(BaseDevice):
 
         return dict(sys=image)
 
+    def install_os(self, image_name, **vendor_specifics):
+        # TODO: Validate this works
+        # TODO: Add validation that OS was installed properly
+        self.set_boot_options(image_name)
+        self.reboot()
+
     def open(self):
         pass
 

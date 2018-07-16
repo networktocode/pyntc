@@ -206,6 +206,17 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def install_os(self, image_name, **vendor_specifics):
+        """Installs desired OS on device.
+
+        Args:
+            image_name (str): The main system image file name.
+
+        Keyword Args: many implementors may choose to supply a kickstart parameter to specify a kickstart image.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def open(self):
         """Open a connection to the device.
         """

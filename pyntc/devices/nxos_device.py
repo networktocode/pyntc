@@ -71,6 +71,10 @@ class NXOSDevice(BaseDevice):
         dest = dest or os.path.basename(src)
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
 
+    def install_os(self, image_name, **vendor_specifics):
+        kickstart = vendor_specifics.get('kickstart')
+        self.set_boot_options(image_name, kickstart=kickstart)
+
     def open(self):
         pass
 
@@ -96,7 +100,9 @@ class NXOSDevice(BaseDevice):
     def save(self, filename='startup-config'):
         return self.native.save(filename=filename)
 
-    def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+    def set_boot_options(self, image_name, **vendor_specifics):
+        # TODO: Update pynxos class to use install_os name
+        kickstart = vendor_specifics.get('kickstart')
         return self.native.set_boot_options(image_name, kickstart=kickstart)
 
     @property

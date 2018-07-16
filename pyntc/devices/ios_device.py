@@ -206,6 +206,11 @@ class IOSDevice(BaseDevice):
 
         return {'sys': boot_image}
 
+    def install_os(self, image_name, **vendor_specifics):
+        # TODO:
+        self.set_boot_options(image_name)
+        self.reboot()
+
     def open(self):
         if self._connected:
             try:
