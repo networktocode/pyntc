@@ -168,9 +168,8 @@ class IOSDevice(BaseDevice):
     def file_copy(self, src, dest=None, file_system='flash:'):
             fc = self._file_copy_instance(src, dest, file_system=file_system)
             self._enable()
-                    if not fc.verify_space_available():
-                        raise FileTransferError('Not enough space available.')
-
+            if not fc.verify_space_available():
+                raise FileTransferError('Not enough space available.')
             try:
                 fc.enable_scp()
                 fc.establish_scp_conn()
@@ -190,21 +189,28 @@ class IOSDevice(BaseDevice):
         return False
 
     def get_boot_options(self):
+        # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
             show_boot_out = self.show('show boot')
-            boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
-            boot_path = re.search(boot_path_regex, show_boot_out).group(1)
-            boot_image = boot_path.replace('flash:/', '')
+            boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
+            match = re.search(boot_path_regex, show_boot_out)
+            if match:
+                boot_path = match.group(2)
+                boot_image = boot_path.replace('flash:/', '')
+            else:
+                boot_image = None
+            return dict(sys=boot_image)
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
+
             match = re.search(boot_path_regex, show_boot_out)
             if match:
                 boot_image = match.group(1)
             else:
                 boot_image = None
+            return dict(sys=boot_image)
 
-        return {'sys': boot_image}
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
