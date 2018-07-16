@@ -37,7 +37,7 @@ def recursive_key_lookup(keys, obj):
     return obj
 
 
-def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklist=[]):
+def convert_dict_by_key(original, key_map, fill_in=False, whitelist=None, blacklist=None):
     """Use a key map to convert a dictionary to desired keys.
 
     Args:
@@ -45,9 +45,9 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
         key_map (dict): Key map to use to convert dictionary.
         fill_in (bool): Whether the returned dictionary should contain
             keys and values from the original dictionary if not specified in the key map.
-        whitelist: If fill_in is True, and whitelist isn't empty, only fill in the keys
+        whitelist (iter): If fill_in is True, and whitelist isn't empty, only fill in the keys
             in the whitelist in the returned dictionary.
-        blacklist: If fill_in is True, and blacklist isn't empty, fill in with all keys from
+        blacklist (iter): If fill_in is True, and blacklist isn't empty, fill in with all keys from
             the original dictionary besides those in the blacklist.
 
     Returns:
@@ -56,19 +56,20 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
     converted = {}
     for converted_key in key_map:
         original_key = key_map[converted_key]
-
         converted[converted_key] = recursive_key_lookup(original_key, original)
 
     if fill_in:
         original_key_subset = []
 
         # ignore complex values in key map
-        key_map_values = list(x for x in key_map.values() if not isinstance(x, list))
+        key_map_values = [x for x in key_map.values() if not isinstance(x, list)]
 
-        if whitelist:
+        if whitelist is not None:
             original_key_subset.extend(list(set(whitelist) - set(key_map_values)))
-        else:
+        elif blacklist is not None:
             original_key_subset.extend(list(set(original.keys()) - set(blacklist) - set(key_map_values)))
+        else:
+            original_key_subset.extend(list(set(original.keys()) - set(key_map_values)))
 
         for original_key in original_key_subset:
             if original_key in original:
@@ -77,16 +78,24 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
     return converted
 
 
-def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
+def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=None, blacklist=None):
     """Apply a dictionary conversion for all dictionaries in original_list.
+
+    Args:
+        original_list (iter): Original dictionary to be converted.
+        key_map (dict): Key map to use to convert dictionary.
+        fill_in (bool): Whether the returned dictionary should contain
+            keys and values from the original dictionary if not specified in the key map.
+        whitelist (iter): If fill_in is True, and whitelist isn't empty, only fill in the keys
+            in the whitelist in the returned dictionary.
+        blacklist (iter): If fill_in is True, and blacklist isn't empty, fill in with all keys from
+            the original dictionary besides those in the blacklist.
+
+    Returns: list
     """
     converted_list = []
     for original in list(original_list):
         converted_list.append(
-            convert_dict_by_key(original,
-                                key_map,
-                                fill_in=fill_in,
-                                whitelist=whitelist,
-                                blacklist=blacklist))
+            convert_dict_by_key(original, key_map, fill_in=fill_in,  whitelist=whitelist, blacklist=blacklist))
 
     return converted_list
