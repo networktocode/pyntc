@@ -454,7 +454,7 @@ class F5Device(BaseDevice):
             'fqdn': self._get_hostname(),
             'os_version': self._get_version(),
             'serial_number': self._get_serial_number(),
-            'interface_list': self._get_interfaces_list(),
+            'interfaces': self._get_interfaces_list(),
             'vlans': self._get_vlans(),
         }
 
