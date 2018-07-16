@@ -176,13 +176,6 @@ class JunosDevice(BaseDevice):
     def reboot(self, timer=0):
         self.sw.reboot(in_min=timer)
 
-    @property
-    def running_config(self):
-        if self._running_config is None:
-            self._running_config = self.show('show config')
-
-        return self._running_config
-
     def rollback(self, filename):
         self.native.timeout = 60
 
@@ -198,6 +191,13 @@ class JunosDevice(BaseDevice):
 
         self.native.timeout = 30
 
+    @property
+    def running_config(self):
+        if self._running_config is None:
+            self._running_config = self.show('show config')
+
+        return self._running_config
+
     def save(self, filename=None):
         if filename is None:
             self.cu.commit()
@@ -210,6 +210,9 @@ class JunosDevice(BaseDevice):
                 scp.put(temp_file.name, remote_path=filename)
 
             temp_file.close()
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        raise NotImplementedError
 
     def show(self, command, raw_text=True):
         if not raw_text:
