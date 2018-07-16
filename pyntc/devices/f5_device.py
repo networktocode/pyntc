@@ -1,4 +1,4 @@
-"""Module for using an F5 TMOS device over the REST.
+"""Module for using an F5 TMOS device over the REST / SOAP.
 """
 
 import hashlib
@@ -6,12 +6,13 @@ import os
 import re
 import time
 
+import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
 
-F5_API_DEVICE_TYPE = 'f5_tmos_rest'
+F5_API_DEVICE_TYPE = 'f5_tmos_icontrol'
 
 
 class F5Device(BaseDevice):
@@ -24,6 +25,17 @@ class F5Device(BaseDevice):
         self.password = password
         self.api_handler = ManagementRoot(self.hostname, self.username,
                                           self.password)
+
+        self._open_soap()
+
+    def _open_soap(self):
+        try:
+            self.soap_handler = bigsuds.BIGIP(hostname=self.hostname,
+                                              username=self.username,
+                                              password=self.password)
+            self.devices = self.soap_handler.Management.Device.get_list()
+        except bigsuds.OperationFailed as err:
+            raise RuntimeError('ConfigSync API Error ({})'.format(err))
 
     def _reconnect(self):
         """ Reconnects to the device
@@ -403,8 +415,49 @@ class F5Device(BaseDevice):
     def backup_running_config(self, filename):
         raise NotImplementedError
 
+    def _get_uptime(self):
+        return self.soap_handler.System.SystemInfo.get_uptime()
+
+    def _get_version(self):
+        return self.soap_handler.System.SystemInfo.get_version()
+
+    def _get_serial_number(self):
+        system_information = self.soap_handler.System.SystemInfo.get_system_information()
+        chassis_serial = system_information.get('chassis_serial')
+
+        return chassis_serial
+
+    def _get_model(self):
+        return self.soap_handler.System.SystemInfo.get_marketing_name()
+
+    def _get_hostname(self):
+        return self.soap_handler.Management.Device.get_hostname(self.devices)[0]
+
+    def _get_interfaces_list(self):
+        interfaces = self.soap_handler.Networking.Interfaces.get_list()
+        return interfaces
+
+    def _get_vlans(self):
+        rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()
+        rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(
+            rd_list)
+
+        return rd_vlan_list
+
     def facts(self):
-        raise NotImplementedError
+        facts = {
+            'uptime': self._get_uptime(),
+            'vendor': 'F5 Networks',
+            'model': self._get_model(),
+            'hostname': self._get_hostname(),
+            'fqdn': self._get_hostname(),
+            'os_version': self._get_version(),
+            'serial_number': self._get_serial_number(),
+            'interface_list': self._get_interfaces_list(),
+            'vlans': self._get_vlans(),
+        }
+
+        return facts
 
     def running_config(self):
         raise NotImplementedError
