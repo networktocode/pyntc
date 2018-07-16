@@ -12,6 +12,7 @@ from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
 
 
+# noinspection PyProtectedMember
 @fix_docs
 class NXOSDevice(BaseDevice):
     def __init__(self, host, username, password, transport='http', timeout=30, port=None):
