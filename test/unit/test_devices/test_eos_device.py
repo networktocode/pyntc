@@ -69,7 +69,7 @@ class TestEOSDevice(unittest.TestCase):
 
         self.assertIsInstance(result, str)
         self.assertEqual(result,
-                          'Hostname: spine1\nFQDN:     spine1.ntc.com\n')
+                         'Hostname: spine1\nFQDN:     spine1.ntc.com\n')
         self.device.native.enable.assert_called_with([command], encoding='text')
 
     def test_show_list(self):

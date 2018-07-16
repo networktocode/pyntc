@@ -1,5 +1,4 @@
 from setuptools import find_packages, setup
-import sys
 
 name = 'pyntc'
 version = '0.0.6'
@@ -17,34 +16,28 @@ install_requires = [
     'mock>=1.3',
     'textfsm',
     'terminal',
+    'pyeapi',
+    'junos-eznc',
+    'scp',
 ]
 
 dependency_links = []
-
 author = 'Network To Code'
 author_email = 'ntc@networktocode.com'
 url = 'https://github.com/networktocode/pyntc'
 download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.6'
 description = 'A multi-vendor library for managing network devices.'
 
-if sys.version_info.major >= 3:
-    install_requires.append('pyeapi==9.9.9')
-    dependency_links.append(
-        'https://github.com/arista-eosplus/pyeapi/tarball/develop#egg=pyeapi-9.9.9'
-      )
-else:
-    install_requires.append('pyeapi')
-    install_requires.append('junos-eznc')
-
-setup(name=name,
-      version=version,
-      packages=packages,
-      package_data=package_data,
-      install_requires=install_requires,
-      dependency_links=dependency_links,
-      url=url,
-      download_url=download_url,
-      author=author,
-      author_email=author_email,
-      description=description,
+setup(
+    name=name,
+    version=version,
+    packages=packages,
+    package_data=package_data,
+    install_requires=install_requires,
+    dependency_links=dependency_links,
+    url=url,
+    download_url=download_url,
+    author=author,
+    author_email=author_email,
+    description=description,
 )

@@ -7,3 +7,5 @@ coverage_html_report/
 .coverage
 dist/
 .cache/
+.pytest_cache/
+.idea/

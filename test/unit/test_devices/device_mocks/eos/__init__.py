@@ -38,7 +38,6 @@ def config(commands):
         if not os.path.isfile(path):
             raise EOSCommandError(1002, '%s failed' % command, commands=executed_commands)
 
-
         responses.append({})
 
     return responses
