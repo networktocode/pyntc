@@ -444,6 +444,7 @@ class F5Device(BaseDevice):
 
         return rd_vlan_list
 
+    @property
     def facts(self):
         facts = {
             'uptime': self._get_uptime(),
