@@ -1,6 +1,6 @@
 from .base_vlans import BaseVlans, vlan_not_in_range_error
 from pyntc.data_model.key_maps.eos_key_maps import VLAN_KM
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
+from pyntc.data_model.converters import convert_dict_by_key, strip_unicode
 
 
 class EOSVlans(BaseVlans):
@@ -29,7 +29,7 @@ class EOSVlans(BaseVlans):
         # detailed_vlan_list = convert_list_by_key(native_all_vlan_response.values(), VLAN_KM)
 
         # return strip_unicode(detailed_vlan_list)
-        raise  NotImplementedError
+        raise NotImplementedError
 
     def config(self, vlan_id, **params):
         # vlan_not_in_range_error(vlan_id)

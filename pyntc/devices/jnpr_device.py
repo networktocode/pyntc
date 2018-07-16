@@ -8,9 +8,11 @@ from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.sw import SW as JunosNativdSW
 from jnpr.junos.utils.scp import SCP
+# TODO: Check validity of this in latest pyez
 from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.exception import ConfigLoadError
 
+# TODO: Check validity of this in latest pyez
 from .tables.jnpr.loopback import LoopbackTable
 from .base_device import BaseDevice, fix_docs
 
@@ -104,17 +106,17 @@ class JunosDevice(BaseDevice):
             self.native.close()
             # TODO: Set self.connected to False
 
-    def config(self, command, format='set'):
+    def config(self, command, config_format='set'):
         try:
-            self.cu.load(command, format=format)
+            self.cu.load(command, format=config_format)
             self.cu.commit()
         except ConfigLoadError as e:
             raise CommandError(command, e.message)
 
-    def config_list(self, commands, format='set'):
+    def config_list(self, commands, config_format='set'):
         try:
             for command in commands:
-                self.cu.load(command, format=format)
+                self.cu.load(command, format=config_format)
 
             self.cu.commit()
         except ConfigLoadError as e:

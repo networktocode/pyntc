@@ -9,6 +9,8 @@ import sys
 def strip_unicode(data):
     """Return the original data but with all internal
     instances of type (unicode) converted to type (str).
+
+    TODO: See if futures can do this instead of custom function.
     """
     if sys.version_info.major >= 3:
         return data

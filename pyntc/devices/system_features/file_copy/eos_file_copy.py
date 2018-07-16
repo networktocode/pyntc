@@ -57,7 +57,7 @@ class EOSFileCopy(BaseFileCopy):
                 scp.get(self.remote, self.local)
             else:
                 scp.put(self.local, self.remote)
-        except Exception as e:
+        except Exception:
             raise FileTransferError
         finally:
             scp.close()

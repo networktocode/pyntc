@@ -28,15 +28,16 @@ url = 'https://github.com/networktocode/pyntc'
 download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.6'
 description = 'A multi-vendor library for managing network devices.'
 
-setup(name=name,
-      version=version,
-      packages=packages,
-      package_data=package_data,
-      install_requires=install_requires,
-      dependency_links=dependency_links,
-      url=url,
-      download_url=download_url,
-      author=author,
-      author_email=author_email,
-      description=description,
+setup(
+    name=name,
+    version=version,
+    packages=packages,
+    package_data=package_data,
+    install_requires=install_requires,
+    dependency_links=dependency_links,
+    url=url,
+    download_url=download_url,
+    author=author,
+    author_email=author_email,
+    description=description,
 )
