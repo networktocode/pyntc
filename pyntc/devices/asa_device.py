@@ -4,6 +4,7 @@
 from netmiko import ConnectHandler
 
 from pyntc.errors import NTCError
+from pyntc.templates import get_structured_data
 from .base_device import fix_docs
 from .ios_device import IOSDevice
 
@@ -50,3 +51,35 @@ class ASADevice(IOSDevice):
                                          secret=self.secret,
                                          verbose=False)
             self._connected = True
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        self.config_list(['boot system flash {}'.format(image_name)])
+
+    def get_boot_options(self):
+        show_boot_out = self.show('show boot | i BOOT variable')
+        boot_path_regex = r'Current BOOT variable = (\S+):\/(\S+)'
+
+        match = re.search(boot_path_regex, show_boot_out)
+        if match:
+            boot_image = match.group(2)
+        else:
+            boot_image = None
+
+        return dict(sys=boot_image)
+
+    def _interfaces_detailed_list(self):
+        ip_int = self.show('show interface')
+        ip_int_data = get_structured_data('cisco_asa_show_interface.template',
+                                          ip_int)
+
+        return ip_int_data
+
+    def _raw_version_data(self):
+        show_version_out = self.show('show version')
+        try:
+            version_data = \
+                get_structured_data('cisco_asa_show_version.template',
+                                    show_version_out)[0]
+            return version_data
+        except IndexError:
+            return {}
