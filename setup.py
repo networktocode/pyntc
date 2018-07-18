@@ -17,7 +17,8 @@ install_requires = [
     'mock>=1.3',
     'textfsm',
     'terminal',
-    'f5-sdk'
+    'f5-sdk',
+    'bigsuds',
 ]
 
 dependency_links = []
