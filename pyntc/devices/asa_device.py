@@ -55,8 +55,18 @@ class ASADevice(IOSDevice):
             self._connected = True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        self.config_list(['boot system {}{}'.format(
-            vendor_specifics.get('image_location', ''), image_name)])
+        current_boot = self.show("running-config | inc ^boot system ")
+
+        if current_boot and isinstance(current_boot, list):
+            current_images = current_boot.splitlines()
+        else:
+            current_images = []
+
+        commands_to_exec = ["no {}".format(image) for image in current_images]
+        commands_to_exec.append("boot system {}{}".format(
+            vendor_specifics.get('image_location', ''), image_name))
+
+        self.config_list(commands_to_exec)
 
     def get_boot_options(self):
         show_boot_out = self.show('show boot | i BOOT variable')
