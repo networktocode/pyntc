@@ -55,9 +55,9 @@ class ASADevice(IOSDevice):
             self._connected = True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        current_boot = self.show("running-config | inc ^boot system ")
+        current_boot = self.show("show running-config | inc ^boot system ")
 
-        if current_boot and isinstance(current_boot, list):
+        if current_boot:
             current_images = current_boot.splitlines()
         else:
             current_images = []
@@ -70,6 +70,7 @@ class ASADevice(IOSDevice):
 
     def get_boot_options(self):
         show_boot_out = self.show('show boot | i BOOT variable')
+        # Improve regex to get only the first boot $var in the sequence!
         boot_path_regex = r'Current BOOT variable = (\S+):\/(\S+)'
 
         match = re.search(boot_path_regex, show_boot_out)
