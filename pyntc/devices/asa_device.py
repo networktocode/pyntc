@@ -78,8 +78,8 @@ class ASADevice(IOSDevice):
         show_version_out = self.show('show version')
         try:
             version_data = \
-                get_structured_data('cisco_asa_show_version.template',
-                                    show_version_out)[0]
+            get_structured_data('cisco_asa_show_version.template',
+                                show_version_out)[0]
             return version_data
         except IndexError:
             return {}
