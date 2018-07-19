@@ -1,6 +1,8 @@
 """Module for using a Cisco ASA device over SSH.
 """
 
+import re
+
 from netmiko import ConnectHandler
 
 from pyntc.errors import NTCError
@@ -53,7 +55,8 @@ class ASADevice(IOSDevice):
             self._connected = True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        self.config_list(['boot system flash {}'.format(image_name)])
+        self.config_list(['boot system {}{}'.format(
+            vendor_specifics.get('image_location', ''), image_name)])
 
     def get_boot_options(self):
         show_boot_out = self.show('show boot | i BOOT variable')
@@ -78,8 +81,16 @@ class ASADevice(IOSDevice):
         show_version_out = self.show('show version')
         try:
             version_data = \
-            get_structured_data('cisco_asa_show_version.template',
-                                show_version_out)[0]
+                get_structured_data('cisco_asa_show_version.template',
+                                    show_version_out)[0]
             return version_data
         except IndexError:
             return {}
+
+    @property
+    def facts(self):
+        """Implement this once facts' re-factor is done. """
+        return {}
+
+    def rollback(self, rollback_to):
+        raise NotImplementedError
