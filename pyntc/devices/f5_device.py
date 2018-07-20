@@ -20,6 +20,8 @@ class F5Device(BaseDevice):
         super(F5Device, self).__init__(host, username, password, vendor='f5',
                                        device_type=F5_API_DEVICE_TYPE)
 
+        self.vendor = 'F5 Networks'
+
         self.hostname = host
         self.username = username
         self.password = password
@@ -469,7 +471,7 @@ class F5Device(BaseDevice):
     def facts(self):
         facts = {
             'uptime': self._get_uptime(),
-            'vendor': 'F5 Networks',
+            'vendor': self.vendor,
             'model': self._get_model(),
             'hostname': self._get_hostname(),
             'fqdn': self._get_hostname(),
