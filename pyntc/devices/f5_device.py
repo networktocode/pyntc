@@ -109,6 +109,12 @@ class F5Device(BaseDevice):
         return os.path.isfile(filepath)
 
     def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
+        """Gets md5 checksum from the filepath
+
+        Returns:
+            str - if the file exists
+            None - if the file does not exist
+        """
         if self._file_copy_local_file_exists(filepath):
             m = hashlib.md5()
             with open(filepath, "rb") as f:
@@ -217,6 +223,9 @@ class F5Device(BaseDevice):
         Returns:
             bool - True / False if image installed on a specified volume
         """
+        if not image_name or not volume:
+            raise RuntimeError("image_name and volume must be specified")
+
         image = None
         images_on_device = self._get_images()
 
@@ -352,14 +361,14 @@ class F5Device(BaseDevice):
         raise NotImplementedError
 
     def file_copy(self, src, dest=None, **kwargs):
-        if dest:
+        if dest and not dest.startswith("/shared/images"):
             raise NotImplementedError(
                 "Support only for images - destination is always /shared/images")
 
         self._upload_image(image_filepath=src)
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        if dest:
+        if dest and not dest.startswith("/shared/images"):
             raise NotImplementedError(
                 "Support only for images - destination is always /shared/images")
 
