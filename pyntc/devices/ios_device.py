@@ -200,7 +200,6 @@ class IOSDevice(BaseDevice):
                 boot_image = boot_path.replace('flash:/', '')
             else:
                 boot_image = None
-            return dict(sys=boot_image)
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
@@ -210,7 +209,7 @@ class IOSDevice(BaseDevice):
                 boot_image = match.group(1)
             else:
                 boot_image = None
-            return dict(sys=boot_image)
+        return dict(sys=boot_image)
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
