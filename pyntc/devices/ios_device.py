@@ -284,7 +284,6 @@ class IOSDevice(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         if self._is_catalyst():
             self.config_list(['no boot system', 'boot system flash:/%s' % image_name])
-            self.config('boot system flash:/%s' % image_name)
         else:
             self.config_list(['no boot system', 'boot system flash %s' % image_name])
 
