@@ -4,6 +4,7 @@
 import signal
 import os
 import re
+import time
 
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_structured_data
@@ -70,6 +71,18 @@ class IOSDevice(BaseDevice):
             return version_data
         except IndexError:
             return {}
+
+    def _reconnect(self, timeout=20):
+        counter = 0
+        while counter < 10:
+            try:
+                self.open()
+                return True
+            except:
+                counter += 1
+                time.sleep(30)
+        time.sleep(60)
+        return False
 
     def _send_command(self, command, expect=False, expect_string=''):
         if expect:
@@ -190,26 +203,46 @@ class IOSDevice(BaseDevice):
         return False
 
     def get_boot_options(self):
+        # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
             show_boot_out = self.show('show boot')
-            boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
-            boot_path = re.search(boot_path_regex, show_boot_out).group(1)
-            boot_image = boot_path.replace('flash:/', '')
+            boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
+            match = re.search(boot_path_regex, show_boot_out)
+            if match:
+                boot_path = match.group(2)
+                boot_image = boot_path.replace('flash:/', '')
+            else:
+                boot_image = None
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
+
             match = re.search(boot_path_regex, show_boot_out)
             if match:
                 boot_image = match.group(1)
             else:
                 boot_image = None
-
-        return {'sys': boot_image}
+        return dict(sys=boot_image)
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
+        current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
-        self.reboot()
+        new_boot_option = self.get_boot_options().get('sys')
+        if new_boot_option != current_boot_option:
+            self.save()
+            self.reboot()
+            reconnected = self._reconnect()
+            if reconnected:
+                new_boot_option = self.get_boot_options().get('sys')
+                if new_boot_option == image_name:
+                    return {'upgraded': True, 'msg': 'device was upgraded'}
+            else:
+                return {'upgraded': False, 'msg': 'reconnect timeout: could not verified device upgrade'}
+        else:
+            return {'upgraded': False, 'msg': 'Device have the lastest version'}
+
+
 
     def open(self):
         if self._connected:
@@ -249,8 +282,10 @@ class IOSDevice(BaseDevice):
             self.native.send_command_timing('\n')
         except RebootSignal:
             signal.alarm(0)
+            time.sleep(30)
 
         signal.alarm(0)
+
 
     def rollback(self, rollback_to):
         try:
@@ -278,7 +313,7 @@ class IOSDevice(BaseDevice):
 
     def set_boot_options(self, image_name, **vendor_specifics):
         if self._is_catalyst():
-            self.config('boot system flash:/%s' % image_name)
+            self.config_list(['no boot system', 'boot system flash:/%s' % image_name])
         else:
             self.config_list(['no boot system', 'boot system flash %s' % image_name])
 
