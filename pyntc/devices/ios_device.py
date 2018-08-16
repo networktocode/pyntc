@@ -55,6 +55,11 @@ class IOSDevice(BaseDevice):
 
         return fc
 
+    def _get_file_system(self):
+        raw_data = self._send_command('dir')
+        file_system = re.search(r'flash:|bootflash:', raw_data).group(0)
+        return file_system
+
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show('show ip int br')
         ip_int_br_data = get_structured_data('cisco_ios_show_ip_int_brief.template', ip_int_br_out)
@@ -194,7 +199,8 @@ class IOSDevice(BaseDevice):
             finally:
                 fc.close_scp_chan()
 
-    def file_copy_remote_exists(self, src, dest=None, file_system='flash:'):
+    def file_copy_remote_exists(self, src, dest=None):
+        file_system = self._get_file_system()
         fc = self._file_copy_instance(src, dest, file_system=file_system)
         self._enable()
         if fc.check_file_exists() and fc.compare_md5():
