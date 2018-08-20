@@ -75,6 +75,12 @@ class IOSDevice(BaseDevice):
     def _is_catalyst(self):
         return self.facts['model'].startswith('WS-')
 
+    def _is_file_in_dir(self, request_image):
+        file_in_dir = self.show('dir')
+        if re.search(request_image, file_in_dir):
+            return True
+        return False
+
     def _raw_version_data(self):
         show_version_out = self.show('show version')
         try:
@@ -238,8 +244,12 @@ class IOSDevice(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
-        if self._is_already_upgraded(image_name):
-            return {'upgraded': False, 'system_state':{'sys': None, 'status': 'Device have the lastest version'}}
+        upgraded = self._is_already_upgraded(image_name):
+        if upgraded:
+            return {'upgraded': False, 'system_state':{'sys': upgraded.group(0), 'status': 'Device have the lastest version'}}
+
+        if self._is_file_in_dir(image_name):
+            return {'upgraded': False, 'system_state':{'sys': upgraded.group(0), 'status': 'Image file {} is not on device'.format(image_name)}}
 
         current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
@@ -249,7 +259,7 @@ class IOSDevice(BaseDevice):
             self.reboot()
             reconnected = self._reconnect()
             if reconnected:
-                upgraded = self._is_already_upgraded()
+                upgraded = self._is_already_upgraded(image_name)
                 if upgraded:
                     return {'upgraded': True, 'system_state':{'sys': upgraded.group(0), 'status': 'Device was upgraded'}}
             else:
