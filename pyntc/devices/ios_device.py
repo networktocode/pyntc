@@ -239,7 +239,8 @@ class IOSDevice(BaseDevice):
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
         if self._is_already_upgraded(image_name):
-            return {'upgraded': False, system_state:{'sys': None, status: 'Device have the lastest version'}
+            return {'upgraded': False, 'system_state':{'sys': None, 'status': 'Device have the lastest version'}}
+
         current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
         new_boot_option = self.get_boot_options().get('sys')
@@ -250,9 +251,9 @@ class IOSDevice(BaseDevice):
             if reconnected:
                 upgraded = self._is_already_upgraded()
                 if upgraded:
-                    return {'upgraded': True, system_state:{'sys': upgraded.group(0), status: 'Device was upgraded'}}
+                    return {'upgraded': True, 'system_state':{'sys': upgraded.group(0), 'status': 'Device was upgraded'}}
             else:
-                return {'upgraded': False, system_state:{'sys': None, status: 'reconnect timeout: could not verified device upgrade'}}
+                return {'upgraded': False, 'system_state':{'sys': None, 'status': 'reconnect timeout: could not verified device upgrade'}}
 
     def open(self):
         if self._connected:
