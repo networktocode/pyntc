@@ -66,6 +66,12 @@ class IOSDevice(BaseDevice):
 
         return ip_int_br_data
 
+    def _is_already_upgraded(self, request_image):
+        show_version = self.show('show version')
+        if re.search(request_image.strip(), show_version):
+            return True
+        return False
+
     def _is_catalyst(self):
         return self.facts['model'].startswith('WS-')
 
@@ -232,6 +238,8 @@ class IOSDevice(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
+        if self._is_already_upgraded(image_name):
+            return {'upgraded': False, 'msg': 'Device have the lastest version'}
         current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
         new_boot_option = self.get_boot_options().get('sys')
@@ -240,15 +248,10 @@ class IOSDevice(BaseDevice):
             self.reboot()
             reconnected = self._reconnect()
             if reconnected:
-                new_boot_option = self.get_boot_options().get('sys')
-                if new_boot_option == image_name:
-                    return {'upgraded': True, 'msg': 'device was upgraded'}
+                if self._is_already_upgraded(image_name):
+                    return {'upgraded': False, 'msg': 'Device was upgraded'}
             else:
                 return {'upgraded': False, 'msg': 'reconnect timeout: could not verified device upgrade'}
-        else:
-            return {'upgraded': False, 'msg': 'Device have the lastest version'}
-
-
 
     def open(self):
         if self._connected:
