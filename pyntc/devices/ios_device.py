@@ -249,7 +249,7 @@ class IOSDevice(BaseDevice):
             reconnected = self._reconnect()
             if reconnected:
                 if self._is_already_upgraded(image_name):
-                    return {'upgraded': False, 'msg': 'Device was upgraded'}
+                    return {'upgraded': True, 'msg': 'Device was upgraded'}
             else:
                 return {'upgraded': False, 'msg': 'reconnect timeout: could not verified device upgrade'}
 
