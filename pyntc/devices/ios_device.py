@@ -76,8 +76,8 @@ class IOSDevice(BaseDevice):
         return self.facts['model'].startswith('WS-')
 
     def _is_file_in_dir(self, request_image):
-        file_in_dir = self.show('dir')
-        if re.search(request_image, file_in_dir):
+        show_file_in_dir = self.show('dir')
+        if re.search(request_image, show_file_in_dir):
             return True
         return False
 
@@ -223,14 +223,25 @@ class IOSDevice(BaseDevice):
     def get_boot_options(self):
         # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
-            show_boot_out = self.show('show boot')
+            try:
+                show_boot_out = self.show('show boot')
+                bootvar = False
+            except CommandError:
+                show_boot_out = self.show('show bootvar')
+                bootvar= True
             boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
             match = re.search(boot_path_regex, show_boot_out)
+
             if match:
-                boot_path = match.group(2)
-                boot_image = boot_path.replace('flash:/', '')
+                if bootvar:
+                    boot_path = match.group(2)
+                    boot_image = boot_path.split(',')[0]
+                else:
+                    boot_path = match.group(2)
+                    boot_image = boot_path.replace('flash:/', '')
             else:
                 boot_image = None
+
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
@@ -244,26 +255,27 @@ class IOSDevice(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
-        upgraded = self._is_already_upgraded(image_name):
-        if upgraded:
-            return {'upgraded': False, 'system_state':{'sys': upgraded.group(0), 'status': 'Device have the lastest version'}}
+        if self._is_already_upgraded(image_name):
+            return False
 
-        if self._is_file_in_dir(image_name):
-            return {'upgraded': False, 'system_state':{'sys': upgraded.group(0), 'status': 'Image file {} is not on device'.format(image_name)}}
+        if not self._is_file_in_dir(image_name):
+            raise ValueError('Image is not on device')
 
         current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
+        try:
+            self.config('config-register 0x2102')
+        except CommandError:
+            pass
+        self.save()
         new_boot_option = self.get_boot_options().get('sys')
-        if new_boot_option != current_boot_option:
-            self.save()
-            self.reboot()
-            reconnected = self._reconnect()
-            if reconnected:
-                upgraded = self._is_already_upgraded(image_name)
-                if upgraded:
-                    return {'upgraded': True, 'system_state':{'sys': upgraded.group(0), 'status': 'Device was upgraded'}}
+        self.reboot()
+        reconnected = self._reconnect()
+        if reconnected:
+            if self._is_already_upgraded(image_name):
+                return True
             else:
-                return {'upgraded': False, 'system_state':{'sys': None, 'status': 'reconnect timeout: could not verified device upgrade'}}
+                raise ValueError('reconnect timeout: could not verified device upgrade')
 
     def open(self):
         if self._connected:
@@ -333,10 +345,11 @@ class IOSDevice(BaseDevice):
         self.native.find_prompt()
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        file_system = self._get_file_system()
         if self._is_catalyst():
-            self.config_list(['no boot system', 'boot system flash:/%s' % image_name])
+            self.config_list(['no boot system', 'boot system {}/%s'.format(file_system) % image_name])
         else:
-            self.config_list(['no boot system', 'boot system flash %s' % image_name])
+            self.config_list(['no boot system', 'boot system {} %s'.format(file_system.replace(':','')) % image_name])
 
     def show(self, command, expect=False, expect_string=''):
         self._enable()
