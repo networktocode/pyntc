@@ -89,7 +89,7 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
 
-    def _reconnect(self, timeout=20):
+    def _reconnect(self, timeout=26):
         counter = 0
         while counter < 10:
             try:
@@ -149,6 +149,16 @@ class IOSDevice(BaseDevice):
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
+
+    def change_config_register(self, register='0x2102'):
+        if self.facts['cisco_ios_ssh']['config_register'] == register:
+            return False
+        else:
+            try:
+                self.config('config-register {}'.format(register))
+                return True
+            except :
+                return False
 
     def checkpoint(self, checkpoint_file):
         self.save(filename=checkpoint_file)
@@ -263,10 +273,6 @@ class IOSDevice(BaseDevice):
 
         current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
-        try:
-            self.config('config-register 0x2102')
-        except CommandError:
-            pass
         self.save()
         new_boot_option = self.get_boot_options().get('sys')
         self.reboot()
