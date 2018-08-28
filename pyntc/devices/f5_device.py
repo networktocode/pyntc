@@ -296,6 +296,8 @@ class F5Device(BaseDevice):
         """
         end_time = time.time() + timeout
 
+        time.sleep(60)
+
         while time.time() < end_time:
             time.sleep(5)
             try:
