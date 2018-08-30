@@ -56,6 +56,7 @@ class IOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
+        self._enable()
         raw_data = self._send_command('dir')
         file_system = re.search(r'flash:|bootflash:', raw_data).group(0)
         return file_system
@@ -89,7 +90,7 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
 
-    def _reconnect(self, timeout=30):
+    def _reconnect(self, timeout=36):
         counter = 0
         while counter < 10:
             try:
@@ -98,8 +99,7 @@ class IOSDevice(BaseDevice):
             except:
                 counter += 1
                 time.sleep(30)
-        time.sleep(60)
-        return False
+        raise ValueError('reconnect timeout: could not verified device upgrade')
 
     def _send_command(self, command, expect=False, expect_string=''):
         if expect:
@@ -280,8 +280,6 @@ class IOSDevice(BaseDevice):
         if reconnected:
             if self._is_already_upgraded(image_name):
                 return True
-            else:
-                raise ValueError('reconnect timeout: could not verified device upgrade')
 
     def open(self):
         if self._connected:
