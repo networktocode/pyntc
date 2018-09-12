@@ -32,7 +32,7 @@ supported_devices = {
     },
     ASA_SSH_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: ASADevice,
-    }
+    },
     F5_API_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: F5Device,
     },
