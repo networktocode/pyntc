@@ -19,6 +19,7 @@ install_requires = [
     'terminal',
     'f5-sdk',
     'bigsuds',
+    'pyeapi'
 ]
 
 dependency_links = []
@@ -29,13 +30,7 @@ url = 'https://github.com/networktocode/pyntc'
 download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.6'
 description = 'A multi-vendor library for managing network devices.'
 
-if sys.version_info.major >= 3:
-    install_requires.append('pyeapi==9.9.9')
-    dependency_links.append(
-        'https://github.com/arista-eosplus/pyeapi/tarball/develop#egg=pyeapi-9.9.9'
-      )
-else:
-    install_requires.append('pyeapi')
+if sys.version_info.major < 3:
     install_requires.append('junos-eznc')
 
 setup(name=name,
