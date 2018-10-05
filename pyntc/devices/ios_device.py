@@ -90,15 +90,16 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
 
-    def _reconnect(self, timeout=36):
+    def _reconnect(self, timeout=20):
         counter = 0
-        while counter < 10:
+        timeout = timeout*4
+        while counter < timeout:
             try:
                 self.open()
                 return True
             except:
                 counter += 1
-                time.sleep(30)
+                time.sleep(15)
         raise ValueError('reconnect timeout: could not verified device upgrade')
 
     def _send_command(self, command, expect=False, expect_string=''):
