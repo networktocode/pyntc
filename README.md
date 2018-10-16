@@ -141,7 +141,7 @@ On a Nexus device:
 >>> nxs1.facts
 {'vendor': 'cisco', 'interfaces': [], u'hostname': 'nxos-spine1', u'os_version': '7.1(0)D1(1) [build 7.2(0)ZD(0.17)]', u'serial_number': 'TM600C2833B', u'model': 'NX-OSv Chassis', 'vlans': ['1']}
 >>> 
->>> print json.dumps(nxs1.facts, indent=4)
+>>> print(json.dumps(nxs1.facts, indent=4))
 {
     "vendor": "cisco", 
     "interfaces": [], 
@@ -160,7 +160,7 @@ On an IOS device:
 ```
 >>> csr1 = NTCNAME('csr1')
 >>> 
->>> print json.dumps(csr1.facts, indent=4)
+>>> print(json.dumps(csr1.facts, indent=4))
 {
     "uptime": 87060, 
     "vendor": "cisco", 
@@ -216,7 +216,7 @@ On an IOS device:
 
 ```
 >>> for d in data:
-...   print d
+...   print(d)
 ... 
 nxos-spine1 
 
@@ -250,7 +250,7 @@ interface Ethernet2/1
 ```
 >>> run = csr1.running_config
 >>> 
->>> print run
+>>> print(run)
 Building configuration...
 
 Current configuration : 2062 bytes
