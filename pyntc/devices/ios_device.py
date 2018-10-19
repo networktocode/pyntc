@@ -90,7 +90,7 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
 
-    def _reconnect(self, timeout=35):
+    def _reconnect(self, timeout=40):
         counter = 0
         timeout = timeout*4
         while counter < timeout:
@@ -352,7 +352,7 @@ class IOSDevice(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         file_system = self._get_file_system()
         if self._is_catalyst():
-            self.config_list(['no boot system', 'boot system {}/%s'.format(file_system) % image_name])
+            self.config_list(['no boot system', 'boot system {}%s'.format(file_system) % image_name])
         else:
             self.config_list(['no boot system', 'boot system {} %s'.format(file_system.replace(':','')) % image_name])
 
