@@ -6,38 +6,6 @@ import collections
 import sys
 
 
-def strip_unicode(data):
-    """Return the original data but with all internal
-    instances of type (unicode) converted to type (str).
-    """
-    if sys.version_info.major >= 3:
-        return data
-
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(strip_unicode, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(strip_unicode, data))
-    else:
-        return data
-
-
-def recursive_key_lookup(keys, obj):
-    """Return obj[keys] if keys is actually a single key.
-    Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
-    """
-    if not isinstance(keys, list):
-        return obj.get(keys)
-
-    for key in keys:
-        if obj is not None:
-            obj = obj.get(key)
-
-    return obj
-
-
-
 def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklist=[]):
     """Use a key map to convert a dictionary to desired keys.
 
@@ -91,3 +59,34 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
                                 blacklist=blacklist))
 
     return converted_list
+
+
+def recursive_key_lookup(keys, obj):
+    """Return obj[keys] if keys is actually a single key.
+    Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
+    """
+    if not isinstance(keys, list):
+        return obj.get(keys)
+
+    for key in keys:
+        if obj is not None:
+            obj = obj.get(key)
+
+    return obj
+
+
+def strip_unicode(data):
+    """Return the original data but with all internal
+    instances of type (unicode) converted to type (str).
+    """
+    if sys.version_info.major >= 3:
+        return data
+
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(strip_unicode, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(strip_unicode, data))
+    else:
+        return data

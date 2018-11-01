@@ -15,27 +15,22 @@ DEVICE_CLASS_KEY = 'device_class'
 
 
 supported_devices = {
-    EOS_API_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: EOSDevice,
-    },
-
-    NXOS_API_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: NXOSDevice,
-    },
-
-    IOS_SSH_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: IOSDevice
-    },
-
-    JNPR_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: JunosDevice,
-    },
-
     ASA_SSH_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: ASADevice,
     },
-
+    EOS_API_DEVICE_TYPE: {
+        DEVICE_CLASS_KEY: EOSDevice,
+    },
     F5_API_DEVICE_TYPE: {
         DEVICE_CLASS_KEY: F5Device,
+    },
+    IOS_SSH_DEVICE_TYPE: {
+        DEVICE_CLASS_KEY: IOSDevice
+    },
+    JNPR_DEVICE_TYPE: {
+        DEVICE_CLASS_KEY: JunosDevice,
+    },
+    NXOS_API_DEVICE_TYPE: {
+        DEVICE_CLASS_KEY: NXOSDevice,
     },
 }

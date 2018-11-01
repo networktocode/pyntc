@@ -5,19 +5,23 @@ import re
 from scp import SCPClient
 from .base_file_copy import BaseFileCopy, FileTransferError
 
+
 class EOSFileCopy(BaseFileCopy):
+
     def __init__(self, device, local, remote=None, port=22):
         self.device = device
         self.local = local
         self.remote = remote or os.path.basename(local)
         self.port = port
 
-    def get_remote_size(self):
-        dir_out = self.device.show('dir', raw_text=True)
-        match = re.search(r'(\d+) bytes free', dir_out)
-        bytes_free = match.group(1)
+    def already_transfered(self):
+        remote_hash = self.get_remote_md5()
+        local_hash = self.get_local_md5()
+        if local_hash is not None:
+            if local_hash == remote_hash:
+                return True
 
-        return int(bytes_free)
+        return False
 
     def enough_remote_space(self):
         remote_size = self.get_remote_size()
@@ -27,16 +31,8 @@ class EOSFileCopy(BaseFileCopy):
 
         return True
 
-    def local_file_exists(self):
-        return os.path.isfile(self.local)
-
-    def remote_file_exists(self):
-        try:
-            self.device.show('dir {}'.format(self.remote))
-        except:
-            return False
-
-        return True
+    def get(self):
+        self.transfer_file(pull=True)
 
     def get_local_md5(self, blocksize=2**20):
         if self.local_file_exists():
@@ -56,24 +52,34 @@ class EOSFileCopy(BaseFileCopy):
         except:
             return None
 
-    def already_transfered(self):
-        remote_hash = self.get_remote_md5()
-        local_hash = self.get_local_md5()
-        if local_hash is not None:
-            if local_hash == remote_hash:
-                return True
+    def get_remote_size(self):
+        dir_out = self.device.show('dir', raw_text=True)
+        match = re.search(r'(\d+) bytes free', dir_out)
+        bytes_free = match.group(1)
 
-        return False
+        return int(bytes_free)
+
+    def local_file_exists(self):
+        return os.path.isfile(self.local)
+
+    def remote_file_exists(self):
+        try:
+            self.device.show('dir {}'.format(self.remote))
+        except:
+            return False
+
+        return True
+
+    def send(self):
+        self.transfer_file()
 
     def transfer_file(self, pull=False):
         if pull is False:
             if not self.local_file_exists():
-                raise FileTransferError(
-                    'Could not transfer file. Local file doesn\'t exist.')
+                raise FileTransferError('Could not transfer file. Local file doesn\'t exist.')
 
             if not self.enough_remote_space():
-                raise FileTransferError(
-                    'Could not transfer file. Not enough space on device.')
+                raise FileTransferError('Could not transfer file. Not enough space on device.')
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -97,9 +103,3 @@ class EOSFileCopy(BaseFileCopy):
             scp.close()
 
         return True
-
-    def send(self):
-        self.transfer_file()
-
-    def get(self):
-        self.transfer_file(pull=True)

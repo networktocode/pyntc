@@ -4,18 +4,6 @@ import textfsm
 TEMPLATE_PATH_ENV_VAR = 'NTC_TEMPLATES'
 
 
-def get_template_dir():
-    try:
-        return os.environ[TEMPLATE_PATH_ENV_VAR]
-    except KeyError:
-        return os.path.realpath(os.path.dirname(__file__))
-
-
-def get_template(template_name):
-    template_dir = get_template_dir()
-    return os.path.join(template_dir, template_name)
-
-
 def get_structured_data(template_name, rawtxt):
     """Returns structured data given raw text using
     TextFSM templates
@@ -32,3 +20,15 @@ def get_structured_data(template_name, rawtxt):
         structured_data.append(temp_dict)
 
     return structured_data
+
+
+def get_template(template_name):
+    template_dir = get_template_dir()
+    return os.path.join(template_dir, template_name)
+
+
+def get_template_dir():
+    try:
+        return os.environ[TEMPLATE_PATH_ENV_VAR]
+    except KeyError:
+        return os.path.realpath(os.path.dirname(__file__))
