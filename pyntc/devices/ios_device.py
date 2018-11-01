@@ -199,12 +199,27 @@ class IOSDevice(BaseDevice):
         return False
 
     def get_boot_options(self):
+        # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
-            show_boot_out = self.show('show boot')
-            boot_path_regex = r'BOOT path-list\s+:\s+(\S+)'
-            boot_path = re.search(boot_path_regex, show_boot_out).group(1)
-            boot_image = boot_path.replace('flash:/', '')
-            return dict(sys=boot_image)
+            try:
+                show_boot_out = self.show('show boot')
+                bootvar = False
+            except CommandError:
+                show_boot_out = self.show('show bootvar')
+                bootvar= True
+            boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
+            match = re.search(boot_path_regex, show_boot_out)
+
+            if match:
+                if bootvar:
+                    boot_path = match.group(2)
+                    boot_image = boot_path.split(',')[0]
+                else:
+                    boot_path = match.group(2)
+                    boot_image = boot_path.replace('flash:/', '')
+            else:
+                boot_image = None
+
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
@@ -214,7 +229,7 @@ class IOSDevice(BaseDevice):
                 boot_image = match.group(1)
             else:
                 boot_image = None
-            return dict(sys=boot_image)
+        return dict(sys=boot_image)
 
     def open(self):
         if self._connected:
