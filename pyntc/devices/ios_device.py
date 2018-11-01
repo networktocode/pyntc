@@ -216,6 +216,23 @@ class IOSDevice(BaseDevice):
                 boot_image = None
             return dict(sys=boot_image)
 
+    def install_os(self, image_name, **vendor_specifics):
+        if self._is_already_upgraded(image_name):
+            return False
+
+        if not self._is_file_in_dir(image_name):
+            raise ValueError('Image is not on device')
+
+        current_boot_option = self.get_boot_options().get('sys')
+        self.set_boot_options(image_name)
+        self.save()
+        new_boot_option = self.get_boot_options().get('sys')
+        self.reboot()
+        reconnected = self._reconnect()
+        if reconnected:
+            if self._is_already_upgraded(image_name):
+                return True
+
     def open(self):
         if self._connected:
             try:
