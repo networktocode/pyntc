@@ -68,6 +68,12 @@ class IOSDevice(BaseDevice):
     def _is_catalyst(self):
         return self.facts['model'].startswith('WS-')
 
+    def _is_file_in_dir(self, request_image):
+        show_file_in_dir = self.show('dir')
+        if re.search(request_image, show_file_in_dir):
+            return True
+        return False
+        
     def _raw_version_data(self):
         show_version_out = self.show('show version')
         try:
