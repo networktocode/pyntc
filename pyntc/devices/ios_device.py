@@ -59,6 +59,12 @@ class IOSDevice(BaseDevice):
 
         return ip_int_br_data
 
+    def _is_already_upgraded(self, request_image):
+        show_version = self.show('show version')
+        if re.search(request_image.strip(), show_version):
+            return True
+        return False
+
     def _is_catalyst(self):
         return self.facts['model'].startswith('WS-')
 
