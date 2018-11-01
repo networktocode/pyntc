@@ -202,11 +202,11 @@ class IOSDevice(BaseDevice):
         # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
             try:
-                show_boot_out = self.show('show boot')
-                bootvar = False
-            except CommandError:
                 show_boot_out = self.show('show bootvar')
                 bootvar= True
+            except CommandError:
+                show_boot_out = self.show('show boot')
+                bootvar = False
             boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
             match = re.search(boot_path_regex, show_boot_out)
 
