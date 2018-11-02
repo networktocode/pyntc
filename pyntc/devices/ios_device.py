@@ -55,10 +55,7 @@ class IOSDevice(BaseDevice):
 
     def _get_file_system(self):
         raw_data = self.show('dir')
-        file_system = re.match(r'.+?:', raw_data).group(0)
-        return file_system
-        raw_data = self._send_command('dir')
-        file_system = re.search(r'flash:|bootflash:', raw_data).group(0)
+        file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
         return file_system
 
     def _interfaces_detailed_list(self):
@@ -293,7 +290,7 @@ class IOSDevice(BaseDevice):
         file_system = self._get_file_system()
         try:
             self.config_list(['no boot system', 'boot system {}/%s'.format(file_system) % image_name])
-        except:
+        except CommandError:
             self.config_list(['no boot system', 'boot system {} %s'.format(file_system.replace(':','')) % image_name])
 
     def show(self, command, expect=False, expect_string=''):
