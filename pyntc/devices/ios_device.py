@@ -70,18 +70,17 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
             
-    def _reconnect(timeout=2):
-        start = int(time.time())
-        while (int(time.time()) - start) / 60 < timeout:
-            print((int(time.time()) - start) / 60)
+    def _reconnect(timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
             try:
-                open()
+                self.open()
                 return True
             except:
-                time.sleep(15)
+                pass
         raise ValueError(
             "reconnect timeout: could not reconnect {} minutes after device reboot".format(
-                timeout / 4
+                timeout / 60
             )
         )
         
