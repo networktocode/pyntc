@@ -291,9 +291,9 @@ class IOSDevice(BaseDevice):
 
     def set_boot_options(self, image_name, **vendor_specifics):
         file_system = self._get_file_system()
-        if self._is_catalyst():
+        try:
             self.config_list(['no boot system', 'boot system {}/%s'.format(file_system) % image_name])
-        else:
+        except:
             self.config_list(['no boot system', 'boot system {} %s'.format(file_system.replace(':','')) % image_name])
 
     def show(self, command, expect=False, expect_string=''):
