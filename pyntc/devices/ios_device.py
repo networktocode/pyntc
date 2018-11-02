@@ -53,6 +53,11 @@ class IOSDevice(BaseDevice):
         fc = FileTransfer(self.native, src, dest, file_system=file_system)
         return fc
 
+    def _get_file_system(self):
+        raw_data = self.show('dir')
+        file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
+        return file_system
+
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show('show ip int br')
         ip_int_br_data = get_structured_data('cisco_ios_show_ip_int_brief.template', ip_int_br_out)
@@ -298,10 +303,12 @@ class IOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        if self._is_catalyst():
-            self.config('boot system flash:/%s' % image_name)
-        else:
-            self.config_list(['no boot system', 'boot system flash %s' % image_name])
+        file_system = self._get_file_system()
+        try:
+            self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
+        except CommandError:
+            file_system = file_system.replace(':', '')
+            self.config_list(['no boot system', 'boot system {0} {1}'.format(file_system, image_name)])
 
     def show(self, command, expect=False, expect_string=''):
         self._enable()
