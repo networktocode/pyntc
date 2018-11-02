@@ -80,7 +80,7 @@ class IOSDevice(BaseDevice):
             except:
                 counter += 1
                 time.sleep(15)
-        raise ValueError('reconnect timeout: could not verified device upgrade')
+        raise ValueError('reconnect timeout: could not reconnect {} minutes after device reboot'.format(timeout/4))
 
     def _send_command(self, command, expect=False, expect_string=''):
         if expect:
