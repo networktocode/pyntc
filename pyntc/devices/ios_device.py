@@ -17,14 +17,12 @@ from .base_device import BaseDevice, RollbackError, fix_docs
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-IOS_SSH_DEVICE_TYPE = 'cisco_ios_ssh'
-
 
 @fix_docs
 class IOSDevice(BaseDevice):
 
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type=IOS_SSH_DEVICE_TYPE)
+        super(IOSDevice, self).__init__(host, username, password, vendor='cisco', device_type='cisco_ios_ssh')
 
         self.native = None
         self.host = host
@@ -188,7 +186,7 @@ class IOSDevice(BaseDevice):
             facts['vlans'] = []
 
         # ios-specific facts
-        ios_facts = facts[IOS_SSH_DEVICE_TYPE] = {}
+        ios_facts = facts[self.device_type] = {}
         ios_facts['config_register'] = version_data['config_register']
 
         self._facts = facts

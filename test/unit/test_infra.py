@@ -4,7 +4,7 @@ import mock
 
 from pyntc import ntc_device, ntc_device_by_name
 from pyntc.errors import UnsupportedDeviceError, ConfFileNotFoundError
-from pyntc.devices import supported_devices, DEVICE_CLASS_KEY
+from pyntc.devices import supported_devices
 from pyntc.devices import EOSDevice, NXOSDevice, IOSDevice
 
 
@@ -19,8 +19,7 @@ class TestInfra(unittest.TestCase):
     def test_device_creation(self, j_open, i_open):
         for device_type in supported_devices:
             device = ntc_device(device_type, 'host', 'user', 'pass')
-            self.assertIsInstance(
-                device, supported_devices[device_type][DEVICE_CLASS_KEY])
+            self.assertIsInstance(device, supported_devices[device_type])
 
     def test_unsupported_device(self):
         with self.assertRaises(UnsupportedDeviceError):
