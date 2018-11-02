@@ -229,7 +229,8 @@ class IOSDevice(BaseDevice):
                 boot_image = match.group(1)
             else:
                 boot_image = None
-        return dict(sys=boot_image)
+
+        return {'sys': boot_image}
 
     def open(self):
         if self._connected:
