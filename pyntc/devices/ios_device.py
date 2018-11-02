@@ -204,36 +204,28 @@ class IOSDevice(BaseDevice):
         return False
 
     def get_boot_options(self):
-        # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
-        if self._is_catalyst():
+        # TODO: CREATE A MOCK FOR TESTING THIS FUNCTION
+        boot_path_regex = r'(?:BOOT variable\s+=\s+|BOOT path-list\s+:\s+|boot\s+system\s+\S+\s+)(\S+)(?:;|)\s*'
+        try:
+            # Try show bootvar command first
+            show_boot_out = self.show('show bootvar')
+        except CommandError:
             try:
-                show_boot_out = self.show('show bootvar')
-                bootvar= True
-            except CommandError:
+                # Try show boot if previous command was invalid
                 show_boot_out = self.show('show boot')
-                bootvar = False
-            boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
-            match = re.search(boot_path_regex, show_boot_out)
+            except CommandError:
+                # Default to running config value
+                show_boot_out = self.show('show run | inc boot')
 
-            if match:
-                if bootvar:
-                    boot_path = match.group(2)
-                    boot_image = boot_path.split(',')[0]
-                else:
-                    boot_path = match.group(2)
-                    boot_image = boot_path.replace('flash:/', '')
-            else:
-                boot_image = None
-
+        match = re.search(boot_path_regex, show_boot_out)
+        if match:
+            boot_path = match.group(1)
+            file_system = self._get_file_system()
+            boot_image = boot_path.replace(file_system, '')
+            boot_image = boot_image.replace('/', '')
+            boot_image = boot_image.split(',')[0]
         else:
-            show_boot_out = self.show('show run | inc boot')
-            boot_path_regex = r'boot system flash (\S+)'
-
-            match = re.search(boot_path_regex, show_boot_out)
-            if match:
-                boot_image = match.group(1)
-            else:
-                boot_image = None
+            boot_image = None
 
         return {'sys': boot_image}
 
