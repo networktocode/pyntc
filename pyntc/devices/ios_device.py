@@ -54,7 +54,9 @@ class IOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
-        self._enable()
+        raw_data = self.show('dir')
+        file_system = re.match(r'.+?:', raw_data).group(0)
+        return file_system
         raw_data = self._send_command('dir')
         file_system = re.search(r'flash:|bootflash:', raw_data).group(0)
         return file_system
