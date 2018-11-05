@@ -8,16 +8,17 @@ def get_structured_data(template_name, rawtxt):
     """Returns structured data given raw text using
     TextFSM templates
     """
-    template = get_template(template_name)
-    fsm = textfsm.TextFSM(open(template))
-    table = fsm.ParseText(rawtxt)
+    template_file = get_template(template_name)
+    with open(template_file) as template:
+        fsm = textfsm.TextFSM(template)
+        table = fsm.ParseText(rawtxt)
 
-    structured_data = []
-    for row in table:
-        temp_dict = {}
-        for index, element in enumerate(row):
-            temp_dict[fsm.header[index].lower()] = element
-        structured_data.append(temp_dict)
+        structured_data = []
+        for row in table:
+            temp_dict = {}
+            for index, element in enumerate(row):
+                temp_dict[fsm.header[index].lower()] = element
+            structured_data.append(temp_dict)
 
     return structured_data
 
