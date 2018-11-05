@@ -1,5 +1,4 @@
 from setuptools import find_packages, setup
-import sys
 
 name = 'pyntc'
 version = '0.0.8'
@@ -21,6 +20,7 @@ install_requires = [
     'bigsuds',
     'pyeapi',
     'junos-eznc',
+    'scp',
 ]
 
 dependency_links = []
@@ -31,15 +31,16 @@ url = 'https://github.com/networktocode/pyntc'
 download_url = 'https://github.com/networktocode/pyntc/tarball/0.0.8'
 description = 'A multi-vendor library for managing network devices.'
 
-setup(name=name,
-      version=version,
-      packages=packages,
-      package_data=package_data,
-      install_requires=install_requires,
-      dependency_links=dependency_links,
-      url=url,
-      download_url=download_url,
-      author=author,
-      author_email=author_email,
-      description=description,
+setup(
+    name=name,
+    version=version,
+    packages=packages,
+    package_data=package_data,
+    install_requires=install_requires,
+    dependency_links=dependency_links,
+    url=url,
+    download_url=download_url,
+    author=author,
+    author_email=author_email,
+    description=description,
 )
