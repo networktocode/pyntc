@@ -13,15 +13,13 @@ from pyntc.templates import get_structured_data
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
 
-ASA_SSH_DEVICE_TYPE = 'cisco_asa_ssh'
-
 
 @fix_docs
 class ASADevice(BaseDevice):
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
         super(ASADevice, self).__init__(host, username, password,
                                         vendor='cisco',
-                                        device_type=ASA_SSH_DEVICE_TYPE)
+                                        device_type='cisco_asa_ssh')
 
         self.native = None
         self.host = host
