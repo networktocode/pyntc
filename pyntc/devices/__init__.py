@@ -2,35 +2,20 @@
 device_type stored as a string, and a class subclassed from BaseDevice.
 """
 
-from .eos_device import EOSDevice, EOS_API_DEVICE_TYPE
-from .nxos_device import NXOSDevice, NXOS_API_DEVICE_TYPE
-from .ios_device import IOSDevice, IOS_SSH_DEVICE_TYPE
-from .jnpr_device import JunosDevice, JNPR_DEVICE_TYPE
-from .asa_device import ASADevice, ASA_SSH_DEVICE_TYPE
-from .f5_device import F5Device, F5_API_DEVICE_TYPE
+from .eos_device import EOSDevice
+from .nxos_device import NXOSDevice
+from .ios_device import IOSDevice
+from .jnpr_device import JunosDevice
+from .asa_device import ASADevice
+from .f5_device import F5Device
 from .base_device import BaseDevice
 
 
-DEVICE_CLASS_KEY = 'device_class'
-
-
 supported_devices = {
-    ASA_SSH_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: ASADevice,
-    },
-    EOS_API_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: EOSDevice,
-    },
-    F5_API_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: F5Device,
-    },
-    IOS_SSH_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: IOSDevice
-    },
-    JNPR_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: JunosDevice,
-    },
-    NXOS_API_DEVICE_TYPE: {
-        DEVICE_CLASS_KEY: NXOSDevice,
-    },
+    'cisco_asa_ssh': ASADevice,
+    'arista_eos_eapi': EOSDevice,
+    'f5_tmos_icontrol': F5Device,
+    'cisco_ios_ssh': IOSDevice,
+    'juniper_junos_netconf': JunosDevice,
+    'cisco_nxos_nxapi': NXOSDevice,
 }

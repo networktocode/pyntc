@@ -12,13 +12,11 @@ from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
 
-F5_API_DEVICE_TYPE = 'f5_tmos_icontrol'
-
 
 class F5Device(BaseDevice):
 
     def __init__(self, host, username, password, **kwargs):
-        super(F5Device, self).__init__(host, username, password, vendor='f5', device_type=F5_API_DEVICE_TYPE)
+        super(F5Device, self).__init__(host, username, password, vendor='f5', device_type='f5_tmos_icontrol')
 
         self.vendor = 'F5 Networks'
         self.hostname = host

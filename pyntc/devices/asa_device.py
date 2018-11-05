@@ -16,6 +16,7 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 @fix_docs
 class ASADevice(BaseDevice):
+
     def __init__(self, host, username, password, secret='', port=22, **kwargs):
         super(ASADevice, self).__init__(host, username, password,
                                         vendor='cisco',

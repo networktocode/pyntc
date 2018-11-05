@@ -3,7 +3,7 @@
 
 import os
 
-from .devices import supported_devices, DEVICE_CLASS_KEY
+from .devices import supported_devices
 from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
 
 try:
@@ -30,8 +30,9 @@ def ntc_device(device_type, *args, **kwargs):
     Raises:
         UnsupportedDeviceError: if the device_type is unsupported.
     """
+
     try:
-        device_class = supported_devices[device_type][DEVICE_CLASS_KEY]
+        device_class = supported_devices[device_type]
         return device_class(*args, **kwargs)
     except KeyError:
         raise UnsupportedDeviceError(device_type)

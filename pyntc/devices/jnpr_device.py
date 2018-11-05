@@ -16,8 +16,6 @@ from .base_device import BaseDevice, fix_docs
 
 from pyntc.errors import CommandError, CommandListError
 
-JNPR_DEVICE_TYPE = 'juniper_junos_netconf'
-
 
 @fix_docs
 class JunosDevice(BaseDevice):
@@ -26,7 +24,7 @@ class JunosDevice(BaseDevice):
         super(JunosDevice, self).__init__(host, username, password,
                                           *args,
                                           vendor='juniper',
-                                          device_type=JNPR_DEVICE_TYPE,
+                                          device_type='juniper_junos_netconf',
                                           **kwargs)
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)

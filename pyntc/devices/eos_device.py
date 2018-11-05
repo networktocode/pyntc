@@ -15,14 +15,12 @@ from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
-EOS_API_DEVICE_TYPE = 'arista_eos_eapi'
-
 
 @fix_docs
 class EOSDevice(BaseDevice):
 
     def __init__(self, host, username, password, transport='http', timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type=EOS_API_DEVICE_TYPE)
+        super(EOSDevice, self).__init__(host, username, password, vendor='arista', device_type='arista_eos_eapi')
         self.transport = transport
         self.timeout = timeout
         self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
