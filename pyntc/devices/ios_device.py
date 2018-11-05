@@ -74,7 +74,21 @@ class IOSDevice(BaseDevice):
             return version_data
         except IndexError:
             return {}
-
+            
+    def _reconnect(timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                self.open()
+                return True
+            except:
+                pass
+        raise ValueError(
+            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
+                timeout / 60
+            )
+        )
+        
     def _send_command(self, command, expect=False, expect_string=''):
         if expect:
             if expect_string:
