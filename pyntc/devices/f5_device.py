@@ -175,6 +175,16 @@ class F5Device(BaseDevice):
 
         return volumes
 
+    def _image_booted(self, image_name, **vendor_specifics):
+        """Checks if requested booted volume is an active volume.
+
+           F5 does not provide reliable way to rely on image_name once the
+           volume has been installed so check needs to be performed against
+           volume parameter.
+        """
+        volume = vendor_specifics.get("volume")
+        return True if self._get_active_volume() == volume else False
+
     def _image_exists(self, image_name):
         """Checks if image exists on the device
 
