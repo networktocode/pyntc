@@ -1,7 +1,12 @@
 from setuptools import find_packages, setup
+import re
+
+with open("pyntc/__init__.py") as pkg_init:
+    # Create a dict of all dunder vars and their values in package __init__
+    metadata = dict(re.findall("__(\w+)__\s*=\s*\"(\S+?)\"", pkg_init.read()))
 
 name = "pyntc"
-version = "0.0.8"
+version = metadata["version"]
 packages = find_packages()
 package_data = {"pyntc": ["templates/*.template", "devices/tables/jnpr/*.yml"]}
 
