@@ -154,25 +154,38 @@ class ASADevice(BaseDevice):
         """Implement this once facts' re-factor is done. """
         return {}
 
-    def file_copy(self, src, dest=None, file_system='flash:'):
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
+    def file_copy(self, src, dest=None, file_system=None):
         self._enable()
-        #        if not self.fc.verify_space_available():
-        #            raise FileTransferError('Not enough space available.')
+        if file_system is None:
+            file_system = self._get_file_system()
 
-        try:
-            fc.enable_scp()
-            fc.establish_scp_conn()
-            fc.transfer_file()
-        except:
-            raise FileTransferError
-        finally:
-            fc.close_scp_chan()
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            #        if not self.fc.verify_space_available():
+            #            raise FileTransferError('Not enough space available.')
 
-    def file_copy_remote_exists(self, src, dest=None, file_system='flash:'):
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
+            try:
+                fc.enable_scp()
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            except:
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
 
+            if not self.file_copy_remote_exists(src, dest, file_system):
+                raise FileTransferError(
+                    message="Attempted file copy, "
+                            "but could not validate file existed after transfer"
+                )
+
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
         self._enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
         if fc.check_file_exists() and fc.compare_md5():
             return True
         return False

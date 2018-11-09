@@ -15,6 +15,8 @@ from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
+from .system_features.file_copy.base_file_copy import FileTransferError
+
 
 @fix_docs
 class EOSDevice(BaseDevice):
@@ -120,9 +122,17 @@ class EOSDevice(BaseDevice):
         return facts
 
     def file_copy(self, src, dest=None, **kwargs):
-        fc = EOSFileCopy(self, src, dest)
-        fc.send()
+        if not self.file_copy_remote_exists(src, dest, **kwargs):
+            fc = EOSFileCopy(self, src, dest)
+            fc.send()
 
+            if not self.file_copy_remote_exists(src, dest, **kwargs):
+                raise FileTransferError(
+                    message="Attempted file copy, "
+                            "but could not validate file existed after transfer"
+                )
+
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
         if fc.remote_file_exists():
