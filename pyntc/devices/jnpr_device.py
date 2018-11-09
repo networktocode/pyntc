@@ -61,6 +61,9 @@ class JunosDevice(BaseDevice):
 
         return ifaces
 
+    def _image_booted(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+
     def _uptime_components(self, uptime_full_string):
         match_days = re.search(r'(\d+) days?', uptime_full_string)
         match_hours = re.search(r'(\d+) hours?', uptime_full_string)

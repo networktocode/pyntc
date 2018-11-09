@@ -175,6 +175,28 @@ class F5Device(BaseDevice):
 
         return volumes
 
+    def _image_booted(self, image_name, **vendor_specifics):
+        volume = vendor_specifics.get("volume")
+        if not image_name or not volume:
+            raise RuntimeError("image_name and volume must be specified")
+
+        image = None
+        images_on_device = self._get_images()
+
+        for _image in images_on_device:
+            # fullPath = u'BIGIP-11.6.0.0.0.401.iso'
+            if _image.fullPath == image_name:
+                image = _image
+
+        if image:
+            volumes = self._get_volumes()
+
+            for _volume in volumes:
+                if _volume.name == volume and _volume.version == image.version and _volume.basebuild == image.build and _volume.status == 'complete':
+                    return True
+
+        return False
+
     def _image_exists(self, image_name):
         """Checks if image exists on the device
 
@@ -393,31 +415,9 @@ class F5Device(BaseDevice):
 
         return {'active_volume': active_volume}
 
+    # TODO: deprecate in favor of internal _image_booted method
     def image_installed(self, image_name, volume):
-        """Checks if image is installed on a specified volume
-
-        Returns:
-            bool - True / False if image installed on a specified volume
-        """
-        if not image_name or not volume:
-            raise RuntimeError("image_name and volume must be specified")
-
-        image = None
-        images_on_device = self._get_images()
-
-        for _image in images_on_device:
-            # fullPath = u'BIGIP-11.6.0.0.0.401.iso'
-            if _image.fullPath == image_name:
-                image = _image
-
-        if image:
-            volumes = self._get_volumes()
-
-            for _volume in volumes:
-                if _volume.name == volume and _volume.version == image.version and _volume.basebuild == image.build and _volume.status == 'complete':
-                    return True
-
-        return False
+        return self._image_booted(image_name, volume=volume)
 
     def open(self):
         pass
