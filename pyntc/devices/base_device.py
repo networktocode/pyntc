@@ -32,24 +32,6 @@ class BaseDevice(object):
     ####################
     # ABSTRACT METHODS #
     ####################
-
-    def _image_booted(self, image_name, **vendor_specifics):
-        """Determines if a particular image is serving as the active OS.
-
-        Args:
-            image_name (str): The image that you would like the device to be using for active OS.
-            vendor_specifics (kwargs):
-                volume: Required by F5Device as F5 boots into a volume.
-
-        Returns:
-            bool: True if image is currently being used by the device, else False.
-        """
-        current_image = self.get_boot_options()
-        if current_image["sys"] == image_name:
-            return True
-
-        return False
-
     @abc.abstractmethod
     def backup_running_config(self, filename):
         """Save a local copy of the running config.
@@ -285,6 +267,22 @@ class BaseDevice(object):
     #################################
     # Inherited implemented methods #
     #################################
+    def _image_booted(self, image_name, **vendor_specifics):
+        """Determines if a particular image is serving as the active OS.
+
+        Args:
+            image_name (str): The image that you would like the device to be using for active OS.
+            vendor_specifics (kwargs):
+                volume: Required by F5Device as F5 boots into a volume.
+
+        Returns:
+            bool: True if image is currently being used by the device, else False.
+        """
+        current_image = self.get_boot_options()
+        if current_image["sys"] == image_name:
+            return True
+
+        return False
 
     def feature(self, feature_name):
         """Return a feature class based on the ``feature_name`` for the
