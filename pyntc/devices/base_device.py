@@ -195,18 +195,31 @@ class BaseDevice(object):
         """Install the OS from specified image_name
 
         Args:
-            image_name(str): Image's Name
+            image_name(str): The name of the image on the device to install.
 
         Keyword Args:
-            kickstart (str): Cisco Nexus kickstart file
-            volume (str): F5 Networks target boot volume
+            kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
+            volume (str): Option for ``F5Device`` to set the target boot volume.
+            file_system (str): Option for ``ASADevice``, ``EOSDevice``, ``IOSDevice``, and
+                ``NXOSDevice`` to set where the OS files are stored. The default will use
+                the ``_get_file_system`` method.
+            timeout (int): Option for ``IOSDevice`` and ``NXOSDevice`` to set the wait time for
+                device installation to complete.
 
         Returns:
             True if system has been installed during function's call, False if OS has not been installed
 
         Raises:
+            OSInstallError: When device finishes installation process, but the running image
+                does not match ``image_name``.
+            CommandError: When sending a command to the device fails, or when the config status
+                after sending a command does not yield expected results.
+            CommandListError: When sending commands to the device fails.
+            NotEnoughFreeSpaceError: When the device does not have enough free space for install.
+            NTCFileNotFoundError: When the ``image_name`` is not found in the devices ``file_system``.
+            FileSystemNotFoundError: When the ``file_system`` is left to default,
+                and the ``file_system`` cannot be identified.
             RebootTimeoutError: When device is rebooted and is unreachable longer than ``timeout`` period.
-            RuntimeError: If there is a problem with OS installation.
         """
         raise NotImplementedError
 

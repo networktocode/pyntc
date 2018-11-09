@@ -338,7 +338,7 @@ class F5Device(BaseDevice):
                 pass
         return False
 
-    def _wait_for_image_installed(self, image_name, volume, timeout=900):
+    def _wait_for_image_installed(self, image_name, volume, timeout=1800):
         """Waits for the device to install image on a volume
 
         Args:
@@ -394,7 +394,6 @@ class F5Device(BaseDevice):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
             self._check_free_space(min_space=6)
             self._upload_image(image_filepath=src)
-
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
                     message="Attempted file copy, "
@@ -442,6 +441,17 @@ class F5Device(BaseDevice):
             for _volume in volumes:
                 if _volume.name == volume and _volume.version == image.version and _volume.basebuild == image.build and _volume.status == 'complete':
                     return True
+
+        return False
+
+    def install_os(self, image_name, **vendor_specifics):
+        volume = vendor_specifics.get('volume')
+        if not self.image_installed(image_name, volume):
+            self._check_free_space(min_space=6)
+            self._image_install(image_name=image_name, volume=volume)
+            self._wait_for_image_installed(image_name=image_name, volume=volume)
+
+            return True
 
         return False
 

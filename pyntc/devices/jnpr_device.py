@@ -191,6 +191,9 @@ class JunosDevice(BaseDevice):
     def get_boot_options(self):
         return self.facts['os_version']
 
+    def install_os(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+
     def open(self):
         if not self.connected:
             self.native.open()

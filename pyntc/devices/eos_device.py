@@ -17,6 +17,7 @@ from pyntc.errors import (
     NTCError,
     NTCFileNotFoundError,
     RebootTimeoutError,
+    OSInstallError,
 )
 
 from pyeapi import connect as eos_connect
@@ -185,6 +186,19 @@ class EOSDevice(BaseDevice):
         image = self.show('show boot-config')['softwareImage']
         image = image.replace('flash:', '')
         return dict(sys=image)
+
+    def install_os(self, image_name, **vendor_specifics):
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self.reboot(confirm=True)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+
+            return True
+
+        return False
 
     def open(self):
         pass

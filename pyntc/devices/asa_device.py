@@ -9,7 +9,9 @@ import time
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-
+from pyntc.templates import get_structured_data
+from .base_device import BaseDevice, fix_docs
+from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -17,11 +19,8 @@ from pyntc.errors import (
     NTCError,
     NTCFileNotFoundError,
     RebootTimeoutError,
+    OSInstallError,
 )
-from pyntc.templates import get_structured_data
-from .base_device import BaseDevice, fix_docs
-from .system_features.file_copy.base_file_copy import FileTransferError
-
 
 @fix_docs
 class ASADevice(BaseDevice):
@@ -243,6 +242,20 @@ class ASADevice(BaseDevice):
 
         return dict(sys=boot_image)
 
+    def install_os(self, image_name, **vendor_specifics):
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self.save()
+            self.reboot(confirm=True)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+
+            return True
+
+        return False
+
     def open(self):
         if self._connected:
             try:
@@ -314,7 +327,8 @@ class ASADevice(BaseDevice):
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(
-                hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+                # TODO: Update to use hostname
+                hostname=self.host, file=image_name, dir=file_system
             )
 
         current_images = current_boot.splitlines()
