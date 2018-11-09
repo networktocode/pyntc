@@ -174,6 +174,25 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def install_os(self, image_name, **vendor_specifics):
+        """Install the OS from specified image_name
+
+        Args:
+            image_name(str): Image's Name
+
+        Keyword Args:
+            kickstart (str): Cisco Nexus kickstart file
+            volume (str): F5 Networks target boot volume
+
+        Returns:
+            True if system has been installed during function's call, False if OS has not been installed
+
+        Raises:
+            RuntimeError: If there is a problem with OS installation.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def open(self):
         """Open a connection to the device.
         """
