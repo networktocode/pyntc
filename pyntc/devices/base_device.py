@@ -181,6 +181,10 @@ class BaseDevice(object):
         Args:
             image_name(str): Image's Name
 
+        Keyword Args:
+            kickstart (str): Cisco Nexus kickstart file
+            volume (str): F5 Networks target boot volume
+
         Returns:
             True if system has been installed during function's call, False if OS has not been installed
 
