@@ -73,7 +73,7 @@ class IOSDevice(BaseDevice):
         except IndexError:
             return {}
             
-    def _reconnect(timeout=3600):
+    def _reconnect(self, timeout=3600):
         start = time.time()
         while time.time() - start < timeout:
             try:
