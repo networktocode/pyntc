@@ -236,6 +236,7 @@ class IOSDevice(BaseDevice):
             boot_image = boot_path.replace(file_system, '')
             boot_image = boot_image.replace('/', '')
             boot_image = boot_image.split(',')[0]
+            boot_image = boot_image.split(';')[0]
         else:
             boot_image = None
 
