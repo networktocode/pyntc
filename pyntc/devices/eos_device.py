@@ -1,6 +1,7 @@
 """Module for using an Arista EOS device over the eAPI.
 """
 
+import re
 import time
 
 from pyntc.errors import CommandError, CommandListError, NTCError
@@ -37,6 +38,13 @@ class EOSDevice(BaseDevice):
         vlan_list = vlans.get_list()
 
         return vlan_list
+
+    def _image_booted(self, image_name, **vendor_specifics):
+        version_data = self.show("show boot", raw_text=True)
+        if re.search(image_name, version_data):
+            return True
+
+        return False
 
     def _interfaces_status_list(self):
         interfaces_list = []

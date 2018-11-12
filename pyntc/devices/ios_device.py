@@ -56,6 +56,13 @@ class IOSDevice(BaseDevice):
         file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
         return file_system
 
+    def _image_booted(self, image_name, **vendor_specifics):
+        version_data = self.show("show version")
+        if re.search(image_name, version_data):
+            return True
+
+        return False
+
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show('show ip int br')
         ip_int_br_data = get_structured_data('cisco_ios_show_ip_int_brief.template', ip_int_br_out)

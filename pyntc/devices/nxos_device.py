@@ -1,6 +1,7 @@
 """Module for using an NXOX device over NX-API.
 """
 import os
+import re
 import time
 
 from pyntc.errors import CommandError, CommandListError
@@ -21,6 +22,13 @@ class NXOSDevice(BaseDevice):
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
+
+    def _image_booted(self, image_name, **vendor_specifics):
+        version_data = self.show("show version", raw_text=True)
+        if re.search(image_name, version_data):
+            return True
+
+        return False
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
