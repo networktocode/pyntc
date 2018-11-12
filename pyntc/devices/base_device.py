@@ -147,30 +147,34 @@ class BaseDevice(object):
 
         Args:
             src (str): Path to the local file to send.
-
-        Keyword Args:
             dest (str): The destination file path to be saved on remote flash.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+
+        Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
+                remote fle. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        """Check if a remote file exists. A remote file exists if it has the same name
-        as supplied dest, and the same md5 hash as the source.
+        """Check if a remote file exists.
+
+        A remote file exists if it has the same name as supplied dest,
+        and the same md5 hash as the source.
 
         Args:
             src (str): Path to local file to check.
-
-        Keyword Args:
             dest (str): The destination file path to be saved on remote the remote device.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+
+        Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. Defaults to 'flash:' for IOS and 'bootflash:' for NXOS.
+                remote fle. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
 
         Returns:
             True if the remote file exists, False if it doesn't.
@@ -256,7 +260,12 @@ class BaseDevice(object):
             The main system image file name.
 
         Keyword Args: many implementors may choose
-            to supply a kickstart parameter to specicify a kickstart image.
+            to supply a kickstart parameter to specify a kickstart image.
+
+        Raises:
+            ValueError: When the boot options returned by the ``get_boot_options``
+                method does not match the ``image_name`` after the config command(s)
+                have been sent to the device.
         """
         raise NotImplementedError
 

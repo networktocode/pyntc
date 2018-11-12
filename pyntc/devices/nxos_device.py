@@ -78,13 +78,21 @@ class NXOSDevice(BaseDevice):
         return self._facts
 
     def file_copy(self, src, dest=None, file_system='bootflash:'):
-        dest = dest or os.path.basename(src)
-        try:
-            return self.native.file_copy(src, dest, file_system=file_system)
-        except NXOSFileTransferError as e:
-            print(str(e))
-            raise FileTransferError
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            dest = dest or os.path.basename(src)
+            try:
+                file_copy = self.native.file_copy(src, dest, file_system=file_system)
+                if not self.file_copy_remote_exists(src, dest, file_system):
+                    raise FileTransferError(
+                        message="Attempted file copy, "
+                                "but could not validate file existed after transfer"
+                    )
+                return file_copy
+            except NXOSFileTransferError as e:
+                print(str(e))
+                raise FileTransferError
 
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system='bootflash:'):
         dest = dest or os.path.basename(src)
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)

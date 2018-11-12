@@ -11,6 +11,7 @@ import requests
 from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
+from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 class F5Device(BaseDevice):
@@ -381,11 +382,16 @@ class F5Device(BaseDevice):
         return facts
 
     def file_copy(self, src, dest=None, **kwargs):
-        if dest and not dest.startswith("/shared/images"):
-            raise NotImplementedError("Support only for images - destination is always /shared/images")
+        if not self.file_copy_remote_exists(src, dest, **kwargs):
+            self._upload_image(image_filepath=src)
 
-        self._upload_image(image_filepath=src)
+            if not self.file_copy_remote_exists(src, dest, **kwargs):
+                raise FileTransferError(
+                    message="Attempted file copy, "
+                            "but could not validate file existed after transfer"
+                )
 
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         if dest and not dest.startswith("/shared/images"):
             raise NotImplementedError("Support only for images - destination is always /shared/images")
