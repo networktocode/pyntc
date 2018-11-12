@@ -198,14 +198,17 @@ class BaseDevice(object):
             image_name(str): Image's Name
 
         Keyword Args:
-            kickstart (str): Cisco Nexus kickstart file
-            volume (str): F5 Networks target boot volume
+            kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
+            volume (str): Option for ``F5Device`` to set the target boot volume.
+            timeout (int): Option for ``IOSDevice`` and ``NXOSDevice`` to set the wait time for
+                device installation to complete.
 
         Returns:
             True if system has been installed during function's call, False if OS has not been installed
 
         Raises:
             RuntimeError: If there is a problem with OS installation.
+            # TODO: Update with all possible exceptions based on all methods used.
         """
         raise NotImplementedError
 

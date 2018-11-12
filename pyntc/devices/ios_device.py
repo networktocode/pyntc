@@ -268,24 +268,14 @@ class IOSDevice(BaseDevice):
         file_system = vendor_specifics.get("file_system")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            # TODO: Just make call to file_copy if/when file_copy PR is merged
-            if not self.file_copy_remote_exists(image_name, dest, file_system):
-                self.file_copy(image_name, dest, file_system)
-
+            self.file_copy(image_name, dest, file_system)
             self.set_boot_options(image_name)
-            # TODO: Do validation in set_boot_options and remove from here
-            if self.get_boot_options()["sys"] != image_name:
-                raise CommandError(
-                    command="boot command",
-                    message="Setting boot command did not yield expected results",
-                )
-
             self.save()
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 # TODO: Raise proper exception class
-                raise ValueError(
+                raise RuntimeError(
                     "Image was not what was expected after reboot. "
                     "Current image: {0}"
                     "Expected image: {1}".format(self.get_boot_options(), image_name)
