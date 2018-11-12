@@ -290,6 +290,7 @@ class ASADevice(BaseDevice):
 
     def set_boot_options(self, image_name, **vendor_specifics):
         current_boot = self.show("show running-config | inc ^boot system ")
+        image_location = vendor_specifics.get("image_location", "")
 
         if current_boot:
             current_images = current_boot.splitlines()
@@ -297,10 +298,15 @@ class ASADevice(BaseDevice):
             current_images = []
 
         commands_to_exec = ["no {}".format(image) for image in current_images]
-        commands_to_exec.append("boot system {}{}".format(
-            vendor_specifics.get('image_location', ''), image_name))
+        commands_to_exec.append("boot system {}{}".format(image_location, image_name))
 
         self.config_list(commands_to_exec)
+
+        if self.get_boot_options()["sys"] != image_name:
+            raise CommandError(
+                command="boot system {}{}".format(image_location, image_name),
+                message="Setting boot command did not yield expected results",
+            )
 
     def show(self, command, expect=False, expect_string=''):
         self._enable()

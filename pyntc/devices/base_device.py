@@ -260,7 +260,12 @@ class BaseDevice(object):
             The main system image file name.
 
         Keyword Args: many implementors may choose
-            to supply a kickstart parameter to specicify a kickstart image.
+            to supply a kickstart parameter to specify a kickstart image.
+
+        Raises:
+            ValueError: When the boot options returned by the ``get_boot_options``
+                method does not match the ``image_name`` after the config command(s)
+                have been sent to the device.
         """
         raise NotImplementedError
 
