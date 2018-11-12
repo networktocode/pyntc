@@ -333,7 +333,7 @@ class F5Device(BaseDevice):
                 pass
         return False
 
-    def _wait_for_image_installed(self, image_name, volume, timeout=900):
+    def _wait_for_image_installed(self, image_name, volume, timeout=1800):
         """Waits for the device to install image on a volume
 
         Returns:
@@ -467,6 +467,24 @@ class F5Device(BaseDevice):
 
         if not self._wait_for_image_installed(image_name=image_name, volume=volume):
             raise RuntimeError("Installation of {} failed".format(volume))
+
+    def install_os(self, image_name, **vendor_specifics):
+        volume = vendor_specifics.get('volume')
+
+        if not self.image_installed(image_name, volume):
+            free_space = self._check_free_space(min_space=6)
+
+            if not free_space:
+                raise RuntimeError("Not enough free space to install OS".format(volume))
+
+            self._image_install(image_name=image_name, volume=volume)
+
+            if not self._wait_for_image_installed(image_name=image_name, volume=volume):
+                raise RuntimeError("Installation of {} failed".format(volume))
+
+            return True
+        else:
+            return False
 
     def show(self, command, raw_text=False):
         raise NotImplementedError
