@@ -261,7 +261,7 @@ class IOSDevice(BaseDevice):
 
             self.set_boot_options(image_name)
             # TODO: Do validation in set_boot_options and remove from here
-            if not self._image_booted(image_name, dest=dest, file_system=file_system):
+            if self.get_boot_options()["sys"] != image_name:
                 raise CommandError(
                     command="boot command",
                     message="Setting boot command did not yield expected results",
@@ -269,8 +269,8 @@ class IOSDevice(BaseDevice):
 
             self.save()
             self.reboot(confirm=True)
-            self._reconnect(timeout=timeout)
-            if not self._image_booted(image_name, dest=dest, file_system=file_system):
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
                 # TODO: Raise proper exception class
                 raise ValueError(
                     "Image was not what was expected after reboot. "
