@@ -92,6 +92,32 @@ class NXOSDevice(BaseDevice):
     def get_boot_options(self):
         return self.native.get_boot_options()
 
+    def install_os(self, image_name, **vendor_specifics):
+        kickstart = vendor_specifics.get("kickstart")
+        file_system = vendor_specifics.get("file_system")
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            # TODO: Just make call to file_copy if/when file_copy PR is merged
+            if not self.file_copy_remote_exists(image_name, file_system=file_system):
+                self.file_copy(image_name, file_system=file_system)
+            if not self.file_copy_remote_exists(kickstart, file_system=file_system):
+                self.file_copy_remote_exists(kickstart, file_system=file_system)
+
+            self.native.set_boot_options(image_name, kickstart=kickstart)
+            self._wait_for_device_reboot(timeout=timeout)
+            self.save()
+            if not self._image_booted(image_name):
+                # TODO: Raise proper exception class
+                raise ValueError(
+                    "Image was not what was expected after reboot. "
+                    "Current image: {0}"
+                    "Expected image: {1}".format(self.get_boot_options(), image_name)
+                )
+
+            return True
+
+        return False
+
     def open(self):
         pass
 
