@@ -345,9 +345,10 @@ class F5Device(BaseDevice):
         while time.time() < end_time:
             time.sleep(20)
             if self.image_installed(image_name=image_name, volume=volume):
-                return True
+                return
 
-        return False
+        # TODO: Raise proper exception class
+        raise ValueError("Installation of {} failed".format(volume))
 
     def backup_running_config(self, filename):
         raise NotImplementedError
@@ -383,8 +384,11 @@ class F5Device(BaseDevice):
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
-            self._upload_image(image_filepath=src)
+            free_space = self._check_free_space(min_space=6)
+            if not free_space:
+                raise RuntimeError("Not enough free space to install OS")
 
+            self._upload_image(image_filepath=src)
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
                     message="Attempted file copy, "
@@ -437,21 +441,15 @@ class F5Device(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
-
+        dest = vendor_specifics.get("dest")
         if not self.image_installed(image_name, volume):
-            free_space = self._check_free_space(min_space=6)
-
-            if not free_space:
-                raise RuntimeError("Not enough free space to install OS".format(volume))
-
+            self.file_copy(image_name, dest)
             self._image_install(image_name=image_name, volume=volume)
-
-            if not self._wait_for_image_installed(image_name=image_name, volume=volume):
-                raise RuntimeError("Installation of {} failed".format(volume))
+            self._wait_for_image_installed(image_name=image_name, volume=volume)
 
             return True
-        else:
-            return False
+
+        return False
 
     def open(self):
         pass
