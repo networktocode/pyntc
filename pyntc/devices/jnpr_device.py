@@ -172,10 +172,8 @@ class JunosDevice(BaseDevice):
 
         local_hash = self._file_copy_local_md5(src)
         remote_hash = self._file_copy_remote_md5(dest)
-        if local_hash is not None:
-            if local_hash == remote_hash:
-                return True
-
+        if local_hash is not None and local_hash == remote_hash:
+            return True
         return False
 
     def get_boot_options(self):
