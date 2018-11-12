@@ -69,6 +69,21 @@ class EOSDevice(BaseDevice):
 
         return '%02d:%02d:%02d:%02d' % (days, hours, mins, seconds)
 
+    def _wait_for_device_reboot(self, timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                self.show("show hostname")
+                return
+            except:
+                pass
+
+        raise ValueError(
+            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
+                timeout / 60
+            )
+        )
+
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)

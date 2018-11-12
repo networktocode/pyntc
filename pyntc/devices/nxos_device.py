@@ -1,6 +1,7 @@
 """Module for using an NXOX device over NX-API.
 """
 import os
+import time
 
 from pyntc.errors import CommandError, CommandListError
 from pyntc.data_model.converters import strip_unicode
@@ -20,6 +21,21 @@ class NXOSDevice(BaseDevice):
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
+
+    def _wait_for_device_reboot(self, timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                self.show("show hostname")
+                return
+            except:
+                pass
+
+        raise ValueError(
+            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
+                timeout / 60
+            )
+        )
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)

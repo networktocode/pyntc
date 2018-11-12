@@ -4,6 +4,7 @@
 import os
 import re
 import signal
+import time
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -119,6 +120,21 @@ class ASADevice(BaseDevice):
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes = self._uptime_components(uptime_full_string)
         return '%02d:%02d:%02d:00' % (days, hours, minutes)
+
+    def _wait_for_device_reboot(self, timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                self.open()
+                return
+            except:
+                pass
+
+        raise ValueError(
+            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
+                timeout / 60
+            )
+        )
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
