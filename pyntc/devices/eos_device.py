@@ -186,6 +186,11 @@ class EOSDevice(BaseDevice):
 
     def set_boot_options(self, image_name, **vendor_specifics):
         self.show('install source %s' % image_name)
+        if self.get_boot_options()["sys"] != image_name:
+            raise CommandError(
+                command="install source {}".format(image_name),
+                message="Setting install source did not yield expected results",
+            )
 
     def show(self, command, raw_text=False):
         try:

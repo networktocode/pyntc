@@ -317,11 +317,18 @@ class IOSDevice(BaseDevice):
 
     def set_boot_options(self, image_name, **vendor_specifics):
         file_system = self._get_file_system()
+
         try:
             self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
         except CommandError:
             file_system = file_system.replace(':', '')
             self.config_list(['no boot system', 'boot system {0} {1}'.format(file_system, image_name)])
+
+        if self.get_boot_options()["sys"] != image_name:
+            raise CommandError(
+                command="boot command",
+                message="Setting boot command did not yield expected results",
+            )
 
     def show(self, command, expect=False, expect_string=''):
         self._enable()
