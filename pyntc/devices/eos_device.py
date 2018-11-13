@@ -194,6 +194,12 @@ class EOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        # TODO: Add support for file_system argument
+        file_system_files = self.show("dir", raw_text=True)
+        if re.search(image_name, file_system_files) is None:
+            # TODO: Raise proper exception class
+            raise ValueError("Could not find {0} in flash:".format(image_name))
+
         self.show('install source %s' % image_name)
         if self.get_boot_options()["sys"] != image_name:
             raise CommandError(
