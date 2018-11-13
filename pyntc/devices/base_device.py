@@ -260,10 +260,14 @@ class BaseDevice(object):
         like system image and kickstart image.
 
         Args:
-            The main system image file name.
+            image_name: The main system image file name.
 
-        Keyword Args: many implementors may choose
-            to supply a kickstart parameter to specify a kickstart image.
+        Keyword Args:
+            kickstart: Option for ``NXOSDevice`` for devices that require a kickstart image.
+            volume: Option for ``F5Device`` to set which volume should have image installed.
+            file_system: Option for ``ASADevice`` and ``IOSDevice`` to set which directory
+                to use when setting the boot path. The default will use the directory returned
+                by the ``_get_file_system()`` method.
 
         Raises:
             ValueError: When the boot options returned by the ``get_boot_options``

@@ -351,7 +351,9 @@ class IOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        file_system = self._get_file_system()
+        file_system = vendor_specifics.get("file_system")
+        if file_system is None:
+            file_system = self._get_file_system()
 
         try:
             self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
