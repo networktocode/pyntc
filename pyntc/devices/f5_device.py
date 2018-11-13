@@ -12,6 +12,7 @@ from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
+from pyntc.errors import NotEnoughFreeSpace
 
 
 class F5Device(BaseDevice):
@@ -29,17 +30,20 @@ class F5Device(BaseDevice):
     def _check_free_space(self, min_space=0):
         """Checks for minimum space on the device
 
-        Returns:
-            bool - True / False if min_space is available on the device
+        Args:
+            min_space (int): The minimal amount of space required.
+
+        Raises:
+            NotEnoughFreeSpace: When the amount of space on the device is less than min_space.
         """
         free_space = self._get_free_space()
 
         if not free_space:
             raise ValueError('Could not get free space')
         elif free_space >= min_space:
-            return True
+            return
         elif free_space < min_space:
-            return False
+            raise NotEnoughFreeSpace(hostname=self.facts.get("hostname"), min_space=min_space)
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct
@@ -384,10 +388,7 @@ class F5Device(BaseDevice):
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
-            free_space = self._check_free_space(min_space=6)
-            if not free_space:
-                raise RuntimeError("Not enough free space to install OS")
-
+            self._check_free_space(min_space=6)
             self._upload_image(image_filepath=src)
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
@@ -442,6 +443,7 @@ class F5Device(BaseDevice):
     def install_os(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
         if not self.image_installed(image_name, volume):
+            self._check_free_space(min_space=6)
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -478,13 +480,8 @@ class F5Device(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
 
-        free_space = self._check_free_space(min_space=6)
-
-        if not free_space:
-            raise RuntimeError("Not enough free space to install OS".format(volume))
-
+        self._check_free_space(min_space=6)
         self._image_install(image_name=image_name, volume=volume)
-
         if not self._wait_for_image_installed(image_name=image_name, volume=volume):
             raise RuntimeError("Installation of {} failed".format(volume))
 

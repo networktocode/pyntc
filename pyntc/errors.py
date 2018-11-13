@@ -48,3 +48,11 @@ class FeatureNotFoundError(NTCError):
     def __init__(self, feature, device_type):
         message = '%s feature not found for %s device type.' % (feature, device_type)
         super(FeatureNotFoundError, self).__init__(message)
+
+
+class NotEnoughFreeSpace(NTCError):
+    def __init__(self, hostname, min_space):
+        message = "{0} does not meet the minimum disk space requiremtns of {1}".format(
+            hostname, min_space
+        )
+        super(NotEnoughFreeSpace, self).__init__(message)
