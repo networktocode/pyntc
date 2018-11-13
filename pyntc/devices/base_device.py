@@ -195,11 +195,13 @@ class BaseDevice(object):
         """Install the OS from specified image_name
 
         Args:
-            image_name(str): Image's Name
+            image_name(str): The name of the image on the device to install.
 
         Keyword Args:
             kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
             volume (str): Option for ``F5Device`` to set the target boot volume.
+            file_system (str): Option for ``IOSDevice`` to set where the OS files are stored.
+                The default will use the ``_get_file_system`` method.
             timeout (int): Option for ``IOSDevice`` and ``NXOSDevice`` to set the wait time for
                 device installation to complete.
 

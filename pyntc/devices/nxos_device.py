@@ -104,9 +104,6 @@ class NXOSDevice(BaseDevice):
         kickstart = vendor_specifics.get("kickstart")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            self.file_copy(image_name)
-            if kickstart is not None:
-                self.file_copy(kickstart)
             self.native.set_boot_options(image_name, kickstart=kickstart)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):

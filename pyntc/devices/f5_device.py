@@ -441,9 +441,7 @@ class F5Device(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
-        dest = vendor_specifics.get("dest")
         if not self.image_installed(image_name, volume):
-            self.file_copy(image_name, dest)
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 

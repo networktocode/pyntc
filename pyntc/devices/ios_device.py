@@ -264,12 +264,10 @@ class IOSDevice(BaseDevice):
         return {'sys': boot_image}
 
     def install_os(self, image_name, **vendor_specifics):
-        dest = vendor_specifics.get("dest")
         file_system = vendor_specifics.get("file_system")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            self.file_copy(image_name, dest, file_system)
-            self.set_boot_options(image_name)
+            self.set_boot_options(image_name, file_system=file_system)
             self.save()
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
