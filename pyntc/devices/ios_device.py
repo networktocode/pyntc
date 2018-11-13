@@ -355,6 +355,11 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
+        file_system_files = self.show("dir {0}".format(file_system))
+        if re.search(image_name, file_system_files) is None:
+            # TODO: Raise proper exception class
+            raise ValueError("Could not find {0} in {1}".format(image_name, file_system))
+
         try:
             self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
         except CommandError:

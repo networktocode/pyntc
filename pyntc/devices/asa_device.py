@@ -294,6 +294,11 @@ class ASADevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
+        file_system_files = self.show("dir {0}".format(file_system))
+        if re.search(image_name, file_system_files) is None:
+            # TODO: Raise proper exception class
+            raise ValueError("Could not find {0} in {1}".format(image_name, file_system))
+
         current_images = current_boot.splitlines()
         commands_to_exec = ["no {0}".format(image) for image in current_images]
         commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))

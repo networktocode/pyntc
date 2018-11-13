@@ -145,6 +145,16 @@ class NXOSDevice(BaseDevice):
         return self.native.save(filename=filename)
 
     def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+        # TODO: Add support for file_system argument
+        file_system_files = self.show("dir", raw_text=True)
+        if re.search(image_name, file_system_files) is None:
+            # TODO: Raise proper exception class
+            raise ValueError("Could not find {0} in bootflash:".format(image_name))
+        if kickstart is not None:
+            if re.search(kickstart, file_system_files) is None:
+                # TODO: Raise proper exception class
+                raise ValueError("Could not find {0} in bootflash:".format(kickstart))
+
         return self.native.set_boot_options(image_name, kickstart=kickstart)
 
     def set_timeout(self, timeout):
