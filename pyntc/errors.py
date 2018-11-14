@@ -65,7 +65,7 @@ class RebootTimeoutError(NTCError):
 class NotEnoughFreeSpaceError(NTCError):
     def __init__(self, hostname, min_space):
         message = "{0} does not meet the minimum disk space requirements of {1}".format(hostname, min_space)
-        super(NotEnoughFreeSpace, self).__init__(message)
+        super(NotEnoughFreeSpaceError, self).__init__(message)
 
 
 class OSInstallError(NTCError):
