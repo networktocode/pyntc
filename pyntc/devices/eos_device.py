@@ -4,13 +4,19 @@
 import re
 import time
 
-from pyntc.errors import CommandError, CommandListError, NTCError, RebootTimeoutError
 from pyntc.data_model.converters import convert_dict_by_key, \
     convert_list_by_key, strip_unicode
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    NTCError,
+    RebootTimeoutError,
+)
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
@@ -28,6 +34,22 @@ class EOSDevice(BaseDevice):
         self.timeout = timeout
         self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
         self.native = EOSNative(self.connection)
+
+    def _get_file_system(self):
+        """Determines the default file system or directory for device.
+
+        Returns:
+            str: The name of the default file system or directory for the device.
+
+        Raises:
+            FileSystemNotFound: When the module is unable to determine the default file system.
+        """
+        raw_data = self.show("dir", raw_text=True)
+        try:
+            file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
+            return file_system
+        except AttributeError:
+            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
@@ -190,16 +212,19 @@ class EOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        # TODO: Add support for file_system argument
-        file_system_files = self.show("dir", raw_text=True)
+        file_system = vendor_specifics.get("file_system")
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
             # TODO: Raise proper exception class
             raise ValueError("Could not find {0} in flash:".format(image_name))
 
-        self.show('install source %s' % image_name)
+        self.show('install source {0}{1}'.format(file_system, image_name))
         if self.get_boot_options()["sys"] != image_name:
             raise CommandError(
-                command="install source {}".format(image_name),
+                command="install source {0}".format(image_name),
                 message="Setting install source did not yield expected results",
             )
 
