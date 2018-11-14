@@ -9,7 +9,7 @@ import time
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.errors import CommandError, CommandListError, NTCError
+from pyntc.errors import CommandError, CommandListError, NTCError, FileSystemNotFoundError
 from pyntc.templates import get_structured_data
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
@@ -51,9 +51,21 @@ class ASADevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
+        """Determines the default file system or directory for device.
+
+        Returns:
+            str: The name of the default file system or directory for the device.
+
+        Raises:
+            FileSystemNotFound: When the module is unable to determine the default file system.
+        """
         raw_data = self.show('dir')
-        file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
-        return file_system
+        try:
+            file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
+            return file_system
+        except AttributeError:
+            # TODO: Get proper hostname
+            raise FileSystemNotFoundError(hostname=self.host, command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
