@@ -4,7 +4,7 @@ import os
 import re
 import time
 
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, RebootTimeoutError
 from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
@@ -39,11 +39,7 @@ class NXOSDevice(BaseDevice):
             except:
                 pass
 
-        raise ValueError(
-            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
-                timeout / 60
-            )
-        )
+        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)

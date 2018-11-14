@@ -9,7 +9,10 @@ import time
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.errors import CommandError, CommandListError, NTCError, FileSystemNotFoundError
+
+from pyntc.errors import (
+    CommandError, CommandListError, NTCError, FileSystemNotFoundError, RebootTimeoutError
+)
 from pyntc.templates import get_structured_data
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
@@ -149,11 +152,8 @@ class ASADevice(BaseDevice):
             except:
                 pass
 
-        raise ValueError(
-            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
-                timeout / 60
-            )
-        )
+        # TODO: Get proper hostname parameter
+        raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:

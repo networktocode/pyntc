@@ -15,7 +15,7 @@ from jnpr.junos.exception import ConfigLoadError
 from .tables.jnpr.loopback import LoopbackTable
 from .base_device import BaseDevice, fix_docs
 
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, RebootTimeoutError
 from .system_features.file_copy.base_file_copy import FileTransferError
 
 
@@ -101,11 +101,7 @@ class JunosDevice(BaseDevice):
             except:
                 pass
 
-        raise ValueError(
-            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
-                timeout / 60
-            )
-        )
+        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
