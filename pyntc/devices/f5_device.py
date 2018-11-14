@@ -12,7 +12,7 @@ from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
-from pyntc.errors import NotEnoughFreeSpace
+from pyntc.errors import NotEnoughFreeSpace, OSInstallError
 
 
 class F5Device(BaseDevice):
@@ -341,17 +341,22 @@ class F5Device(BaseDevice):
     def _wait_for_image_installed(self, image_name, volume, timeout=900):
         """Waits for the device to install image on a volume
 
-        Returns:
-            bool - True / False if installation has been successful
+        Args:
+            image_name (str): The name of the image that should be booting.
+            volume (str): The volume that the device should be booting into.
+            timeout (int): The number of seconds to wait for device to boot up.
+
+        Raises:
+            OSInstallError: When the volume is not booted before the timeout is reached.
         """
         end_time = time.time() + timeout
 
         while time.time() < end_time:
             time.sleep(20)
             if self.image_installed(image_name=image_name, volume=volume):
-                return True
+                return
 
-        return False
+        raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
 
     def backup_running_config(self, filename):
         raise NotImplementedError
@@ -470,9 +475,7 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get('volume')
         self._check_free_space(min_space=6)
         self._image_install(image_name=image_name, volume=volume)
-
-        if not self._wait_for_image_installed(image_name=image_name, volume=volume):
-            raise RuntimeError("Installation of {} failed".format(volume))
+        self._wait_for_image_installed(image_name=image_name, volume=volume)
 
     def show(self, command, raw_text=False):
         raise NotImplementedError
