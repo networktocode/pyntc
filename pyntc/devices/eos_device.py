@@ -15,6 +15,7 @@ from pyntc.errors import (
     CommandListError,
     FileSystemNotFoundError,
     NTCError,
+    NTCFileNotFoundError,
     RebootTimeoutError,
 )
 
@@ -218,8 +219,9 @@ class EOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            # TODO: Raise proper exception class
-            raise ValueError("Could not find {0} in flash:".format(image_name))
+            raise NTCFileNotFoundError(
+                hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+            )
 
         self.show('install source {0}{1}'.format(file_system, image_name))
         if self.get_boot_options()["sys"] != image_name:

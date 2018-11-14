@@ -12,7 +12,7 @@ from f5.bigip import ManagementRoot
 
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
-from pyntc.errors import NotEnoughFreeSpace, OSInstallError
+from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError
 
 
 class F5Device(BaseDevice):
@@ -34,7 +34,7 @@ class F5Device(BaseDevice):
             min_space (int): The minimal amount of space required.
 
         Raises:
-            NotEnoughFreeSpace: When the amount of space on the device is less than min_space.
+            NotEnoughFreeSpaceError: When the amount of space on the device is less than min_space.
         """
         free_space = self._get_free_space()
 
@@ -43,7 +43,7 @@ class F5Device(BaseDevice):
         elif free_space >= min_space:
             return
         elif free_space < min_space:
-            raise NotEnoughFreeSpace(hostname=self.facts.get("hostname"), min_space=min_space)
+            raise NotEnoughFreeSpaceError(hostname=self.facts.get("hostname"), min_space=min_space)
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct

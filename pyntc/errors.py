@@ -64,7 +64,7 @@ class RebootTimeoutError(NTCError):
         super(RebootTimeoutError, self).__init__(message)
 
 
-class NotEnoughFreeSpace(NTCError):
+class NotEnoughFreeSpaceError(NTCError):
     def __init__(self, hostname, min_space):
         message = "{0} does not meet the minimum disk space requirements of {1}".format(
             hostname, min_space
@@ -76,3 +76,9 @@ class OSInstallError(NTCError):
     def __init__(self, hostname, desired_boot):
         message = "{0} was unable to boot into {1}".format(hostname, desired_boot)
         super(OSInstallError, self).__init__(message)
+
+
+class NTCFileNotFoundError(NTCError):
+    def __init__(self, hostname, file, dir):
+        message = "{0} was not found in {1} on {2}".format(file, dir, hostname)
+        super(NTCFileNotFoundError, self).__init__(message)

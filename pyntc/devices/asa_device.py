@@ -11,7 +11,12 @@ from netmiko import FileTransfer
 
 
 from pyntc.errors import (
-    CommandError, CommandListError, NTCError, FileSystemNotFoundError, RebootTimeoutError
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    NTCError,
+    NTCFileNotFoundError,
+    RebootTimeoutError,
 )
 from pyntc.templates import get_structured_data
 from .base_device import BaseDevice, fix_docs
@@ -308,8 +313,9 @@ class ASADevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            # TODO: Raise proper exception class
-            raise ValueError("Could not find {0} in {1}".format(image_name, file_system))
+            raise NTCFileNotFoundError(
+                hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+            )
 
         current_images = current_boot.splitlines()
         commands_to_exec = ["no {0}".format(image) for image in current_images]
