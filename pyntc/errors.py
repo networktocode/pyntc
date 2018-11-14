@@ -62,3 +62,11 @@ class RebootTimeoutError(NTCError):
     def __init__(self, hostname, wait_time):
         message = "Unable to reconnect to {0} after {1} seconds".format(hostname, wait_time)
         super(RebootTimeoutError, self).__init__(message)
+
+
+class NotEnoughFreeSpace(NTCError):
+    def __init__(self, hostname, min_space):
+        message = "{0} does not meet the minimum disk space requirements of {1}".format(
+            hostname, min_space
+        )
+        super(NotEnoughFreeSpace, self).__init__(message)
