@@ -6,7 +6,7 @@ import os
 import re
 import time
 
-from pyntc.errors import CommandError, CommandListError, NTCError
+from pyntc.errors import CommandError, CommandListError, NTCError, FileSystemNotFoundError
 from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
@@ -52,9 +52,20 @@ class IOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
+        """Determines the default file system or directory for device.
+
+        Returns:
+            str: The name of the default file system or directory for the device.
+
+        Raises:
+            FileSystemNotFound: When the module is unable to determine the default file system.
+        """
         raw_data = self.show('dir')
-        file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
-        return file_system
+        try:
+            file_system = re.match(r'\s*.*?(\S+:)', raw_data).group(1)
+            return file_system
+        except AttributeError:
+            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")

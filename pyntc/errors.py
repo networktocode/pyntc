@@ -48,3 +48,11 @@ class FeatureNotFoundError(NTCError):
     def __init__(self, feature, device_type):
         message = '%s feature not found for %s device type.' % (feature, device_type)
         super(FeatureNotFoundError, self).__init__(message)
+
+
+class FileSystemNotFoundError(NTCError):
+    def __init__(self, hostname, command):
+        message = 'Unable to parse "{0}" command to identify the default file system on {1}.'.format(
+            command, hostname
+        )
+        super(FileSystemNotFoundError, self).__init__(message)
