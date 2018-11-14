@@ -70,3 +70,9 @@ class NotEnoughFreeSpace(NTCError):
             hostname, min_space
         )
         super(NotEnoughFreeSpace, self).__init__(message)
+
+
+class OSInstallError(NTCError):
+    def __init__(self, hostname, desired_boot):
+        message = "{0} was unable to boot into {1}".format(hostname, desired_boot)
+        super(OSInstallError, self).__init__(message)
