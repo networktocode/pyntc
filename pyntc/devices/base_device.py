@@ -205,6 +205,7 @@ class BaseDevice(object):
             True if system has been installed during function's call, False if OS has not been installed
 
         Raises:
+            RebootTimeoutError: When device is rebooted and is unreachable longer than ``timeout`` period.
             RuntimeError: If there is a problem with OS installation.
         """
         raise NotImplementedError

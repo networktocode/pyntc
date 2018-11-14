@@ -56,3 +56,9 @@ class FileSystemNotFoundError(NTCError):
             command, hostname
         )
         super(FileSystemNotFoundError, self).__init__(message)
+
+
+class RebootTimeoutError(NTCError):
+    def __init__(self, hostname, wait_time):
+        message = "Unable to reconnect to {0} after {1} seconds".format(hostname, wait_time)
+        super(RebootTimeoutError, self).__init__(message)

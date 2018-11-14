@@ -6,7 +6,9 @@ import os
 import re
 import time
 
-from pyntc.errors import CommandError, CommandListError, NTCError, FileSystemNotFoundError
+from pyntc.errors import (
+    CommandError, CommandListError, NTCError, FileSystemNotFoundError, RebootTimeoutError
+)
 from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
@@ -144,11 +146,7 @@ class IOSDevice(BaseDevice):
             except:
                 pass
 
-        raise ValueError(
-            "reconnect timeout: could not reconnect {} minutes after device reboot".format(
-                timeout / 60
-            )
-        )
+        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
