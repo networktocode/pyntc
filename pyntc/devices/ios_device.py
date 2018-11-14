@@ -6,15 +6,19 @@ import os
 import re
 import time
 
-from pyntc.errors import (
-    CommandError, CommandListError, NTCError, FileSystemNotFoundError, RebootTimeoutError
-)
 from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
-
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    NTCError,
+    NTCFileNotFoundError,
+    RebootTimeoutError,
+)
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -344,8 +348,9 @@ class IOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            # TODO: Raise proper exception class
-            raise ValueError("Could not find {0} in {1}".format(image_name, file_system))
+            raise NTCFileNotFoundError(
+                hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+            )
 
         try:
             self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
