@@ -10,9 +10,10 @@ import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
+from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, \
+    NTCFileNotFoundError
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
-from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError
 
 
 class F5Device(BaseDevice):
@@ -448,6 +449,11 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get('volume')
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)
+            if not self._image_exists(image_name):
+                raise NTCFileNotFoundError(
+                    hostname=self._get_hostname(), file=image_name,
+                    dir='/shared/images'
+                )
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -484,6 +490,11 @@ class F5Device(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
         self._check_free_space(min_space=6)
+        if not self._image_exists(image_name):
+            raise NTCFileNotFoundError(
+                hostname=self._get_hostname(), file=image_name,
+                dir='/shared/images'
+            )
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 
