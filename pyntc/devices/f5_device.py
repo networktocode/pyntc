@@ -354,8 +354,13 @@ class F5Device(BaseDevice):
 
         while time.time() < end_time:
             time.sleep(20)
-            if self.image_installed(image_name=image_name, volume=volume):
-                return
+            # Avoid race-conditions issues. Newly created volumes _might_ lack
+            # of .version attribute in first seconds of their live.
+            try:
+                if self.image_installed(image_name=image_name, volume=volume):
+                    return
+            except:
+                pass
 
         raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
 
