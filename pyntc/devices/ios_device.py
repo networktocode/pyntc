@@ -353,15 +353,20 @@ class IOSDevice(BaseDevice):
             )
 
         try:
-            self.config_list(['no boot system', 'boot system {0}/{1}'.format(file_system, image_name)])
+            command = "boot system {0}/{1}".format(file_system, image_name)
+            self.config_list(['no boot system', command])
         except CommandError:
             file_system = file_system.replace(':', '')
-            self.config_list(['no boot system', 'boot system {0} {1}'.format(file_system, image_name)])
+            command = "boot system {0} {1}".format(file_system, image_name)
+            self.config_list(['no boot system', command])
 
-        if self.get_boot_options()["sys"] != image_name:
+        new_boot_options = self.get_boot_options()["sys"]
+        if new_boot_options != image_name:
             raise CommandError(
-                command="boot command",
-                message="Setting boot command did not yield expected results",
+                command=command,
+                message="Setting boot command did not yield expected results, found {0}".format(
+                    new_boot_options
+                ),
             )
 
     def show(self, command, expect=False, expect_string=''):
