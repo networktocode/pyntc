@@ -1,5 +1,4 @@
 class BaseFeature(object):
-
     def config(self, vlan_id, **params):
         raise NotImplementedError
 
