@@ -12,10 +12,10 @@ from .base_device import BaseDevice
 
 
 supported_devices = {
-    'cisco_asa_ssh': ASADevice,
-    'arista_eos_eapi': EOSDevice,
-    'f5_tmos_icontrol': F5Device,
-    'cisco_ios_ssh': IOSDevice,
-    'juniper_junos_netconf': JunosDevice,
-    'cisco_nxos_nxapi': NXOSDevice,
+    "cisco_asa_ssh": ASADevice,
+    "arista_eos_eapi": EOSDevice,
+    "f5_tmos_icontrol": F5Device,
+    "cisco_ios_ssh": IOSDevice,
+    "juniper_junos_netconf": JunosDevice,
+    "cisco_nxos_nxapi": NXOSDevice,
 }
