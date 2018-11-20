@@ -302,7 +302,7 @@ class ASADevice(BaseDevice):
         self.native.send_command_timing(command)
         # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
         # This will send return without requiring an OK.
-        # Send a return to pass the [OK]? message - Incease delay_factor for looking for response.
+        # Send a return to pass the [OK]? message - Increase delay_factor for looking for response.
         self.native.send_command_timing("\n", delay_factor=2)
         # Confirm that we have a valid prompt again before returning.
         self.native.find_prompt()
