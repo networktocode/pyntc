@@ -67,7 +67,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def close(self):
-        """Close the connectin to the device.
+        """Close the connection to the device.
         """
         raise NotImplementedError
 
@@ -288,7 +288,7 @@ class BaseDevice(object):
 
     @abc.abstractproperty
     def startup_config(self):
-        """Return the starup configuration of the device.
+        """Return the startup configuration of the device.
         """
         raise NotImplementedError
 
