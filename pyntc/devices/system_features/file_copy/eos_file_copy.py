@@ -45,7 +45,9 @@ class EOSFileCopy(BaseFileCopy):
 
     def get_remote_md5(self):
         try:
-            hash_out = self.device.show("verify /md5 {}".format(self.remote), raw_text=True)
+            hash_out = self.device.show(
+                "verify /md5 {}".format(self.remote), raw_text=True
+            )
             hash_out = hash_out.split("=")[1].strip()
             return hash_out
         except:
@@ -75,10 +77,14 @@ class EOSFileCopy(BaseFileCopy):
     def transfer_file(self, pull=False):
         if pull is False:
             if not self.local_file_exists():
-                raise FileTransferError("Could not transfer file. Local file doesn't exist.")
+                raise FileTransferError(
+                    "Could not transfer file. Local file doesn't exist."
+                )
 
             if not self.enough_remote_space():
-                raise FileTransferError("Could not transfer file. Not enough space on device.")
+                raise FileTransferError(
+                    "Could not transfer file. Not enough space on device."
+                )
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
