@@ -4,7 +4,11 @@
 import re
 import time
 
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
+from pyntc.data_model.converters import (
+    convert_dict_by_key,
+    convert_list_by_key,
+    strip_unicode,
+)
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
@@ -27,11 +31,17 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 @fix_docs
 class EOSDevice(BaseDevice):
-    def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor="arista", device_type="arista_eos_eapi")
+    def __init__(
+        self, host, username, password, transport="http", timeout=60, **kwargs
+    ):
+        super(EOSDevice, self).__init__(
+            host, username, password, vendor="arista", device_type="arista_eos_eapi"
+        )
         self.transport = transport
         self.timeout = timeout
-        self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
+        self.connection = eos_connect(
+            transport, host=host, username=username, password=password, timeout=timeout
+        )
         self.native = EOSNative(self.connection)
 
     def _get_file_system(self):
@@ -48,7 +58,9 @@ class EOSDevice(BaseDevice):
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
             return file_system
         except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+            raise FileSystemNotFoundError(
+                hostname=self.facts.get("hostname"), command="dir"
+            )
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
@@ -71,13 +83,20 @@ class EOSDevice(BaseDevice):
 
     def _interfaces_status_list(self):
         interfaces_list = []
-        interfaces_status_dictionary = self.show("show interfaces status")["interfaceStatuses"]
+        interfaces_status_dictionary = self.show("show interfaces status")[
+            "interfaceStatuses"
+        ]
         for key in interfaces_status_dictionary:
             interface_dictionary = interfaces_status_dictionary[key]
             interface_dictionary["interface"] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(interfaces_list, eos_key_maps.INTERFACES_KM, fill_in=True, whitelist=["interface"])
+        return convert_list_by_key(
+            interfaces_list,
+            eos_key_maps.INTERFACES_KM,
+            fill_in=True,
+            whitelist=["interface"],
+        )
 
     def _parse_response(self, response, raw_text):
         if raw_text:
@@ -141,14 +160,20 @@ class EOSDevice(BaseDevice):
         facts["vendor"] = self.vendor
 
         sh_version_output = self.show("show version")
-        facts.update(convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM))
+        facts.update(
+            convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM)
+        )
 
         uptime = int(time.time() - sh_version_output["bootupTimestamp"])
         facts["uptime"] = uptime
         facts["uptime_string"] = self._uptime_to_string(uptime)
 
         sh_hostname_output = self.show("show hostname")
-        facts.update(convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname", "fqdn"]))
+        facts.update(
+            convert_dict_by_key(
+                sh_hostname_output, {}, fill_in=True, whitelist=["hostname", "fqdn"]
+            )
+        )
 
         facts["interfaces"] = self._get_interface_list()
         facts["vlans"] = self._get_vlan_list()
@@ -163,7 +188,8 @@ class EOSDevice(BaseDevice):
 
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
-                    message="Attempted file copy, " "but could not validate file existed after transfer"
+                    message="Attempted file copy, "
+                    "but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
@@ -194,7 +220,9 @@ class EOSDevice(BaseDevice):
         try:
             self.show("configure replace %s force" % rollback_to)
         except (CommandError, CommandListError):
-            raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
+            raise RollbackError(
+                "Rollback unsuccessful. %s may not exist." % rollback_to
+            )
 
     @property
     def running_config(self):
@@ -235,7 +263,9 @@ class EOSDevice(BaseDevice):
 
         try:
             return strip_unicode(
-                self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
+                self._parse_response(
+                    self.native.enable(commands, encoding=encoding), raw_text=raw_text
+                )
             )
         except EOSCommandError as e:
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
