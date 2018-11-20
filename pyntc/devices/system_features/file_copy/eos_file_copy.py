@@ -14,7 +14,7 @@ class EOSFileCopy(BaseFileCopy):
         self.remote = remote or os.path.basename(local)
         self.port = port
 
-    def already_transfered(self):
+    def already_transferred(self):
         remote_hash = self.get_remote_md5()
         local_hash = self.get_local_md5()
         if local_hash is not None:
