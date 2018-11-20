@@ -23,10 +23,18 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 class JunosDevice(BaseDevice):
     def __init__(self, host, username, password, *args, **kwargs):
         super(JunosDevice, self).__init__(
-            host, username, password, *args, vendor="juniper", device_type="juniper_junos_netconf", **kwargs
+            host,
+            username,
+            password,
+            *args,
+            vendor="juniper",
+            device_type="juniper_junos_netconf",
+            **kwargs
         )
 
-        self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
+        self.native = JunosNativeDevice(
+            *args, host=host, user=username, passwd=password, **kwargs
+        )
         self.open()
         self.cu = JunosNativeConfig(self.native)
         self.fs = JunosNativeFS(self.native)
@@ -170,7 +178,8 @@ class JunosDevice(BaseDevice):
 
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
-                    message="Attempted file copy, " "but could not validate file existed after transfer"
+                    message="Attempted file copy, "
+                    "but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
@@ -242,7 +251,9 @@ class JunosDevice(BaseDevice):
             )
 
         if not command.startswith("show"):
-            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+            raise CommandError(
+                command, 'Juniper "show" commands must begin with "show".'
+            )
 
         return self.native.cli(command, warning=False)
 
