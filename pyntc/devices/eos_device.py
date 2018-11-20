@@ -137,31 +137,25 @@ class EOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            sh_version_output = self.show('show version')
+            self._facts = convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM)
+            self._facts['vendor'] = self.vendor
 
-        facts = {}
-        facts['vendor'] = self.vendor
+            uptime = int(time.time() - sh_version_output['bootupTimestamp'])
+            self._facts['uptime'] = uptime
+            self._facts['uptime_string'] = self._uptime_to_string(uptime)
 
-        sh_version_output = self.show('show version')
-        facts.update(
-            convert_dict_by_key(
-                sh_version_output, eos_key_maps.BASIC_FACTS_KM))
+            sh_hostname_output = self.show('show hostname')
+            self._facts.update(
+                convert_dict_by_key(
+                    sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn'])
+            )
 
-        uptime = int(time.time() - sh_version_output['bootupTimestamp'])
-        facts['uptime'] = uptime
-        facts['uptime_string'] = self._uptime_to_string(uptime)
+            self._facts['interfaces'] = self._get_interface_list()
+            self._facts['vlans'] = self._get_vlan_list()
 
-        sh_hostname_output = self.show('show hostname')
-        facts.update(
-            convert_dict_by_key(
-                sh_hostname_output, {}, fill_in=True, whitelist=['hostname', 'fqdn']))
-
-        facts['interfaces'] = self._get_interface_list()
-        facts['vlans'] = self._get_vlan_list()
-
-        self._facts = facts
-        return facts
+        return self._facts
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):

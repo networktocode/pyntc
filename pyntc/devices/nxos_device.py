@@ -69,13 +69,13 @@ class NXOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, '_facts'):
-            return self._facts
+        if self._facts is None:
+            if hasattr(self.native, "_facts"):
+                del self.native._facts
 
-        facts = strip_unicode(self.native.facts)
-        facts['vendor'] = self.vendor
+            self._facts = strip_unicode(self.native.facts)
+            self._facts['vendor'] = self.vendor
 
-        self._facts = facts
         return self._facts
 
     def file_copy(self, src, dest=None, file_system='bootflash:'):
