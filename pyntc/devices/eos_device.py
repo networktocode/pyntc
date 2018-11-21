@@ -161,13 +161,13 @@ class EOSDevice(BaseDevice):
 
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
-                    message="Attempted file copy, " "but could not validate file existed after transfer"
+                    message="Attempted file copy, but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         fc = EOSFileCopy(self, src, dest)
-        if fc.remote_file_exists() and fc.already_transferred():
+        if fc.remote_file_exists() and fc.already_transfered():
             return True
         return False
 
