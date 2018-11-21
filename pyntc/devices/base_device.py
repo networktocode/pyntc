@@ -30,6 +30,7 @@ class BaseDevice(object):
         self.password = password
         self.vendor = vendor
         self.device_type = device_type
+        self._facts = None
 
     def _image_booted(self, image_name, **vendor_specifics):
         """Determines if a particular image is serving as the active OS.
@@ -319,8 +320,16 @@ class BaseDevice(object):
     def refresh_facts(self):
         """Refresh cached facts.
         """
-        del self._facts
-        self.facts
+        # Persist values that were not added by facts getter
+        if isinstance(self._facts, dict):
+            facts_backup = self._facts.copy()
+            self._facts = None
+            facts_backup.update(self.facts)
+            self._facts = facts_backup.copy()
+        else:
+            self._facts = None
+
+        return self.facts
 
 
 class FileTransferError(NTCError):

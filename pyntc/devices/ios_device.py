@@ -180,36 +180,27 @@ class IOSDevice(BaseDevice):
         self.native.exit_config_mode()
 
     @property
-    def facts(self):
-        if hasattr(self, "_facts"):
-            return self._facts
+   def facts(self):
+        if self._facts is None:
+            version_data = self._raw_version_data()
+            self._facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+            self._facts["vendor"] = self.vendor
 
-        facts = {}
-        facts["vendor"] = self.vendor
+            uptime_full_string = version_data["uptime"]
+            self._facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
+            self._facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
+            self._facts["fqdn"] = "N/A"
+            self._facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
 
-        version_data = self._raw_version_data()
-        show_version_facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+            if self._facts["model"].startswith("WS"):
+                self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
+            else:
+                self._facts["vlans"] = []
 
-        facts.update(show_version_facts)
+            # ios-specific facts
+            self._facts[self.device_type] = {"config_register": version_data["config_register"]}
 
-        uptime_full_string = version_data["uptime"]
-        facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
-        facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
-
-        facts["fqdn"] = "N/A"
-        facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
-
-        if show_version_facts["model"].startswith("WS"):
-            facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
-        else:
-            facts["vlans"] = []
-
-        # ios-specific facts
-        ios_facts = facts[self.device_type] = {}
-        ios_facts["config_register"] = version_data["config_register"]
-
-        self._facts = facts
-        return facts
+        return self._facts
 
     def file_copy(self, src, dest=None, file_system=None):
         self._enable()

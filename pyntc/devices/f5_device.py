@@ -399,20 +399,21 @@ class F5Device(BaseDevice):
 
     @property
     def facts(self):
-        facts = {
-            "uptime": self._get_uptime(),
-            "vendor": self.vendor,
-            "model": self._get_model(),
-            "hostname": self._get_hostname(),
-            "fqdn": self._get_hostname(),
-            "os_version": self._get_version(),
-            "serial_number": self._get_serial_number(),
-            "interfaces": self._get_interfaces_list(),
-            "vlans": self._get_vlans(),
-            "uptime_string": self._uptime_to_string(self._get_uptime()),
-        }
+        if self._facts is None:
+            self._facts = {
+                "uptime": self._get_uptime(),
+                "vendor": self.vendor,
+                "model": self._get_model(),
+                "hostname": self._get_hostname(),
+                "fqdn": self._get_hostname(),
+                "os_version": self._get_version(),
+                "serial_number": self._get_serial_number(),
+                "interfaces": self._get_interfaces_list(),
+                "vlans": self._get_vlans(),
+                "uptime_string": self._uptime_to_string(self._get_uptime()),
+            }
 
-        return facts
+        return self._facts
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):

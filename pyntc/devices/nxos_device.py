@@ -42,12 +42,13 @@ class NXOSDevice(BaseDevice):
 
         return False
 
-    def _wait_for_device_reboot(self, timeout=3600):
+    def _wait_for_device_reboot(self, timeout=600):
         start = time.time()
         while time.time() - start < timeout:
             try:
-                self.show("show hostname")
-                return
+                self.refresh_facts()
+                if self.facts["uptime"] < 180:
+                    return
             except:
                 pass
 
@@ -76,13 +77,12 @@ class NXOSDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, "_facts"):
-            return self._facts
+        if self._facts is None:
+            if hasattr(self.native, "_facts"):
+                del self.native._facts
 
-        facts = strip_unicode(self.native.facts)
-        facts["vendor"] = self.vendor
-
-        self._facts = facts
+            self._facts = strip_unicode(self.native.facts)
+            self._facts["vendor"] = self.vendor
         return self._facts
 
     def file_copy(self, src, dest=None, file_system="bootflash:"):
@@ -149,8 +149,11 @@ class NXOSDevice(BaseDevice):
             kickstart = file_system + kickstart
 
         image_name = file_system + image_name
+        self.native.timeout = 300
+        upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
+        self.native.timeout = 30
 
-        return self.native.set_boot_options(image_name, kickstart=kickstart)
+        return upgrade_result
 
     def set_timeout(self, timeout):
         self.native.timeout = timeout

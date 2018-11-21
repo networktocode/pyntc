@@ -141,31 +141,29 @@ class JunosDevice(BaseDevice):
 
     @property
     def facts(self):
-        if hasattr(self, "_facts"):
-            return self._facts
+        if self._facts is None:
+            native_facts = self.native.facts
+            try:
+                native_uptime_string = native_facts["RE0"]["up_time"]
+            except (AttributeError, TypeError):
+                native_uptime_string = None
 
-        native_facts = self.native.facts
+            self._facts = {
+                "hostname": native_facts.get("hostname"),
+                "fqdn": native_facts.get("fqdn"),
+                "model": native_facts.get("model"),
+                "uptime": None,
+                "uptime_string": None,
+                "serial_number": native_facts.get("serialnumber"),
+                "interfaces": self._get_interfaces(),
+                "vendor": self.vendor,
+                "version": native_facts.get("version"),
+            }
+            # TODO: Use a more reliable method for determining uptime (show system uptime)
+            if native_uptime_string is not None:
+                self._facts["uptime"] = self._uptime_to_seconds(native_uptime_string)
+                self._facts["uptime_string"] = self._uptime_to_string(native_uptime_string)
 
-        facts = {}
-        facts["hostname"] = native_facts["hostname"]
-        facts["fqdn"] = native_facts["fqdn"]
-        facts["model"] = native_facts["model"]
-
-        native_uptime_string = native_facts["RE0"]["up_time"]
-        facts["uptime"] = self._uptime_to_seconds(native_uptime_string)
-        facts["uptime_string"] = self._uptime_to_string(native_uptime_string)
-
-        facts["serial_number"] = native_facts["serialnumber"]
-
-        facts["interfaces"] = self._get_interfaces()
-
-        for fact_key in native_facts:
-            if fact_key.startswith("version") and fact_key != "version_info":
-                facts["os_version"] = native_facts[fact_key]
-                break
-
-        facts["vendor"] = self.vendor
-        self._facts = facts
         return self._facts
 
     def file_copy(self, src, dest=None, **kwargs):
