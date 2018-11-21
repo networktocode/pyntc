@@ -7,7 +7,7 @@ import time
 from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, RebootTimeoutError
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, RebootTimeoutError, OSInstallError
 
 from pynxos.device import Device as NXOSNative
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
@@ -94,6 +94,19 @@ class NXOSDevice(BaseDevice):
     def get_boot_options(self):
         return self.native.get_boot_options()
 
+    def install_os(self, image_name, **vendor_specifics):
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+            self.save()
+
+            return True
+
+        return False
+
     def open(self):
         pass
 
@@ -124,9 +137,10 @@ class NXOSDevice(BaseDevice):
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
-                raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+                raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=kickstart, dir=file_system)
 
             kickstart = file_system + kickstart
 
