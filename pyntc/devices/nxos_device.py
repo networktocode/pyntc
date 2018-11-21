@@ -12,6 +12,7 @@ from pyntc.errors import (
     CommandListError,
     NTCFileNotFoundError,
     RebootTimeoutError,
+    OSInstallError,
 )
 
 from pynxos.device import Device as NXOSNative
@@ -102,6 +103,19 @@ class NXOSDevice(BaseDevice):
     def get_boot_options(self):
         return self.native.get_boot_options()
 
+    def install_os(self, image_name, **vendor_specifics):
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+            self.save()
+
+            return True
+
+        return False
+
     def open(self):
         pass
 
@@ -134,10 +148,11 @@ class NXOSDevice(BaseDevice):
             raise NTCFileNotFoundError(
                 hostname=self.facts.get("hostname"), file=image_name, dir=file_system
             )
+
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
                 raise NTCFileNotFoundError(
-                    hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+                    hostname=self.facts.get("hostname"), file=kickstart, dir=file_system
                 )
 
             kickstart = file_system + kickstart

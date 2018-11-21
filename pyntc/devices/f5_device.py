@@ -10,9 +10,10 @@ import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
+from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, \
+    NTCFileNotFoundError
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
-from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError
 
 
 class F5Device(BaseDevice):
@@ -338,7 +339,7 @@ class F5Device(BaseDevice):
                 pass
         return False
 
-    def _wait_for_image_installed(self, image_name, volume, timeout=900):
+    def _wait_for_image_installed(self, image_name, volume, timeout=1800):
         """Waits for the device to install image on a volume
 
         Args:
@@ -353,8 +354,13 @@ class F5Device(BaseDevice):
 
         while time.time() < end_time:
             time.sleep(20)
-            if self.image_installed(image_name=image_name, volume=volume):
-                return
+            # Avoid race-conditions issues. Newly created volumes _might_ lack
+            # of .version attribute in first seconds of their live.
+            try:
+                if self.image_installed(image_name=image_name, volume=volume):
+                    return
+            except:
+                pass
 
         raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
 
@@ -395,7 +401,6 @@ class F5Device(BaseDevice):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
             self._check_free_space(min_space=6)
             self._upload_image(image_filepath=src)
-
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
                     message="Attempted file copy, "
@@ -446,6 +451,22 @@ class F5Device(BaseDevice):
 
         return False
 
+    def install_os(self, image_name, **vendor_specifics):
+        volume = vendor_specifics.get('volume')
+        if not self.image_installed(image_name, volume):
+            self._check_free_space(min_space=6)
+            if not self._image_exists(image_name):
+                raise NTCFileNotFoundError(
+                    hostname=self._get_hostname(), file=image_name,
+                    dir='/shared/images'
+                )
+            self._image_install(image_name=image_name, volume=volume)
+            self._wait_for_image_installed(image_name=image_name, volume=volume)
+
+            return True
+
+        return False
+
     def open(self):
         pass
 
@@ -475,6 +496,11 @@ class F5Device(BaseDevice):
     def set_boot_options(self, image_name, **vendor_specifics):
         volume = vendor_specifics.get('volume')
         self._check_free_space(min_space=6)
+        if not self._image_exists(image_name):
+            raise NTCFileNotFoundError(
+                hostname=self._get_hostname(), file=image_name,
+                dir='/shared/images'
+            )
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 

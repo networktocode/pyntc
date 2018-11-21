@@ -17,6 +17,7 @@ from pyntc.errors import (
     FileSystemNotFoundError,
     NTCError,
     NTCFileNotFoundError,
+    OSInstallError,
     RebootTimeoutError,
 )
 
@@ -270,6 +271,19 @@ class IOSDevice(BaseDevice):
             boot_image = None
 
         return {'sys': boot_image}
+
+    def install_os(self, image_name, **vendor_specifics):
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self.reboot(confirm=True)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+
+            return True
+
+        return False
 
     def open(self):
         if self._connected:
