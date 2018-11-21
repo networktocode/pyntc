@@ -104,10 +104,9 @@ class NXOSDevice(BaseDevice):
         return self.native.get_boot_options()
 
     def install_os(self, image_name, **vendor_specifics):
-        kickstart = vendor_specifics.get("kickstart")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            self.set_boot_options(image_name, kickstart=kickstart, **vendor_specifics)
+            self.set_boot_options(image_name, **vendor_specifics)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
@@ -149,10 +148,11 @@ class NXOSDevice(BaseDevice):
             raise NTCFileNotFoundError(
                 hostname=self.facts.get("hostname"), file=image_name, dir=file_system
             )
+
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
                 raise NTCFileNotFoundError(
-                    hostname=self.facts.get("hostname"), file=image_name, dir=file_system
+                    hostname=self.facts.get("hostname"), file=kickstart, dir=file_system
                 )
 
             kickstart = file_system + kickstart
