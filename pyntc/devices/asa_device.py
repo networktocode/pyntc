@@ -246,7 +246,6 @@ class ASADevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
-            self.save()
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
@@ -336,6 +335,7 @@ class ASADevice(BaseDevice):
         commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
         self.config_list(commands_to_exec)
 
+        self.save()
         if self.get_boot_options()["sys"] != image_name:
             raise CommandError(
                 command="boot system {0}/{1}".format(file_system, image_name),
