@@ -79,7 +79,7 @@ class NXOSDevice(BaseDevice):
                 file_copy = self.native.file_copy(src, dest, file_system=file_system)
                 if not self.file_copy_remote_exists(src, dest, file_system):
                     raise FileTransferError(
-                        message="Attempted file copy, " "but could not validate file existed after transfer"
+                        message="Attempted file copy, but could not validate file existed after transfer"
                     )
                 return file_copy
             except NXOSFileTransferError as e:
