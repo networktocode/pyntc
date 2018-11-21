@@ -8,9 +8,8 @@ def instance(device):
 
 
 class EOSVlans(BaseVlans):
-
     def __init__(self, device):
-        self.native_vlans = device.native.api('vlans')
+        self.native_vlans = device.native.api("vlans")
 
     #    def config(self, vlan_id, **params):
     #        vlan_not_in_range_error(vlan_id)
@@ -26,7 +25,7 @@ class EOSVlans(BaseVlans):
         vlan_id = str(vlan_id)
         native_vlan_response = self.native_vlans.get(vlan_id)
         converted = convert_dict_by_key(native_vlan_response, VLAN_KM)
-        converted['id'] = vlan_id
+        converted["id"] = vlan_id
 
         return strip_unicode(converted)
 

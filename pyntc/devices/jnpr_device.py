@@ -21,13 +21,10 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 @fix_docs
 class JunosDevice(BaseDevice):
-
     def __init__(self, host, username, password, *args, **kwargs):
-        super(JunosDevice, self).__init__(host, username, password,
-                                          *args,
-                                          vendor='juniper',
-                                          device_type='juniper_junos_netconf',
-                                          **kwargs)
+        super(JunosDevice, self).__init__(
+            host, username, password, *args, vendor="juniper", device_type="juniper_junos_netconf", **kwargs
+        )
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
         self.open()
@@ -38,7 +35,7 @@ class JunosDevice(BaseDevice):
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
 
-    def _file_copy_local_md5(self, filepath, blocksize=2**20):
+    def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
         if self._file_copy_local_file_exists(filepath):
             m = hashlib.md5()
             with open(filepath, "rb") as f:
@@ -67,10 +64,10 @@ class JunosDevice(BaseDevice):
         raise NotImplementedError
 
     def _uptime_components(self, uptime_full_string):
-        match_days = re.search(r'(\d+) days?', uptime_full_string)
-        match_hours = re.search(r'(\d+) hours?', uptime_full_string)
-        match_minutes = re.search(r'(\d+) minutes?', uptime_full_string)
-        match_seconds = re.search(r'(\d+) seconds?', uptime_full_string)
+        match_days = re.search(r"(\d+) days?", uptime_full_string)
+        match_hours = re.search(r"(\d+) hours?", uptime_full_string)
+        match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
+        match_seconds = re.search(r"(\d+) seconds?", uptime_full_string)
 
         days = int(match_days.group(1)) if match_days else 0
         hours = int(match_hours.group(1)) if match_hours else 0
@@ -90,7 +87,7 @@ class JunosDevice(BaseDevice):
 
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
-        return '%02d:%02d:%02d:%02d' % (days, hours, minutes, seconds)
+        return "%02d:%02d:%02d:%02d" % (days, hours, minutes, seconds)
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
@@ -104,7 +101,7 @@ class JunosDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
     def backup_running_config(self, filename):
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             f.write(self.running_config)
 
     def checkpoint(self, filename):
@@ -114,14 +111,14 @@ class JunosDevice(BaseDevice):
         if self.connected:
             self.native.close()
 
-    def config(self, command, format='set'):
+    def config(self, command, format="set"):
         try:
             self.cu.load(command, format=format)
             self.cu.commit()
         except ConfigLoadError as e:
             raise CommandError(command, e.message)
 
-    def config_list(self, commands, format='set'):
+    def config_list(self, commands, format="set"):
         try:
             for command in commands:
                 self.cu.load(command, format=format)
@@ -139,7 +136,7 @@ class JunosDevice(BaseDevice):
         if self._facts is None:
             native_facts = self.native.facts
             try:
-                native_uptime_string = native_facts['RE0']['up_time']
+                native_uptime_string = native_facts["RE0"]["up_time"]
             except (AttributeError, TypeError):
                 native_uptime_string = None
 
@@ -171,8 +168,7 @@ class JunosDevice(BaseDevice):
 
             if not self.file_copy_remote_exists(src, dest, **kwargs):
                 raise FileTransferError(
-                    message="Attempted file copy, "
-                            "but could not validate file existed after transfer"
+                    message="Attempted file copy, but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
@@ -187,7 +183,7 @@ class JunosDevice(BaseDevice):
         return False
 
     def get_boot_options(self):
-        return self.facts['os_version']
+        return self.facts["os_version"]
 
     def install_os(self, image_name, **vendor_specifics):
         raise NotImplementedError
@@ -200,7 +196,7 @@ class JunosDevice(BaseDevice):
         if confirm:
             self.sw.reboot(in_min=timer)
         else:
-            print('Need to confirm reboot with confirm=True')
+            print("Need to confirm reboot with confirm=True")
 
     def rollback(self, filename):
         self.native.timeout = 60
@@ -210,7 +206,7 @@ class JunosDevice(BaseDevice):
         with SCP(self.native) as scp:
             scp.get(filename, local_path=temp_file.name)
 
-        self.cu.load(path=temp_file.name, format='text', overwrite=True)
+        self.cu.load(path=temp_file.name, format="text", overwrite=True)
         self.cu.commit()
 
         temp_file.close()
@@ -219,7 +215,7 @@ class JunosDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show('show config')
+        return self.show("show config")
 
     def save(self, filename=None):
         if filename is None:
@@ -227,7 +223,7 @@ class JunosDevice(BaseDevice):
             return
 
         temp_file = NamedTemporaryFile()
-        temp_file.write(self.show('show config'))
+        temp_file.write(self.show("show config"))
         temp_file.flush()
 
         with SCP(self.native) as scp:
@@ -241,10 +237,12 @@ class JunosDevice(BaseDevice):
 
     def show(self, command, raw_text=True):
         if not raw_text:
-            raise ValueError('Juniper only supports raw text output. \
-                Append " | display xml" to your commands for a structured string.')
+            raise ValueError(
+                'Juniper only supports raw text output. \
+                Append " | display xml" to your commands for a structured string.'
+            )
 
-        if not command.startswith('show'):
+        if not command.startswith("show"):
             raise CommandError(command, 'Juniper "show" commands must begin with "show".')
 
         return self.native.cli(command, warning=False)
@@ -258,4 +256,4 @@ class JunosDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show('show config')
+        return self.show("show config")

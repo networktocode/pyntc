@@ -1,7 +1,7 @@
 import os
 import textfsm
 
-TEMPLATE_PATH_ENV_VAR = 'NTC_TEMPLATES'
+TEMPLATE_PATH_ENV_VAR = "NTC_TEMPLATES"
 
 
 def get_structured_data(template_name, rawtxt):

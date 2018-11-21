@@ -11,8 +11,8 @@ try:
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-LIB_PATH_ENV_VAR = 'PYNTC_CONF'
-LIB_PATH_DEFAULT = '~/.ntc.conf'
+LIB_PATH_ENV_VAR = "PYNTC_CONF"
+LIB_PATH_DEFAULT = "~/.ntc.conf"
 
 
 def ntc_device(device_type, *args, **kwargs):
@@ -63,15 +63,15 @@ def ntc_device_by_name(name, filename=None):
         raise ConfFileNotFoundError(filename)
 
     for section in sections:
-        if ':' in section:
-            device_type_and_conn_name = section.split(':')
+        if ":" in section:
+            device_type_and_conn_name = section.split(":")
             device_type = device_type_and_conn_name[0]
             conn_name = device_type_and_conn_name[1]
 
             if name == conn_name:
                 device_kwargs = dict(config.items(section))
-                if 'host' not in device_kwargs:
-                    device_kwargs['host'] = name
+                if "host" not in device_kwargs:
+                    device_kwargs["host"] = name
 
                 return ntc_device(device_type, **device_kwargs)
 

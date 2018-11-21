@@ -9,11 +9,11 @@ from pyntc.errors import NTCError, FeatureNotFoundError
 
 def fix_docs(cls):
     for name, func in vars(cls).items():
-        if hasattr(func, '__call__') and not func.__doc__:
-            #print(func, 'needs doc')
+        if hasattr(func, "__call__") and not func.__doc__:
+            # print(func, 'needs doc')
             for parent in cls.__bases__:
                 parfunc = getattr(parent, name, None)
-                if parfunc and getattr(parfunc, '__doc__', None):
+                if parfunc and getattr(parfunc, "__doc__", None):
                     func.__doc__ = parfunc.__doc__
                     break
     return cls
@@ -66,7 +66,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def close(self):
-        """Close the connectin to the device.
+        """Close the connection to the device.
         """
         raise NotImplementedError
 
@@ -320,7 +320,7 @@ class BaseDevice(object):
 
     @abc.abstractproperty
     def startup_config(self):
-        """Return the starup configuration of the device.
+        """Return the startup configuration of the device.
         """
         raise NotImplementedError
 
@@ -334,7 +334,8 @@ class BaseDevice(object):
         """
         try:
             feature_module = importlib.import_module(
-                'pyntc.devices.system_features.%s.%s_%s' % (feature_name, self.device_type, feature_name))
+                "pyntc.devices.system_features.%s.%s_%s" % (feature_name, self.device_type, feature_name)
+            )
             return feature_module.instance(self)
         except ImportError:
             raise FeatureNotFoundError(feature_name, self.device_type)
@@ -367,7 +368,7 @@ class FileTransferError(NTCError):
 
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
-        super(RebootTimerError, self).__init__('Reboot timer not supported on %s.' % device_type)
+        super(RebootTimerError, self).__init__("Reboot timer not supported on %s." % device_type)
 
 
 class RollbackError(NTCError):

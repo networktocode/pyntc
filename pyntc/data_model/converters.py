@@ -52,11 +52,8 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
     converted_list = []
     for original in list(original_list):
         converted_list.append(
-            convert_dict_by_key(original,
-                                key_map,
-                                fill_in=fill_in,
-                                whitelist=whitelist,
-                                blacklist=blacklist))
+            convert_dict_by_key(original, key_map, fill_in=fill_in, whitelist=whitelist, blacklist=blacklist)
+        )
 
     return converted_list
 
