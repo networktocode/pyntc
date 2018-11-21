@@ -180,7 +180,7 @@ class IOSDevice(BaseDevice):
         self.native.exit_config_mode()
 
     @property
-   def facts(self):
+    def facts(self):
         if self._facts is None:
             version_data = self._raw_version_data()
             self._facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)

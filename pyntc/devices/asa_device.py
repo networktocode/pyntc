@@ -23,13 +23,10 @@ from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
 
 
-
 @fix_docs
 class ASADevice(BaseDevice):
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super(ASADevice, self).__init__(
-            host, username, password, vendor="cisco", device_type="cisco_asa_ssh"
-        )
+        super(ASADevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_asa_ssh")
 
         self.native = None
         self.host = host
@@ -94,9 +91,7 @@ class ASADevice(BaseDevice):
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
-            version_data = get_structured_data(
-                "cisco_asa_show_version.template", show_version_out
-            )[0]
+            version_data = get_structured_data("cisco_asa_show_version.template", show_version_out)[0]
             return version_data
         except IndexError:
             return {}
@@ -104,9 +99,7 @@ class ASADevice(BaseDevice):
     def _send_command(self, command, expect=False, expect_string=""):
         if expect:
             if expect_string:
-                response = self.native.send_command_expect(
-                    command, expect_string=expect_string
-                )
+                response = self.native.send_command_expect(command, expect_string=expect_string)
             else:
                 response = self.native.send_command_expect(command)
         else:
@@ -119,9 +112,7 @@ class ASADevice(BaseDevice):
 
     def _show_vlan(self):
         show_vlan_out = self.show("show vlan")
-        show_vlan_data = get_structured_data(
-            "cisco_ios_show_vlan.template", show_vlan_out
-        )
+        show_vlan_data = get_structured_data("cisco_ios_show_vlan.template", show_vlan_out)
 
         return show_vlan_data
 
@@ -215,8 +206,7 @@ class ASADevice(BaseDevice):
 
             if not self.file_copy_remote_exists(src, dest, file_system):
                 raise FileTransferError(
-                    message="Attempted file copy, "
-                    "but could not validate file existed after transfer"
+                    message="Attempted file copy, " "but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient

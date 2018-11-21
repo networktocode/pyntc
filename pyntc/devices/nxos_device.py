@@ -16,24 +16,11 @@ from pynxos.errors import CLIError
 
 @fix_docs
 class NXOSDevice(BaseDevice):
-    def __init__(
-        self,
-        host,
-        username,
-        password,
-        transport="http",
-        timeout=30,
-        port=None,
-        **kwargs
-    ):
-        super(NXOSDevice, self).__init__(
-            host, username, password, vendor="cisco", device_type="cisco_nxos_nxapi"
-        )
+    def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):
+        super(NXOSDevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(
-            host, username, password, transport=transport, timeout=timeout, port=port
-        )
+        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version", raw_text=True)
@@ -92,8 +79,7 @@ class NXOSDevice(BaseDevice):
                 file_copy = self.native.file_copy(src, dest, file_system=file_system)
                 if not self.file_copy_remote_exists(src, dest, file_system):
                     raise FileTransferError(
-                        message="Attempted file copy, "
-                        "but could not validate file existed after transfer"
+                        message="Attempted file copy, " "but could not validate file existed after transfer"
                     )
                 return file_copy
             except NXOSFileTransferError as e:
@@ -140,11 +126,7 @@ class NXOSDevice(BaseDevice):
             raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
-                raise NTCFileNotFoundError(
-                    hostname=self.facts.get("hostname"),
-                    file=image_name,
-                    dir=file_system,
-                )
+                raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
 
             kickstart = file_system + kickstart
 
