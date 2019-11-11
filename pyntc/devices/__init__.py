@@ -5,10 +5,11 @@ device_type stored as a string, and a class subclassed from BaseDevice.
 from .eos_device import EOSDevice
 from .nxos_device import NXOSDevice
 from .ios_device import IOSDevice
-from .jnpr_device import JunosDevice
+from .f5_device import F5Device
 from .asa_device import ASADevice
 from .f5_device import F5Device
 from .base_device import BaseDevice
+from .jnpr_device import JunosDevice
 
 
 supported_devices = {
