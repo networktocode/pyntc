@@ -234,22 +234,12 @@ class IOSDevice(BaseDevice):
     def get_boot_options(self):
         # TODO: CREATE A MOCK FOR TESTING THIS FUCTION
         if self._is_catalyst():
-            try:
-                show_boot_out = self.show('show boot')
-                bootvar = False
-            except CommandError:
-                show_boot_out = self.show('show bootvar')
-                bootvar= True
+            show_boot_out = self.show('show boot')
             boot_path_regex = r'(BOOT variable\s+=\s+|BOOT path-list\s+:\s+)(\S+?)(?:;|)\s'
             match = re.search(boot_path_regex, show_boot_out)
-
             if match:
-                if bootvar:
-                    boot_path = match.group(2)
-                    boot_image = boot_path.split(',')[0]
-                else:
-                    boot_path = match.group(2)
-                    boot_image = boot_path.replace('flash:/', '')
+                boot_path = match.group(2)
+                boot_image = boot_path.replace('flash:/', '')
             else:
                 boot_image = None
 
