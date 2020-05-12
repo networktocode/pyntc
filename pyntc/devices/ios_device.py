@@ -4,6 +4,7 @@
 import signal
 import os
 import re
+import time
 
 from pyntc.errors import CommandError, CommandListError, NTCError
 from pyntc.templates import get_structured_data
@@ -54,14 +55,32 @@ class IOSDevice(BaseDevice):
 
         return fc
 
+    def _get_file_system(self):
+        self._enable()
+        raw_data = self._send_command('dir')
+        file_system = re.search(r'flash:|bootflash:', raw_data).group(0)
+        return file_system
+
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show('show ip int br')
         ip_int_br_data = get_structured_data('cisco_ios_show_ip_int_brief.template', ip_int_br_out)
 
         return ip_int_br_data
 
+    def _is_already_upgraded(self, request_image):
+        show_version = self.show('show version')
+        if re.search(request_image.strip(), show_version):
+            return True
+        return False
+
     def _is_catalyst(self):
         return self.facts['model'].startswith('WS-')
+
+    def _is_file_in_dir(self, request_image):
+        show_file_in_dir = self.show('dir')
+        if re.search(request_image, show_file_in_dir):
+            return True
+        return False
 
     def _raw_version_data(self):
         show_version_out = self.show('show version')
@@ -70,6 +89,18 @@ class IOSDevice(BaseDevice):
             return version_data
         except IndexError:
             return {}
+
+    def _reconnect(self, timeout=60):
+        counter = 0
+        timeout = timeout*4
+        while counter < timeout:
+            try:
+                self.open()
+                return True
+            except:
+                counter += 1
+                time.sleep(15)
+        raise ValueError('reconnect timeout: could not verified device upgrade')
 
     def _send_command(self, command, expect=False, expect_string=''):
         if expect:
@@ -119,6 +150,16 @@ class IOSDevice(BaseDevice):
     def backup_running_config(self, filename):
         with open(filename, 'w') as f:
             f.write(self.running_config)
+
+    def change_config_register(self, register='0x2102'):
+        if self.facts['cisco_ios_ssh']['config_register'] == register:
+            return False
+        else:
+            try:
+                self.config('config-register {}'.format(register))
+                return True
+            except :
+                return False
 
     def checkpoint(self, checkpoint_file):
         self.save(filename=checkpoint_file)
@@ -181,7 +222,8 @@ class IOSDevice(BaseDevice):
             finally:
                 fc.close_scp_chan()
 
-    def file_copy_remote_exists(self, src, dest=None, file_system='flash:'):
+    def file_copy_remote_exists(self, src, dest=None):
+        file_system = self._get_file_system()
         fc = self._file_copy_instance(src, dest, file_system=file_system)
         self._enable()
         if fc.check_file_exists() and fc.compare_md5():
@@ -200,6 +242,7 @@ class IOSDevice(BaseDevice):
                 boot_image = boot_path.replace('flash:/', '')
             else:
                 boot_image = None
+
         else:
             show_boot_out = self.show('show run | inc boot')
             boot_path_regex = r'boot system flash (\S+)'
@@ -213,8 +256,21 @@ class IOSDevice(BaseDevice):
 
     def install_os(self, image_name, **vendor_specifics):
         # TODO:
+        if self._is_already_upgraded(image_name):
+            return False
+
+        if not self._is_file_in_dir(image_name):
+            raise ValueError('Image is not on device')
+
+        current_boot_option = self.get_boot_options().get('sys')
         self.set_boot_options(image_name)
+        self.save()
+        new_boot_option = self.get_boot_options().get('sys')
         self.reboot()
+        reconnected = self._reconnect()
+        if reconnected:
+            if self._is_already_upgraded(image_name):
+                return True
 
     def open(self):
         if self._connected:
@@ -254,8 +310,10 @@ class IOSDevice(BaseDevice):
             self.native.send_command_timing('\n')
         except RebootSignal:
             signal.alarm(0)
+            time.sleep(30)
 
         signal.alarm(0)
+
 
     def rollback(self, rollback_to):
         try:
@@ -282,10 +340,11 @@ class IOSDevice(BaseDevice):
         self.native.find_prompt()
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        file_system = self._get_file_system()
         if self._is_catalyst():
-            self.config_list(['no boot system', 'boot system flash:/%s' % image_name])
+            self.config_list(['no boot system', 'boot system {}/%s'.format(file_system) % image_name])
         else:
-            self.config_list(['no boot system', 'boot system flash %s' % image_name])
+            self.config_list(['no boot system', 'boot system {} %s'.format(file_system.replace(':','')) % image_name])
 
     def show(self, command, expect=False, expect_string=''):
         self._enable()
