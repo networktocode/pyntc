@@ -4,7 +4,6 @@ import os
 import re
 import time
 
-from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, RebootTimeoutError, OSInstallError
@@ -36,7 +35,7 @@ class NXOSDevice(BaseDevice):
                 self.refresh_facts()
                 if self.facts["uptime"] < 180:
                     return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -68,7 +67,7 @@ class NXOSDevice(BaseDevice):
             if hasattr(self.native, "_facts"):
                 del self.native._facts
 
-            self._facts = strip_unicode(self.native.facts)
+            self._facts = self.native.facts
             self._facts["vendor"] = self.vendor
         return self._facts
 
@@ -156,13 +155,13 @@ class NXOSDevice(BaseDevice):
 
     def show(self, command, raw_text=False):
         try:
-            return strip_unicode(self.native.show(command, raw_text=raw_text))
+            return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
             raise CommandError(command, str(e))
 
     def show_list(self, commands, raw_text=False):
         try:
-            return strip_unicode(self.native.show_list(commands, raw_text=raw_text))
+            return self.native.show_list(commands, raw_text=raw_text)
         except CLIError as e:
             raise CommandListError(commands, e.command, str(e))
 
