@@ -1,6 +1,8 @@
 from .base_vlans import BaseVlans, vlan_not_in_range_error
-from pyntc.data_model.key_maps.eos_key_maps import VLAN_KM
 from pyntc.data_model.converters import convert_dict_by_key
+
+
+VLAN_KM = {"state": "state", "name": "name", "id": "vlan_id"}
 
 
 def instance(device):

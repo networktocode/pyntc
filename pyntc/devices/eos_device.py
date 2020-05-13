@@ -5,7 +5,6 @@ import re
 import time
 
 from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key
-from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
@@ -24,6 +23,16 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 from .system_features.file_copy.base_file_copy import FileTransferError
+
+
+INTERFACES_KM = {
+    "speed": "bandwidth",
+    "duplex": "duplex",
+    "vlan": ["vlanInformation", "vlanId"],
+    "state": "linkStatus",
+    "description": "description",
+}
+BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 
 
 @fix_docs
@@ -80,7 +89,7 @@ class EOSDevice(BaseDevice):
             interface_dictionary["interface"] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(interfaces_list, eos_key_maps.INTERFACES_KM, fill_in=True, whitelist=["interface"])
+        return convert_list_by_key(interfaces_list, INTERFACES_KM, fill_in=True, whitelist=["interface"])
 
     def _parse_response(self, response, raw_text):
         if raw_text:
@@ -139,7 +148,7 @@ class EOSDevice(BaseDevice):
     def facts(self):
         if self._facts is None:
             sh_version_output = self.show("show version")
-            self._facts = convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM)
+            self._facts = convert_dict_by_key(sh_version_output, BASIC_FACTS_KM)
             self._facts["vendor"] = self.vendor
 
             uptime = int(time.time() - sh_version_output["bootupTimestamp"])
