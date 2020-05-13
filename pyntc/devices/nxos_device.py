@@ -15,8 +15,10 @@ from pynxos.errors import CLIError
 
 @fix_docs
 class NXOSDevice(BaseDevice):
+    vendor = "cisco"
+
     def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):
-        super(NXOSDevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_nxos_nxapi")
+        super(NXOSDevice, self).__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)

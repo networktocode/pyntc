@@ -22,11 +22,10 @@ def fix_docs(cls):
 class BaseDevice(object):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, username, password, vendor=None, device_type=None, **kwargs):
+    def __init__(self, host, username, password, device_type=None, **kwargs):
         self.host = host
         self.username = username
         self.password = password
-        self.vendor = vendor
         self.device_type = device_type
         self._facts = None
 

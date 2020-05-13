@@ -21,9 +21,11 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 @fix_docs
 class JunosDevice(BaseDevice):
+    vendor = "juniper"
+
     def __init__(self, host, username, password, *args, **kwargs):
         super(JunosDevice, self).__init__(
-            host, username, password, *args, vendor="juniper", device_type="juniper_junos_netconf", **kwargs
+            host, username, password, *args, device_type="juniper_junos_netconf", **kwargs
         )
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
