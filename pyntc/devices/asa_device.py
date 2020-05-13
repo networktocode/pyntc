@@ -11,7 +11,7 @@ import warnings
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.templates import get_structured_data
+from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
