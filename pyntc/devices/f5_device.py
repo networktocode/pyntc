@@ -21,10 +21,7 @@ class F5Device(BaseDevice):
     def __init__(self, host, username, password, **kwargs):
         super(F5Device, self).__init__(host, username, password, device_type="f5_tmos_icontrol")
 
-        self.hostname = host
-        self.username = username
-        self.password = password
-        self.api_handler = ManagementRoot(self.hostname, self.username, self.password)
+        self.api_handler = ManagementRoot(self.host, self.username, self.password)
         self._open_soap()
 
     def _check_free_space(self, min_space=0):
@@ -238,7 +235,7 @@ class F5Device(BaseDevice):
 
     def _open_soap(self):
         try:
-            self.soap_handler = bigsuds.BIGIP(hostname=self.hostname, username=self.username, password=self.password)
+            self.soap_handler = bigsuds.BIGIP(hostname=self.host, username=self.username, password=self.password)
             self.devices = self.soap_handler.Management.Device.get_list()
         except bigsuds.OperationFailed as err:
             raise RuntimeError("ConfigSync API Error ({})".format(err))
@@ -260,7 +257,7 @@ class F5Device(BaseDevice):
         """ Reconnects to the device
 
         """
-        self.api_handler = ManagementRoot(self.hostname, self.username, self.password)
+        self.api_handler = ManagementRoot(self.host, self.username, self.password)
 
     def _upload_image(self, image_filepath):
         """Uploads an iso image to the device
@@ -270,7 +267,7 @@ class F5Device(BaseDevice):
         """
         image_filename = os.path.basename(image_filepath)
         _URI = "https://{hostname}/mgmt/cm/autodeploy/software-image-uploads/{filename}".format(
-            hostname=self.hostname, filename=image_filename
+            hostname=self.host, filename=image_filename
         )
         chunk_size = 512 * 1024
         size = os.path.getsize(image_filepath)
