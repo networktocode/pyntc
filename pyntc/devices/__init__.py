@@ -8,7 +8,6 @@ from .ios_device import IOSDevice
 from .jnpr_device import JunosDevice
 from .asa_device import ASADevice
 from .f5_device import F5Device
-from .base_device import BaseDevice
 
 
 supported_devices = {

@@ -147,7 +147,7 @@ class IOSDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -217,7 +217,7 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
-            except:
+            except:  # noqa E722
                 raise FileTransferError
             finally:
                 fc.close_scp_chan()
@@ -285,7 +285,7 @@ class IOSDevice(BaseDevice):
         if self._connected:
             try:
                 self.native.find_prompt()
-            except:
+            except:  # noqa E722
                 self._connected = False
 
         if not self._connected:

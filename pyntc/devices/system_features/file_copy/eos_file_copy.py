@@ -48,7 +48,7 @@ class EOSFileCopy(BaseFileCopy):
             hash_out = self.device.show("verify /md5 {}".format(self.remote), raw_text=True)
             hash_out = hash_out.split("=")[1].strip()
             return hash_out
-        except:
+        except:  # noqa E722
             return None
 
     def get_remote_size(self):
@@ -64,7 +64,7 @@ class EOSFileCopy(BaseFileCopy):
     def remote_file_exists(self):
         try:
             self.device.show("dir {}".format(self.remote))
-        except:
+        except:  # noqa E722
             return False
 
         return True
@@ -97,7 +97,7 @@ class EOSFileCopy(BaseFileCopy):
                 scp.get(self.remote, self.local)
             else:
                 scp.put(self.local, self.remote)
-        except Exception as e:
+        except Exception:
             raise FileTransferError
         finally:
             scp.close()

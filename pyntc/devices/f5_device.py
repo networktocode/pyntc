@@ -10,8 +10,7 @@ import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
-from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, \
-    NTCFileNotFoundError
+from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, NTCFileNotFoundError
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
 
@@ -124,7 +123,7 @@ class F5Device(BaseDevice):
         free_space_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "vgdisplay -s --units G"')
         if free_space_output:
             free_space = free_space_output.commandResult
-            free_space_regex = ".*\s\/\s(\d+\.?\d+) GB free"
+            free_space_regex = r".*\s\/\s(\d+\.?\d+) GB free"
             match = re.match(free_space_regex, free_space)
 
             if match:
@@ -289,9 +288,7 @@ class F5Device(BaseDevice):
                     end = size
                 content_range = "{}-{}/{}".format(start, end - 1, size)
                 headers["Content-Range"] = content_range
-                resp = requests.post(
-                    _URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False
-                )
+                requests.post(_URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False)
 
                 start += len(payload)
 
@@ -357,7 +354,7 @@ class F5Device(BaseDevice):
             try:
                 if self.image_installed(image_name=image_name, volume=volume):
                     return
-            except:
+            except:  # noqa E722
                 pass
 
         raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
@@ -445,23 +442,20 @@ class F5Device(BaseDevice):
             for _volume in volumes:
                 if (
                     _volume.name == volume
-                    and _volume.version == image.version
-                    and _volume.basebuild == image.build
-                    and _volume.status == "complete"
+                    and _volume.version == image.version  # noqa W503
+                    and _volume.basebuild == image.build  # noqa W503
+                    and _volume.status == "complete"  # noqa W503
                 ):
                     return True
 
         return False
 
     def install_os(self, image_name, **vendor_specifics):
-        volume = vendor_specifics.get('volume')
+        volume = vendor_specifics.get("volume")
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
-                raise NTCFileNotFoundError(
-                    hostname=self._get_hostname(), file=image_name,
-                    dir='/shared/images'
-                )
+                raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -499,10 +493,7 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get("volume")
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
-            raise NTCFileNotFoundError(
-                hostname=self._get_hostname(), file=image_name,
-                dir='/shared/images'
-            )
+            raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 
