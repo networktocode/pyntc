@@ -40,7 +40,7 @@ class EOSDevice(BaseDevice):
     vendor = "arista"
 
     def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, device_type="arista_eos_eapi")
+        super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
         self.timeout = timeout
         self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)

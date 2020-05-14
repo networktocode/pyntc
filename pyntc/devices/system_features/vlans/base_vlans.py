@@ -14,4 +14,4 @@ class BaseVlans(BaseFeature):
 
 class VlanNotInRangeError(NTCError):
     def __init__(self, lower, upper):
-        super(VlanNotInRangeError, self).__init__("Vlan Id must be in range %s-%s" % (lower, upper))
+        super().__init__("Vlan Id must be in range %s-%s" % (lower, upper))

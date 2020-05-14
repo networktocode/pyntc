@@ -19,7 +19,7 @@ class F5Device(BaseDevice):
     vendor = "f5"
 
     def __init__(self, host, username, password, **kwargs):
-        super(F5Device, self).__init__(host, username, password, device_type="f5_tmos_icontrol")
+        super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
         self._open_soap()

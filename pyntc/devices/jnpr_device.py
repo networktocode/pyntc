@@ -24,7 +24,7 @@ class JunosDevice(BaseDevice):
     vendor = "juniper"
 
     def __init__(self, host, username, password, *args, **kwargs):
-        super(JunosDevice, self).__init__(
+        super().__init__(
             host, username, password, *args, device_type="juniper_junos_netconf", **kwargs
         )
 

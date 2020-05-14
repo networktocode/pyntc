@@ -32,7 +32,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, device_type="cisco_ios_ssh")
+        super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
         self.secret = secret
