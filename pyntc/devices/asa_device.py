@@ -22,6 +22,7 @@ from pyntc.errors import (
     OSInstallError,
 )
 
+
 @fix_docs
 class ASADevice(BaseDevice):
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
@@ -145,7 +146,7 @@ class ASADevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         # TODO: Get proper hostname parameter
@@ -198,7 +199,7 @@ class ASADevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
-            except:
+            except:  # noqa E722
                 raise FileTransferError
             finally:
                 fc.close_scp_chan()
@@ -249,7 +250,7 @@ class ASADevice(BaseDevice):
         if self._connected:
             try:
                 self.native.find_prompt()
-            except:
+            except:  # noqa E722
                 self._connected = False
 
         if not self._connected:

@@ -1,9 +1,4 @@
-"""This module provides methods for manipulating and converting data
-received from an API to a desired format.
-"""
-
-import collections
-import sys
+"""Provides methods for manipulating and converting data."""
 
 
 def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklist=[]):
@@ -70,20 +65,3 @@ def recursive_key_lookup(keys, obj):
             obj = obj.get(key)
 
     return obj
-
-
-def strip_unicode(data):
-    """Return the original data but with all internal
-    instances of type (unicode) converted to type (str).
-    """
-    if sys.version_info.major >= 3:
-        return data
-
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(strip_unicode, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(strip_unicode, data))
-    else:
-        return data

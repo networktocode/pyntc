@@ -95,7 +95,7 @@ class JunosDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)

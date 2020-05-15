@@ -4,7 +4,7 @@
 import re
 import time
 
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
+from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
@@ -106,7 +106,7 @@ class EOSDevice(BaseDevice):
             try:
                 self.show("show hostname")
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -245,9 +245,7 @@ class EOSDevice(BaseDevice):
             encoding = "json"
 
         try:
-            return strip_unicode(
-                self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
-            )
+            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
         except EOSCommandError as e:
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
