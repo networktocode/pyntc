@@ -341,9 +341,9 @@ Full workflow example:
 >>> 
 ```
 
+## Contributing
 
+This section describes how to install *pyntc* for development, how to run
+tests, and make sure you are a good contributors.
 
-
-
-
-
+<!-- TODO: Actually document this. -->
