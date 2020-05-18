@@ -2,14 +2,19 @@
 language: python
 
 python:
-    - "2.7"
+  - "3.6"
+  - "3.7"
+  - "3.8"
+
 
 install:
-    - pip install --process-dependency-links ./
-    - pip install coveralls
+  # XXX: Migrate this to Poetry fully
+  # Install Tox, which is currently our testrunner and helper
+  - pip install tox
 
 script:
-    - coverage run -m unittest discover ./test/unit -v
+  # Run all our tests
+  - tox
 
 after_success:
     - coveralls
