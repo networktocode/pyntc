@@ -4,7 +4,7 @@
 
 pyntc is an open source multi-vendor Python library that establishes a common framework for working with different network APIs & device types (including IOS devices)
 
-It's main purpose to is to simplify the execution of common tasks including:
+It's main purpose is to simplify the execution of common tasks including:
   - Executing commands
   - Copying files
   - Upgrading devices
@@ -13,10 +13,11 @@ It's main purpose to is to simplify the execution of common tasks including:
 
 # Supported Platforms
 
-* Cisco IOS platforms - uses SSH (netmiko)
+* Cisco IOS platforms - uses netmiko (SSH)
 * Cisco NX-OS - uses pynxos (NX-API)
 * Arista EOS - uses pyeapi (eAPI)
 * Juniper Junos - uses PyEz (NETCONF)
+* F5 Networks - uses f5-sdk (ReST)
 
 It is a multi-vendor AND multi-API library.
 
@@ -33,7 +34,8 @@ Option 2:
 ```
 git clone https://github.com/networktocode/pyntc.git
 cd pyntc
-sudo python setup.py install
+pip install poetry
+poetry install
 ```
 
 
