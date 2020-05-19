@@ -58,9 +58,10 @@ class EOSDevice(BaseDevice):
         raw_data = self.show("dir", raw_text=True)
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
         except AttributeError:
             raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+
+        return file_system
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
@@ -245,9 +246,10 @@ class EOSDevice(BaseDevice):
     def show(self, command, raw_text=False):
         try:
             response_list = self.show_list([command], raw_text=raw_text)
-            return response_list[0]
         except CommandListError as e:
             raise CommandError(e.command, e.message)
+
+        return response_list[0]
 
     def show_list(self, commands, raw_text=False):
         if raw_text:

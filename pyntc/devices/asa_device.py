@@ -67,10 +67,12 @@ class ASADevice(BaseDevice):
         raw_data = self.show("dir")
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
+
         except AttributeError:
             # TODO: Get proper hostname
+
             raise FileSystemNotFoundError(hostname=self.host, command="dir")
+        return file_system
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")

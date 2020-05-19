@@ -69,9 +69,10 @@ class IOSDevice(BaseDevice):
         raw_data = self.show("dir")
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
         except AttributeError:
             raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+
+        return file_system
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -93,9 +94,10 @@ class IOSDevice(BaseDevice):
         show_version_out = self.show("show version")
         try:
             version_data = get_structured_data("cisco_ios_show_version.template", show_version_out)[0]
-            return version_data
         except IndexError:
             return {}
+
+        return version_data
 
     def _send_command(self, command, expect=False, expect_string=""):
         if expect:

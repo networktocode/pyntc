@@ -15,10 +15,7 @@ def get_structured_data(template_name, rawtxt):
 
         structured_data = []
         for row in table:
-            entry = {
-                fsm.header[index].lower(): element
-                for index, element in enumerate(row)
-            }
+            entry = {fsm.header[index].lower(): element for index, element in enumerate(row)}
             structured_data.append(entry)
 
     return structured_data
