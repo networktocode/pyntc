@@ -362,6 +362,12 @@ class F5Device(BaseDevice):
     def backup_running_config(self, filename):
         raise NotImplementedError
 
+    @property
+    def boot_options(self):
+        active_volume = self._get_active_volume()
+
+        return {"active_volume": active_volume}
+
     def checkpoint(self, filename):
         raise NotImplementedError
 
@@ -413,11 +419,6 @@ class F5Device(BaseDevice):
             return False
         else:
             return True
-
-    def get_boot_options(self):
-        active_volume = self._get_active_volume()
-
-        return {"active_volume": active_volume}
 
     def image_installed(self, image_name, volume):
         """Checks if image is installed on a specified volume

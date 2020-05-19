@@ -156,6 +156,37 @@ class IOSDevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
+    @property
+    def boot_options(self):
+        boot_path_regex = r"BOOT variable\s+=\s+(\S+)\s*$"
+        try:
+            # Try show bootvar command first
+            show_boot_out = self.show("show bootvar")
+            show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
+        except CommandError:
+            try:
+                # Try show boot if previous command was invalid
+                show_boot_out = self.show("show boot")
+                show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
+                boot_path_regex = r"BOOT path-list\s+:\s*(\S+)\s*$"
+            except CommandError:
+                # Default to running config value
+                show_boot_out = self.show("show run | inc boot")
+                boot_path_regex = r"boot\s+system\s+(?:\S+\s+|)(\S+)\s*$"
+
+        match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
+        if match:
+            boot_path = match.group(1)
+            file_system = self._get_file_system()
+            boot_image = boot_path.replace(file_system, "")
+            boot_image = boot_image.replace("/", "")
+            boot_image = boot_image.split(",")[0]
+            boot_image = boot_image.split(";")[0]
+        else:
+            boot_image = None
+
+        return {"sys": boot_image}
+
     def checkpoint(self, checkpoint_file):
         self.save(filename=checkpoint_file)
 
@@ -250,37 +281,6 @@ class IOSDevice(BaseDevice):
         if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
-
-    def get_boot_options(self):
-        # TODO: CREATE A MOCK FOR TESTING THIS FUNCTION
-        boot_path_regex = r"BOOT variable\s+=\s+(\S+)\s*$"
-        try:
-            # Try show bootvar command first
-            show_boot_out = self.show("show bootvar")
-            show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
-        except CommandError:
-            try:
-                # Try show boot if previous command was invalid
-                show_boot_out = self.show("show boot")
-                show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
-                boot_path_regex = r"BOOT path-list\s+:\s*(\S+)\s*$"
-            except CommandError:
-                # Default to running config value
-                show_boot_out = self.show("show run | inc boot")
-                boot_path_regex = r"boot\s+system\s+(?:\S+\s+|)(\S+)\s*$"
-
-        match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
-        if match:
-            boot_path = match.group(1)
-            file_system = self._get_file_system()
-            boot_image = boot_path.replace(file_system, "")
-            boot_image = boot_image.replace("/", "")
-            boot_image = boot_image.split(",")[0]
-            boot_image = boot_image.split(";")[0]
-        else:
-            boot_image = None
-
-        return {"sys": boot_image}
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -381,7 +381,7 @@ class IOSDevice(BaseDevice):
             self.config_list(["no boot system", command])
 
         self.save()
-        new_boot_options = self.get_boot_options()["sys"]
+        new_boot_options = self.boot_options["sys"]
         if new_boot_options != image_name:
             raise CommandError(
                 command=command,

@@ -10,6 +10,7 @@ from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
+BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
 
 
 class TestIOSDevice(unittest.TestCase):
@@ -191,26 +192,26 @@ class TestIOSDevice(unittest.TestCase):
         assert not self.device.native.send_command_timing.called
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
-    def test_get_boot_options_show_bootvar(self, mock_boot):
+    def test_boot_options_show_bootvar(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command_timing.return_value = f"BOOT variable = bootflash:{BOOT_IMAGE}"
-        boot_options = self.device.get_boot_options()
+        boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show bootvar")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
-    def test_get_boot_options_show_boot(self, mock_boot):
+    def test_boot_options_show_boot(self, mock_boot):
         results = [
             CommandError("show bootvar", "fail"),
             f"BOOT path-list : bootflash:{BOOT_IMAGE}",
         ]
         self.device.native.send_command_timing.side_effect = results
-        boot_options = self.device.get_boot_options()
+        boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show boot")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
-    def test_get_boot_options_show_run(self, mock_boot):
+    def test_boot_options_show_run(self, mock_boot):
         results = [
             CommandError("show bootvar", "fail"),
             CommandError("show bootvar", "fail"),
@@ -218,23 +219,25 @@ class TestIOSDevice(unittest.TestCase):
             "Directory of bootflash:/",
         ]
         self.device.native.send_command_timing.side_effect = results
-        boot_options = self.device.get_boot_options()
+        boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
     @mock.patch.object(IOSDevice, "config_list", return_value=None)
-    def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
-        self.device.set_boot_options(BOOT_IMAGE)
-        mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    def test_set_boot_options(self, mock_cl, mock_fs):
+        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
+            mock_boot.return_value = {"sys": BOOT_IMAGE}
+            self.device.set_boot_options(BOOT_IMAGE)
+            mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
     @mock.patch.object(IOSDevice, "config_list", side_effect=[CommandError("boot system", "fail"), None])
-    def test_set_boot_options_with_spaces(self, mock_cl, mock_bo, mock_fs):
-        self.device.set_boot_options(BOOT_IMAGE)
-        mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+    def test_set_boot_options_with_spaces(self, mock_cl, mock_fs):
+        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
+            mock_boot.return_value = {"sys": BOOT_IMAGE}
+            self.device.set_boot_options(BOOT_IMAGE)
+            mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
     def test_set_boot_options_no_file(self, mock_fs):
@@ -242,7 +245,7 @@ class TestIOSDevice(unittest.TestCase):
             self.device.set_boot_options("bad_image.bin")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
+    @mock.patch.object(IOSDevice, "boot_options", return_value={"sys": "bad_image.bin"})
     @mock.patch.object(IOSDevice, "config_list", return_value=None)
     def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
         with self.assertRaises(CommandError):

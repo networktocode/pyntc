@@ -154,6 +154,20 @@ class ASADevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
+    @property
+    def boot_options(self):
+        show_boot_out = self.show("show boot | i BOOT variable")
+        # Improve regex to get only the first boot $var in the sequence!
+        boot_path_regex = r"Current BOOT variable = (\S+):\/(\S+)"
+
+        match = re.search(boot_path_regex, show_boot_out)
+        if match:
+            boot_image = match.group(2)
+        else:
+            boot_image = None
+
+        return dict(sys=boot_image)
+
     def checkpoint(self, checkpoint_file):
         self.save(filename=checkpoint_file)
 
@@ -230,19 +244,6 @@ class ASADevice(BaseDevice):
         if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
-
-    def get_boot_options(self):
-        show_boot_out = self.show("show boot | i BOOT variable")
-        # Improve regex to get only the first boot $var in the sequence!
-        boot_path_regex = r"Current BOOT variable = (\S+):\/(\S+)"
-
-        match = re.search(boot_path_regex, show_boot_out)
-        if match:
-            boot_image = match.group(2)
-        else:
-            boot_image = None
-
-        return dict(sys=boot_image)
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -343,7 +344,7 @@ class ASADevice(BaseDevice):
         self.config_list(commands_to_exec)
 
         self.save()
-        if self.get_boot_options()["sys"] != image_name:
+        if self.boot_options["sys"] != image_name:
             raise CommandError(
                 command="boot system {0}/{1}".format(file_system, image_name),
                 message="Setting boot command did not yield expected results",

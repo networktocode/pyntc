@@ -104,6 +104,10 @@ class JunosDevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
+    @property
+    def boot_options(self):
+        return self.facts["os_version"]
+
     def checkpoint(self, filename):
         self.save(filename)
 
@@ -181,9 +185,6 @@ class JunosDevice(BaseDevice):
         if local_hash is not None and local_hash == remote_hash:
             return True
         return False
-
-    def get_boot_options(self):
-        return self.facts["os_version"]
 
     def install_os(self, image_name, **vendor_specifics):
         raise NotImplementedError

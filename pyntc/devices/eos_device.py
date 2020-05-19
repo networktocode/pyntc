@@ -115,6 +115,12 @@ class EOSDevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
+    @property
+    def boot_options(self):
+        image = self.show("show boot-config")["softwareImage"]
+        image = image.replace("flash:", "")
+        return dict(sys=image)
+
     def checkpoint(self, checkpoint_file):
         self.show("copy running-config %s" % checkpoint_file)
 
@@ -171,11 +177,6 @@ class EOSDevice(BaseDevice):
             return True
         return False
 
-    def get_boot_options(self):
-        image = self.show("show boot-config")["softwareImage"]
-        image = image.replace("flash:", "")
-        return dict(sys=image)
-
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -225,7 +226,7 @@ class EOSDevice(BaseDevice):
             raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
 
         self.show("install source {0}{1}".format(file_system, image_name))
-        if self.get_boot_options()["sys"] != image_name:
+        if self.boot_options["sys"] != image_name:
             raise CommandError(
                 command="install source {0}".format(image_name),
                 message="Setting install source did not yield expected results",
