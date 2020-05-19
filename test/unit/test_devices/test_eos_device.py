@@ -127,8 +127,8 @@ class TestEOSDevice(unittest.TestCase):
         with self.assertRaises(RebootTimerError):
             self.device.reboot(confirm=True, timer=3)
 
-    def test_get_boot_options(self):
-        boot_options = self.device.get_boot_options()
+    def test_boot_options(self):
+        boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": "EOS.swi"})
 
     def test_set_boot_options(self):
