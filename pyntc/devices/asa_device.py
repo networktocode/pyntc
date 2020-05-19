@@ -86,9 +86,6 @@ class ASADevice(BaseDevice):
 
         return ip_int_data
 
-    def _is_catalyst(self):
-        return self.facts["model"].startswith("WS-")
-
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
