@@ -5,6 +5,7 @@ import signal
 import os
 import re
 import time
+import warnings
 
 from pyntc.templates import get_structured_data
 from pyntc.data_model.converters import convert_dict_by_key
@@ -42,7 +43,7 @@ class IOSDevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        print("This method will be deprecated; migrate to use the ``enable`` method")
+        warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
         self.enable()
 
     def _enter_config(self):

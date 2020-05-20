@@ -5,6 +5,8 @@ import os
 import re
 import signal
 import time
+import warnings
+
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -40,7 +42,7 @@ class ASADevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        print("This method will be deprecated; migrate to use the ``enable`` method")
+        warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
         self.enable()
 
     def _enter_config(self):
