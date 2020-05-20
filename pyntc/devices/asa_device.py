@@ -180,6 +180,11 @@ class ASADevice(BaseDevice):
         self.native.exit_config_mode()
 
     def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
         # Netmiko reports enable and config mode as being enabled
         if not self.native.check_enable_mode():
             self.native.enable()
