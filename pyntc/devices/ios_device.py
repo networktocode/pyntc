@@ -42,12 +42,11 @@ class IOSDevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        self.native.exit_config_mode()
-        if not self.native.check_enable_mode():
-            self.native.enable()
+        print("This method will be deprecated; migrate to use the ``enable`` method")
+        self.enable()
 
     def _enter_config(self):
-        self._enable()
+        self.enable()
         self.native.config_mode()
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
@@ -180,6 +179,14 @@ class IOSDevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    def enable(self):
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
+
     @property
     def facts(self):
         if self._facts is None:
@@ -204,7 +211,7 @@ class IOSDevice(BaseDevice):
         return self._facts
 
     def file_copy(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -229,7 +236,7 @@ class IOSDevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -376,11 +383,11 @@ class IOSDevice(BaseDevice):
             )
 
     def show(self, command, expect=False, expect_string=""):
-        self._enable()
+        self.enable()
         return self._send_command(command, expect=expect, expect_string=expect_string)
 
     def show_list(self, commands):
-        self._enable()
+        self.enable()
 
         responses = []
         entered_commands = []
