@@ -1,12 +1,13 @@
-BOOT path-list      : flash:/c3560-advipservicesk9-mz.122-44.SE
-Config file         : flash:/config.text
-Private Config file : flash:/private-config.text
-Enable Break        : no
-Manual Boot         : no
-HELPER path-list    :
-Auto upgrade        : yes
-Auto upgrade path   :
-Timeout for Config
-          Download:    0 seconds
-Config Download
-       via DHCP:       disabled (next boot: disabled)
+BOOT variable = flash:/new_image.swi;bootflash:cat4000.6-3-5.bin,1;
+
+CONFIG_FILE variable = bootflash:switch.cfg
+
+Configuration register is 0x2
+
+ignore-config: disabled
+
+auto-config: non-recurring
+
+ROMMON console baud: 9600
+
+boot: image specified by the boot system commands
