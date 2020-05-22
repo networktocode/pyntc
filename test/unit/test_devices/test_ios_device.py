@@ -6,7 +6,7 @@ from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
 from pyntc.devices.ios_device import FileTransferError
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
@@ -222,16 +222,32 @@ class TestIOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
-    def test_set_boot_options(self):
-        # TODO: test with show_boot_old, find out if this format is still used
-        # new show_boot was found here: https://community.cisco.com/t5/switching/show-boot-command-and-upgrades/td-p/1008308
-        self.device.set_boot_options("new_image.swi")
-        self.device.native.send_command_timing.assert_any_call("boot system flash:/new_image.swi")
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    @mock.patch.object(IOSDevice, "config_list", return_value=None)
+    def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
+        self.device.set_boot_options(BOOT_IMAGE)
+        mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
 
-    @mock.patch.object(IOSDevice, "_is_catalyst", return_value=True)
-    def test_set_boot_options_catalyst(self, mock_is_cat):
-        self.device.set_boot_options("new_image.swi")
-        self.device.native.send_command_timing.assert_any_call("boot system flash:/new_image.swi")
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    @mock.patch.object(IOSDevice, "config_list", side_effect=[CommandError("boot system", "fail"), None])
+    def test_set_boot_options_with_spaces(self, mock_cl, mock_bo, mock_fs):
+        self.device.set_boot_options(BOOT_IMAGE)
+        mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    def test_set_boot_options_no_file(self, mock_fs):
+        with self.assertRaises(NTCFileNotFoundError):
+            self.device.set_boot_options("bad_image.bin")
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
+    @mock.patch.object(IOSDevice, "config_list", return_value=None)
+    def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
+        with self.assertRaises(CommandError):
+            self.device.set_boot_options(BOOT_IMAGE)
+            mock_bo.assert_called_once()
 
     def test_backup_running_config(self):
         filename = "local_running_config"
