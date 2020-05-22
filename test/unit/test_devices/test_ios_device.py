@@ -58,7 +58,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.native.send_command_timing.side_effect = results
 
-        with self.assertRaisesRegexp(CommandListError, commands[1]):
+        with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
 
     def test_show(self):
@@ -95,7 +95,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.native.send_command_timing.side_effect = results
 
-        with self.assertRaisesRegexp(CommandListError, "show badcommand"):
+        with self.assertRaisesRegex(CommandListError, "show badcommand"):
             self.device.show_list(commands)
 
     def test_save(self):
