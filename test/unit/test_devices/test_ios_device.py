@@ -6,7 +6,10 @@ from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
 from pyntc.devices.ios_device import FileTransferError
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
+
+
+BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 
 
 class TestIOSDevice(unittest.TestCase):
@@ -16,22 +19,29 @@ class TestIOSDevice(unittest.TestCase):
     def setUp(self, mock_miko, mock_close, mock_open):
         self.device = IOSDevice("host", "user", "pass")
 
-        mock_miko.send_command.side_effect = send_command
+        mock_miko.send_command_timing.side_effect = send_command
         mock_miko.send_command_expect.side_effect = send_command_expect
         self.device.native = mock_miko
+
+    def tearDown(self):
+        # Reset the mock so we don't have transient test effects
+        self.device.native.reset_mock()
 
     def test_config(self):
         command = "interface fastEthernet 0/1"
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.native.send_command.assert_called_with(command)
+        self.device.native.send_command_timing.assert_called_with(command)
 
     def test_bad_config(self):
         command = "asdf poknw"
 
-        with self.assertRaisesRegexp(CommandError, command):
-            self.device.config(command)
+        try:
+            with self.assertRaisesRegex(CommandError, command):
+                self.device.config(command)
+        finally:
+            self.device.native.reset_mock()
 
     def test_config_list(self):
         commands = ["interface fastEthernet 0/1", "no shutdown"]
@@ -39,13 +49,16 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertIsNone(result)
 
-        calls = list(mock.call(x) for x in commands)
-        self.device.native.send_command.assert_has_calls(calls)
+        for cmd in commands:
+            self.device.native.send_command_timing.assert_any_call(cmd)
 
     def test_bad_config_list(self):
         commands = ["interface fastEthernet 0/1", "apons"]
+        results = ["ok", "Error: apons"]
 
-        with self.assertRaisesRegexp(CommandListError, commands[1]):
+        self.device.native.send_command_timing.side_effect = results
+
+        with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
 
     def test_show(self):
@@ -56,10 +69,11 @@ class TestIOSDevice(unittest.TestCase):
         self.assertIn("Protocol", result)
         self.assertIn("Address", result)
 
-        self.device.native.send_command.assert_called_with(command)
+        self.device.native.send_command_timing.assert_called_with(command)
 
     def test_bad_show(self):
         command = "show microsoft"
+        self.device.native.send_command_timing.return_value = "Error: Microsoft"
         with self.assertRaises(CommandError):
             self.device.show(command)
 
@@ -73,20 +87,26 @@ class TestIOSDevice(unittest.TestCase):
         self.assertIn("UTC", result[1])
 
         calls = list(mock.call(x) for x in commands)
-        self.device.native.send_command.assert_has_calls(calls)
+        self.device.native.send_command_timing.assert_has_calls(calls)
 
     def test_bad_show_list(self):
         commands = ["show badcommand", "show clock"]
-        with self.assertRaisesRegexp(CommandListError, "show badcommand"):
+        results = ["Error: badcommand", "14:31:57.089 PST Tue Feb 10 2008"]
+
+        self.device.native.send_command_timing.side_effect = results
+
+        with self.assertRaisesRegex(CommandListError, "show badcommand"):
             self.device.show_list(commands)
 
     def test_save(self):
         result = self.device.save()
         self.assertTrue(result)
-        self.device.native.send_command.assert_any_call("copy running-config startup-config")
+        self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = True
         mock_ft_instance.compare_md5.return_value = True
@@ -97,6 +117,8 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_bad_md5(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = True
         mock_ft_instance.compare_md5.return_value = False
@@ -107,6 +129,8 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_not(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = False
         mock_ft_instance.compare_md5.return_value = True
@@ -117,8 +141,11 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy(self, mock_ft):
-        mock_ft_instance = mock_ft.return_value
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
 
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("path/to/source_file")
 
         mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
@@ -128,8 +155,11 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_different_dest(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
 
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("source_file", "dest_file")
 
         mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="flash:")
@@ -139,41 +169,85 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_fail(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = Exception
+        mock_ft_instance.check_file_exists.return_value = False
 
         with self.assertRaises(FileTransferError):
             self.device.file_copy("source_file")
 
     def test_reboot(self):
         self.device.reboot(confirm=True)
-        self.device.native.send_command.assert_any_call("reload")
+        self.device.native.send_command_timing.assert_any_call("reload")
 
     def test_reboot_with_timer(self):
         self.device.reboot(confirm=True, timer=5)
-        self.device.native.send_command.assert_any_call("reload in 5")
+        self.device.native.send_command_timing.assert_any_call("reload in 5")
 
     def test_reboot_no_confirm(self):
         self.device.reboot()
-        assert not self.device.native.send_command.called
+        assert not self.device.native.send_command_timing.called
 
-    def test_get_boot_options(self):
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_bootvar(self, mock_boot):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = f"BOOT variable = bootflash:{BOOT_IMAGE}"
         boot_options = self.device.get_boot_options()
-        self.assertEqual(boot_options, {"sys": "other_image"})
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show bootvar")
 
-    @mock.patch.object(IOSDevice, "_is_catalyst", return_value=True)
-    def test_get_boot_options_catalyst(self, mock_is_cat):
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_boot(self, mock_boot):
+        results = [
+            CommandError("show bootvar", "fail"),
+            f"BOOT path-list : bootflash:{BOOT_IMAGE}",
+        ]
+        self.device.native.send_command_timing.side_effect = results
         boot_options = self.device.get_boot_options()
-        self.assertEqual(boot_options, {"sys": "c3560-advipservicesk9-mz.122-44.SE"})
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show boot")
 
-    def test_set_boot_options(self):
-        self.device.set_boot_options("new_image.swi")
-        self.device.native.send_command.assert_called_with("boot system flash new_image.swi")
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_run(self, mock_boot):
+        results = [
+            CommandError("show bootvar", "fail"),
+            CommandError("show bootvar", "fail"),
+            f"boot system flash bootflash:/{BOOT_IMAGE}",
+            "Directory of bootflash:/",
+        ]
+        self.device.native.send_command_timing.side_effect = results
+        boot_options = self.device.get_boot_options()
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
-    @mock.patch.object(IOSDevice, "_is_catalyst", return_value=True)
-    def test_set_boot_options_catalyst(self, mock_is_cat):
-        self.device.set_boot_options("new_image.swi")
-        self.device.native.send_command.assert_called_with("boot system flash:/new_image.swi")
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    @mock.patch.object(IOSDevice, "config_list", return_value=None)
+    def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
+        self.device.set_boot_options(BOOT_IMAGE)
+        mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    @mock.patch.object(IOSDevice, "config_list", side_effect=[CommandError("boot system", "fail"), None])
+    def test_set_boot_options_with_spaces(self, mock_cl, mock_bo, mock_fs):
+        self.device.set_boot_options(BOOT_IMAGE)
+        mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    def test_set_boot_options_no_file(self, mock_fs):
+        with self.assertRaises(NTCFileNotFoundError):
+            self.device.set_boot_options("bad_image.bin")
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(IOSDevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
+    @mock.patch.object(IOSDevice, "config_list", return_value=None)
+    def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
+        with self.assertRaises(CommandError):
+            self.device.set_boot_options(BOOT_IMAGE)
+            mock_bo.assert_called_once()
 
     def test_backup_running_config(self):
         filename = "local_running_config"
@@ -187,18 +261,19 @@ class TestIOSDevice(unittest.TestCase):
 
     def test_rollback(self):
         self.device.rollback("good_checkpoint")
-        self.device.native.send_command.assert_called_with("configure replace flash:good_checkpoint force")
+        self.device.native.send_command_timing.assert_called_with("configure replace flash:good_checkpoint force")
 
     def test_bad_rollback(self):
+        # TODO: change to what the protocol would return
+        self.device.native.send_command_timing.return_value = "Error: rollback unsuccessful"
         with self.assertRaises(RollbackError):
             self.device.rollback("bad_checkpoint")
 
-    def test_checkpiont(self):
+    def test_checkpoint(self):
         self.device.checkpoint("good_checkpoint")
-        self.device.native.send_command.assert_any_call("copy running-config good_checkpoint")
+        self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
 
     def test_facts(self):
-        facts = self.device.facts
         expected = {
             "uptime": 413940,
             "vendor": "cisco",
@@ -210,14 +285,16 @@ class TestIOSDevice(unittest.TestCase):
             "serial_number": "",
             "model": "2811",
             "vlans": [],
+            'cisco_ios_ssh': {'config_register': '0x2102'},
         }
-        self.assertEqual(facts, expected)
-
-        self.device.native.send_command.reset_mock()
         facts = self.device.facts
         self.assertEqual(facts, expected)
 
-        self.device.native.send_command.assert_not_called()
+        self.device.native.send_command_timing.reset_mock()
+        facts = self.device.facts
+        self.assertEqual(facts, expected)
+
+        self.device.native.send_command_timing.assert_not_called()
 
     def test_running_config(self):
         expected = self.device.show("show running-config")
