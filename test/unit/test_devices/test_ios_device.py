@@ -9,6 +9,9 @@ from pyntc.devices.ios_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError
 
 
+BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
+
+
 class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "open")
     @mock.patch.object(IOSDevice, "close")
@@ -53,7 +56,7 @@ class TestIOSDevice(unittest.TestCase):
         commands = ["interface fastEthernet 0/1", "apons"]
         results = ["ok", "Error: apons"]
 
-        self.device.native.send_command_timing.side_effect = results 
+        self.device.native.send_command_timing.side_effect = results
 
         with self.assertRaisesRegexp(CommandListError, commands[1]):
             self.device.config_list(commands)
@@ -143,7 +146,7 @@ class TestIOSDevice(unittest.TestCase):
 
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.side_effect = [False, True]
-        self.device.file_copy("path/to/source_file")  
+        self.device.file_copy("path/to/source_file")
 
         mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
         mock_ft_instance.enable_scp.assert_any_call()
@@ -187,19 +190,37 @@ class TestIOSDevice(unittest.TestCase):
         self.device.reboot()
         assert not self.device.native.send_command_timing.called
 
-    def test_get_boot_options(self):
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_bootvar(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "BOOT variable = bootflash:other_image"
+        self.device.native.send_command_timing.return_value = f"BOOT variable = bootflash:{BOOT_IMAGE}"
         boot_options = self.device.get_boot_options()
-        self.assertEqual(boot_options, {"sys": "other_image"})
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show bootvar")
 
-    @mock.patch.object(IOSDevice, "_is_catalyst", return_value=True)
-    def test_get_boot_options_catalyst(self, mock_is_cat):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "BOOT variable = bootflash:c3560-advipservicesk9-mz.122-44.SE"
-        # should we set the mock boot options?
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_boot(self, mock_boot):
+        results = [
+            CommandError("show bootvar", "fail"),
+            f"BOOT path-list : bootflash:{BOOT_IMAGE}",
+        ]
+        self.device.native.send_command_timing.side_effect = results
         boot_options = self.device.get_boot_options()
-        self.assertEqual(boot_options, {"sys": "c3560-advipservicesk9-mz.122-44.SE"})
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show boot")
+
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    def test_get_boot_options_show_run(self, mock_boot):
+        results = [
+            CommandError("show bootvar", "fail"),
+            CommandError("show bootvar", "fail"),
+            f"boot system flash bootflash:/{BOOT_IMAGE}",
+            "Directory of bootflash:/",
+        ]
+        self.device.native.send_command_timing.side_effect = results
+        boot_options = self.device.get_boot_options()
+        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
+        self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
     def test_set_boot_options(self):
         # TODO: test with show_boot_old, find out if this format is still used
