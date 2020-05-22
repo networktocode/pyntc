@@ -240,7 +240,7 @@ class IOSDevice(BaseDevice):
 
     def get_boot_options(self):
         # TODO: CREATE A MOCK FOR TESTING THIS FUNCTION
-        boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
+        boot_path_regex = r"BOOT variable\s+=\s+(\S+)\s*$"
         try:
             # Try show bootvar command first
             show_boot_out = self.show("show bootvar")
@@ -250,6 +250,7 @@ class IOSDevice(BaseDevice):
                 # Try show boot if previous command was invalid
                 show_boot_out = self.show("show boot")
                 show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
+                boot_path_regex = r"BOOT path-list\s+:\s*(\S+)\s*$"
             except CommandError:
                 # Default to running config value
                 show_boot_out = self.show("show run | inc boot")
