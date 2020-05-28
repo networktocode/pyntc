@@ -304,6 +304,33 @@ class TestIOSDevice(unittest.TestCase):
         expected = self.device.show("show startup-config")
         self.assertEqual(self.device.startup_config, expected)
 
+    def test_enable_from_disable(self):
+        self.device.native.check_enable_mode.return_value = False
+        self.device.native.check_config_mode.return_value = False
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_not_called()
+
+    def test_enable_from_enable(self):
+        self.device.native.check_enable_mode.return_value = True
+        self.device.native.check_config_mode.return_value = False
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_not_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_not_called()
+
+    def test_enable_from_config(self):
+        self.device.native.check_enable_mode.return_value = True
+        self.device.native.check_config_mode.return_value = True
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_not_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_called()
+
 
 if __name__ == "__main__":
     unittest.main()
