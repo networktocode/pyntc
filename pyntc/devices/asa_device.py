@@ -5,6 +5,8 @@ import os
 import re
 import signal
 import time
+import warnings
+
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -40,12 +42,11 @@ class ASADevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        self.native.exit_config_mode()
-        if not self.native.check_enable_mode():
-            self.native.enable()
+        warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
+        self.enable()
 
     def _enter_config(self):
-        self._enable()
+        self.enable()
         self.native.config_mode()
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
@@ -180,13 +181,26 @@ class ASADevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
+
     @property
     def facts(self):
         """Implement this once facts' re-factor is done. """
         return {}
 
     def file_copy(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -211,7 +225,7 @@ class ASADevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -339,11 +353,11 @@ class ASADevice(BaseDevice):
             )
 
     def show(self, command, expect=False, expect_string=""):
-        self._enable()
+        self.enable()
         return self._send_command(command, expect=expect, expect_string=expect_string)
 
     def show_list(self, commands):
-        self._enable()
+        self.enable()
 
         responses = []
         entered_commands = []

@@ -2,6 +2,7 @@
 """
 
 import os
+import warnings
 
 from .devices import supported_devices
 from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
@@ -15,6 +16,9 @@ __version__ = "0.0.9"
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
+
+
+warnings.simplefilter("default")
 
 
 def ntc_device(device_type, *args, **kwargs):
