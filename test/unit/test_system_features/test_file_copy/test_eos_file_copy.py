@@ -4,11 +4,11 @@ import os
 
 from pyntc.devices.system_features.file_copy.eos_file_copy import EOSFileCopy
 
+
 CURRNENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
+
 class TestEOSFileCopy(unittest.TestCase):
-
-
     @mock.patch('pyntc.devices.eos_device.EOSDevice', autospec=True)
     def setUp(self, mock_eos_device):
         self.mock_device = mock_eos_device.return_value
@@ -56,8 +56,6 @@ class TestEOSFileCopy(unittest.TestCase):
 #
 #        self.eos_fc.transfer_file()
 #        mock_scp.put.assert_called_with(self.eos_fc.local, self.eos_fc.remote)
-
-
 
 
 if __name__ == "__main__":

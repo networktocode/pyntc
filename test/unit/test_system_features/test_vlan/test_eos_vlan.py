@@ -5,8 +5,8 @@ from .mocks.eos import get, getall
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.devices.system_features.vlans.base_vlans import VlanNotInRangeError
 
-class TestEOSVlan(unittest.TestCase):
 
+class TestEOSVlan(unittest.TestCase):
     @mock.patch('pyeapi.api.vlans.Vlans', autospec=True)
     @mock.patch('pyeapi.client.Node', autospec=True)
     @mock.patch('pyntc.devices.eos_device.EOSDevice', autospec=True)
@@ -38,13 +38,6 @@ class TestEOSVlan(unittest.TestCase):
         self.vlans.remove('10')
         self.vlans.native_vlans.delete.assert_called_with('10')
 
+
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
-
-
-
-
