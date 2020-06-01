@@ -32,6 +32,7 @@ black = "^19.10b0"
 pydocstyle = "^5.0.2"
 bandit = "^1.6.2"
 coveralls = "^2.0.0"
+pytest = "^5.4.2"
 
 [tool.black]
 line-length = 120

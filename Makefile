@@ -1,5 +1,5 @@
 unit_tests:
-	coverage run -m unittest discover ./test/unit -v
+	coverage run -m pytest ./test/unit -v
 
 coverage_report:
 	coverage report -m
