@@ -1,16 +1,19 @@
 import unittest
 import mock
 
-from .device_mocks.ios import send_command, send_command_expect
-from pyntc.devices import IOSDevice
+from .device_mocks.asa import send_command, send_command_expect
+from pyntc.devices.base_device import RollbackError
+from pyntc.devices import ASADevice
+from pyntc.devices.ios_device import FileTransferError
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
 class TestASADevice(unittest.TestCase):
-    @mock.patch.object(IOSDevice, "open")
-    @mock.patch.object(IOSDevice, "close")
-    @mock.patch("netmiko.cisco.cisco_ios.CiscoIosSSH", autospec=True)
+    @mock.patch.object(ASADevice, "open")
+    @mock.patch.object(ASADevice, "close")
+    @mock.patch("netmiko.cisco.cisco_asa_ssh.CiscoAsaSSH", autospec=True)
     def setUp(self, mock_miko, mock_close, mock_open):
-        self.device = IOSDevice("host", "user", "pass")
+        self.device = ASADevice("host", "user", "pass")
 
         mock_miko.send_command_timing.side_effect = send_command
         mock_miko.send_command_expect.side_effect = send_command_expect
@@ -47,6 +50,13 @@ class TestASADevice(unittest.TestCase):
         self.device.native.check_config_mode.assert_called()
         self.device.native.exit_config_mode.assert_called()
 
+    def test_config(self):
+        command = "interface gigabitethernet 0/0"
+        self.device.config(command)
+        # self.device.native.enable.assert_called()
+        # self.device.native.config_mode.assert_called()
+        self.device.native.send_command_timing.assert_called_with(command)
+        # self.device.native.exit_config_mode.assert_called()
 
 if __name__ == "__main__":
     unittest.main()
