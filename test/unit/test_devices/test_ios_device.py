@@ -285,7 +285,7 @@ class TestIOSDevice(unittest.TestCase):
             "serial_number": "",
             "model": "2811",
             "vlans": [],
-            'cisco_ios_ssh': {'config_register': '0x2102'},
+            "cisco_ios_ssh": {"config_register": "0x2102"},
         }
         facts = self.device.facts
         self.assertEqual(facts, expected)

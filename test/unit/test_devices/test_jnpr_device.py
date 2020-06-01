@@ -12,7 +12,7 @@ from jnpr.junos.exception import ConfigLoadError
 
 
 # TODO: Remove this when these tests are fixed
-pytestmark = pytest.mark.skipif(os.environ.get('SKIP_BROKEN', True), reason="These tests are broken")
+pytestmark = pytest.mark.skipif(os.environ.get("SKIP_BROKEN", True), reason="These tests are broken")
 
 
 class MockType:
