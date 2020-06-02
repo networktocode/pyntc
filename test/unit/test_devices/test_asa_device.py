@@ -1,12 +1,8 @@
 import unittest
 import mock
-import os
 
 from .device_mocks.ios import send_command, send_command_expect
-from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
-from pyntc.devices.ios_device import FileTransferError
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
 class TestASADevice(unittest.TestCase):
