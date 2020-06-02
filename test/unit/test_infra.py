@@ -2,7 +2,10 @@ import unittest
 import os
 import mock
 
+import toml
+
 from pyntc import ntc_device, ntc_device_by_name
+from pyntc import __version__ as pyntc_version
 from pyntc.errors import UnsupportedDeviceError, ConfFileNotFoundError
 from pyntc.devices import supported_devices
 from pyntc.devices import EOSDevice, NXOSDevice, IOSDevice
@@ -45,3 +48,7 @@ class TestInfra(unittest.TestCase):
     def test_no_conf_file(self):
         with self.assertRaises(ConfFileNotFoundError):
             ntc_device_by_name("test_bad_device", filename="/bad/file/path")
+
+    def test_version(self):
+        metadata = toml.load("pyproject.toml")
+        self.assertEqual(metadata["tool"]["poetry"]["version"], pyntc_version)

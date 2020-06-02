@@ -1,18 +1,25 @@
-"""Kickoff functions for getting instancs of device objects.
-"""
+"""Kickoff functions for getting instances of device objects."""
 
 import os
 import warnings
 
-from .devices import supported_devices
-from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
+try:
+    from importlib.metadata import version as importlib_version
+except ModuleNotFoundError:
+    from importlib_metadata import version as importlib_version
+
 
 try:
     from configparser import ConfigParser as SafeConfigParser
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-__version__ = "0.0.9"
+from .devices import supported_devices
+from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
+
+
+__version__ = importlib_version("pyntc")
+
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"

@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "pyntc"
-version = "0.0.10"
+version = "0.0.10.dev1"
 description = "SDK to simplify common workflows for Network Devices."
 authors = ["NTC <info@networktocode.com>"]
 readme = "README.md"
@@ -33,6 +33,7 @@ pydocstyle = "^5.0.2"
 bandit = "^1.6.2"
 coveralls = "^2.0.0"
 pytest = "^5.4.2"
+toml = "^0.10.1"
 
 [tool.black]
 line-length = 120
