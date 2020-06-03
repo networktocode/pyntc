@@ -1,5 +1,4 @@
-"""The module contains the base class that all device classes must inherit from.
-"""
+"""The module contains the base class that all device classes must inherit from."""
 
 import abc
 import importlib
