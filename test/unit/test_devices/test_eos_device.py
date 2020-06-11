@@ -2,8 +2,6 @@ import unittest
 import mock
 import os
 
-import pytest
-
 from .device_mocks.eos import enable, config
 from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError, RebootTimerError
@@ -93,17 +91,15 @@ class TestEOSDevice(unittest.TestCase):
         self.assertTrue(result)
         self.device.native.enable.assert_called_with(["copy running-config startup-config"], encoding="json")
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
     @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
-    def test_file_copy_remote_exists(self, mock_fc):
-        mock_fc.return_value = True
+    @mock.patch.object(EOSFileCopy, "already_transferred", autospec=True)
+    def test_file_copy_remote_exists(self, mock_fc_at, mock_fc_rfe):
+        mock_fc_at.return_value = True
+        mock_fc_at.return_value = True
         result = self.device.file_copy_remote_exists("source_file")
 
         self.assertTrue(result)
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
     @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
     def test_file_copy_remote_exists_failure(self, mock_fc):
         mock_fc.return_value = False
@@ -111,12 +107,10 @@ class TestEOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
     @mock.patch("pyntc.devices.eos_device.EOSFileCopy", autospec=True)
     def test_file_copy(self, mock_fc):
         instance = mock_fc.return_value
-        instance.remote_file_exists.return_value = False
+        instance.remote_file_exists.side_effect = [False, True]
         self.device.file_copy("source_file")
 
         instance.send.assert_called_with()
@@ -137,11 +131,22 @@ class TestEOSDevice(unittest.TestCase):
         boot_options = self.device.get_boot_options()
         self.assertEqual(boot_options, {"sys": "EOS.swi"})
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
     def test_set_boot_options(self):
+        results = [
+            [{"result": {"output": "flash:"}}],
+            [{"result": {"output": "new_image.swi"}}],
+            [{"result": {}}],
+            [{"result": {"softwareImage": "flash:new_image.swi"}}],
+        ]
+        calls = [
+            mock.call(["dir"], encoding="text"),
+            mock.call(["dir flash:"], encoding="text"),
+            mock.call(["install source flash:new_image.swi"], encoding="json"),
+            mock.call(["show boot-config"], encoding="json"),
+        ]
+        self.device.native.enable.side_effect = results
         self.device.set_boot_options("new_image.swi")
-        self.device.native.enable.assert_called_with(["install source new_image.swi"], encoding="json")
+        self.device.native.enable.assert_has_calls(calls)
 
     def test_backup_running_config(self):
         filename = "local_running_config"
