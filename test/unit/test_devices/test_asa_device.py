@@ -52,11 +52,49 @@ class TestASADevice(unittest.TestCase):
 
     def test_config(self):
         command = "interface gigabitethernet 0/0"
-        self.device.config(command)
-        # self.device.native.enable.assert_called()
-        # self.device.native.config_mode.assert_called()
-        self.device.native.send_command_timing.assert_called_with(command)
-        # self.device.native.exit_config_mode.assert_called()
 
-if __name__ == "__main__":
-    unittest.main()
+        result = self.device.config(command)
+        assert result is None
+
+        self.device.native.send_command_timing.assert_called_with(command)
+
+    def test_enable_from_disable(self):
+        self.device.native.check_enable_mode.return_value = False
+        self.device.native.check_config_mode.return_value = False
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_not_called()
+
+    def test_enable_from_enable(self):
+        self.device.native.check_enable_mode.return_value = True
+        self.device.native.check_config_mode.return_value = False
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_not_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_not_called()
+
+    def test_enable_from_config(self):
+        self.device.native.check_enable_mode.return_value = True
+        self.device.native.check_config_mode.return_value = True
+        self.device.enable()
+        self.device.native.check_enable_mode.assert_called()
+        self.device.native.enable.assert_not_called()
+        self.device.native.check_config_mode.assert_called()
+        self.device.native.exit_config_mode.assert_called()
+
+    def test_facts(self):
+
+        obj = self.device.facts
+
+        assert obj is not None
+
+    def test_count_setup(self):
+        # This class is reinstantiated in every test, so the counter is reset
+        assert self.count_setup == 1
+
+    def test_count_teardown(self):
+        # This class is reinstantiated in every test, so the counter is reset
+        assert self.count_teardown == 0
