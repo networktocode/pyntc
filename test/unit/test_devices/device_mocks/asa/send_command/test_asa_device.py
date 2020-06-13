@@ -4,55 +4,43 @@ import os
 from unittest import mock
 
 from .device_mocks.asa import send_command, send_command_expect
-from pyntc.devices.base_device import RollbackError
-from pyntc.devices import ASADevice
-from pyntc.devices.ios_device import FileTransferError
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
+
+from pyntc.devices.asa_device import ASADevice, FileTransferError
+from pyntc.errors import CommandError, CommandListError
 
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 
-class TestASADevice(unittest.TestCase):
-    @mock.patch.object(ASADevice, "open")
-    @mock.patch.object(ASADevice, "close")
-    @mock.patch("netmiko.cisco.cisco_asa_ssh.CiscoAsaSSH", autospec=True)
-    def setUp(self, mock_miko, mock_close, mock_open):
-        self.device = ASADevice("host", "user", "pass")
 
-        mock_miko.send_command_timing.side_effect = send_command
-        mock_miko.send_command_expect.side_effect = send_command_expect
-        self.device.native = mock_miko
+class TestASADevice:
+    @mock.patch("pyntc.devices.asa_device.ConnectHandler")
+    def setup(self, api):
 
-    def tearDown(self):
-        # Reset the mock so we don't have transient test effects
+        if not getattr(self, "device", None):
+            self.device = ASADevice("host", "user", "password")
+
+        # need to think if there should be an if before this...
+        self.device.native = api
+
+        # counts how many times we setup and tear down
+        if not getattr(self, "count_setup", None):
+            setattr(self, "count_setup", 0)
+
+        if not getattr(self, "count_teardown", None):
+            setattr(self, "count_teardown", 0)
+
+        self.device = ASADevice("host", "user", "password")
+        api.send_command_timing.side_effect = send_command
+        api.send_command_expect.side_effect = send_command_expect
+        self.device.native = api
+        self.count_setup += 1
+
+    def teardown(self):
+        # Reset the mock so that we do not have transient effects
         self.device.native.reset_mock()
 
-    def test_enable_from_disable(self):
-        self.device.native.check_enable_mode.return_value = False
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_enable(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_config(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = True
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_called()
+        # count teardowns
+        self.count_teardown += 1
 
     def test_config(self):
         command = "hostname DATA-CENTER-FW"
@@ -217,33 +205,64 @@ class TestASADevice(unittest.TestCase):
         self.device.reboot()
         assert not self.device.native.send_command_timing.called
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="bootflash:")
-    def test_get_boot_options_show_boot(self, mock_boot):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = f"Current BOOT variable = flash:/{BOOT_IMAGE}"
-        boot_options = self.device.get_boot_options()
-        assert boot_options == {"sys": BOOT_IMAGE}
-        self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="bootflash:")
+    # def test_get_boot_options_show_bootvar(self, mock_boot):
+    #     self.device.native.send_command_timing.side_effect = None
+    #     self.device.native.send_command_timing.return_value = f"BOOT variable = bootflash:{BOOT_IMAGE}"
+    #     boot_options = self.device.get_boot_options()
+    #     assert boot_options == {"sys": BOOT_IMAGE}
+    #     self.device.native.send_command_timing.assert_called_with("show boot")
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
-    def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
-        self.device.set_boot_options(BOOT_IMAGE)
-        mock_cl.assert_called_with([f"boot system flash:/{BOOT_IMAGE}"])
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="bootflash:")
+    # def test_get_boot_options_show_boot(self, mock_boot):
+    #     results = [
+    #         CommandError("show bootvar", "fail"),
+    #         f"BOOT path-list : bootflash:{BOOT_IMAGE}",
+    #     ]
+    #     self.device.native.send_command_timing.side_effect = results
+    #     boot_options = self.device.get_boot_options()
+    #     assert boot_options == {"sys": BOOT_IMAGE}
+    #     self.device.native.send_command_timing.assert_called_with("show boot")
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
-    def test_set_boot_options_no_file(self, mock_fs):
-        with pytest.raises(NTCFileNotFoundError):
-            self.device.set_boot_options("bad_image.bin")
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="bootflash:")
+    # def test_get_boot_options_show_run(self, mock_boot):
+    #     results = [
+    #         CommandError("show bootvar", "fail"),
+    #         CommandError("show bootvar", "fail"),
+    #         f"boot system flash bootflash:/{BOOT_IMAGE}",
+    #         "Directory of bootflash:/",
+    #     ]
+    #     self.device.native.send_command_timing.side_effect = results
+    #     boot_options = self.device.get_boot_options()
+    #     assert boot_options == {"sys": BOOT_IMAGE}
+    #     self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
-    def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
-        with pytest.raises(CommandError):
-            self.device.set_boot_options(BOOT_IMAGE)
-            mock_bo.assert_called_once()
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+    # @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    # @mock.patch.object(ASADevice, "config_list", return_value=None)
+    # def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
+    #     self.device.set_boot_options(BOOT_IMAGE)
+    #     mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+    # @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
+    # @mock.patch.object(ASADevice, "config_list", side_effect=[CommandError("boot system", "fail"), None])
+    # def test_set_boot_options_with_spaces(self, mock_cl, mock_bo, mock_fs):
+    #     self.device.set_boot_options(BOOT_IMAGE)
+    #     mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+    # def test_set_boot_options_no_file(self, mock_fs):
+    #     with pytest.raises(NTCFileNotFoundError):
+    #         self.device.set_boot_options("bad_image.bin")
+
+    # @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+    # @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
+    # @mock.patch.object(ASADevice, "config_list", return_value=None)
+    # def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
+    #     with pytest.raises(CommandError):
+    #         self.device.set_boot_options(BOOT_IMAGE)
+    #         mock_bo.assert_called_once()
 
     def test_backup_running_config(self):
         filename = "local_running_config"
@@ -255,7 +274,7 @@ class TestASADevice(unittest.TestCase):
         assert contents == self.device.running_config
         os.remove(filename)
 
-    # rollback not implemented in asa device
+    # rollback not implemented!
     # def test_rollback(self):
     #     self.device.rollback("good_checkpoint")
     #     self.device.native.send_command_timing.assert_called_with("configure replace flash:good_checkpoint force")
@@ -270,7 +289,7 @@ class TestASADevice(unittest.TestCase):
         self.device.checkpoint("good_checkpoint")
         self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
 
-    # facts not implemented in asa device
+    # not implemented
     # def test_facts(self):
     #     expected = {
     #         "uptime": 413940,
