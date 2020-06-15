@@ -4,7 +4,6 @@ import os
 from unittest import mock
 
 from .device_mocks.asa import send_command, send_command_expect
-from pyntc.devices.base_device import RollbackError
 from pyntc.devices import ASADevice
 from pyntc.devices.ios_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
@@ -12,7 +11,8 @@ from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 
-class TestASADevice(unittest.TestCase):
+
+class TestASADevice:
     @mock.patch.object(ASADevice, "open")
     @mock.patch.object(ASADevice, "close")
     @mock.patch("netmiko.cisco.cisco_asa_ssh.CiscoAsaSSH", autospec=True)
@@ -301,33 +301,6 @@ class TestASADevice(unittest.TestCase):
     def test_starting_config(self):
         expected = self.device.show("show startup-config")
         assert self.device.startup_config == expected
-
-    def test_enable_from_disable(self):
-        self.device.native.check_enable_mode.return_value = False
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_enable(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_config(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = True
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_called()
 
     def test_count_setup(self):
         # This class is reinstantiated in every test, so the counter is reset
