@@ -5,7 +5,7 @@ from unittest import mock
 
 from .device_mocks.asa import send_command, send_command_expect
 from pyntc.devices import ASADevice
-from pyntc.devices.ios_device import FileTransferError
+from pyntc.devices.asa_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
@@ -13,17 +13,29 @@ BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 
 
 class TestASADevice:
-    @mock.patch.object(ASADevice, "open")
-    @mock.patch.object(ASADevice, "close")
-    @mock.patch("netmiko.cisco.cisco_asa_ssh.CiscoAsaSSH", autospec=True)
-    def setUp(self, mock_miko, mock_close, mock_open):
-        self.device = ASADevice("host", "user", "pass")
+    @mock.patch("pyntc.devices.asa_device.ConnectHandler")
+    def setup(self, api):
 
-        mock_miko.send_command_timing.side_effect = send_command
-        mock_miko.send_command_expect.side_effect = send_command_expect
-        self.device.native = mock_miko
+        if not getattr(self, "device", None):
+            self.device = ASADevice("host", "user", "password")
 
-    def tearDown(self):
+        # need to think if there should be an if before this...
+        self.device.native = api
+
+        # counts how many times we setup and tear down
+        if not getattr(self, "count_setup", None):
+            setattr(self, "count_setup", 0)
+
+        if not getattr(self, "count_teardown", None):
+            setattr(self, "count_teardown", 0)
+
+        self.device = ASADevice("host", "user", "password")
+        api.send_command_timing.side_effect = send_command
+        api.send_command_expect.side_effect = send_command_expect
+        self.device.native = api
+        self.count_setup += 1
+
+    def teardown(self):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
