@@ -265,16 +265,6 @@ class TestASADevice:
         assert contents == self.device.running_config
         os.remove(filename)
 
-    # rollback not implemented in asa device
-    # def test_rollback(self):
-    #     self.device.rollback("good_checkpoint")
-    #     self.device.native.send_command_timing.assert_called_with("configure replace flash:good_checkpoint force")
-
-    # def test_bad_rollback(self):
-    #     # TODO: change to what the protocol would return
-    #     self.device.native.send_command_timing.return_value = "Error: rollback unsuccessful"
-    #     with pytest.raises(RollbackError):
-    #         self.device.rollback("bad_checkpoint")
 
     def test_checkpoint(self):
         self.device.checkpoint("good_checkpoint")
