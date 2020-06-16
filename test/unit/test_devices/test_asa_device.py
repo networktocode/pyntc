@@ -27,7 +27,7 @@ class TestASADevice:
            self.count_setup = 0
 
         if not getattr(self, "count_teardown", None):
-            setattr(self, "count_teardown", 0)
+            self.count_teardown = 0
 
         self.device = ASADevice("host", "user", "password")
         api.send_command_timing.side_effect = send_command
