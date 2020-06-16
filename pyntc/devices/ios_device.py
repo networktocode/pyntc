@@ -8,7 +8,7 @@ import time
 import warnings
 
 from pyntc.templates import get_structured_data
-from pyntc.data_model.converters import convert_dict_by_key
+from pyntc.utils import convert_dict_by_key
 from pyntc.data_model.key_maps import ios_key_maps
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
