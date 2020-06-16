@@ -265,11 +265,9 @@ class TestASADevice:
         assert contents == self.device.running_config
         os.remove(filename)
 
-
     def test_checkpoint(self):
         self.device.checkpoint("good_checkpoint")
         self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
-
 
     def test_running_config(self):
         expected = self.device.show("show running config")
