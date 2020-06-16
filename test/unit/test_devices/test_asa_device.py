@@ -24,7 +24,7 @@ class TestASADevice:
 
         # counts how many times we setup and tear down
         if not getattr(self, "count_setup", None):
-           self.count_setup = 0
+            self.count_setup = 0
 
         if not getattr(self, "count_teardown", None):
             self.count_teardown = 0
