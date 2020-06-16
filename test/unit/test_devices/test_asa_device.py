@@ -135,9 +135,6 @@ class TestASADevice:
         result = self.device.save()
 
         assert result
-        # TODO: found that "copy run start" is the right command.
-        # https://www.networkstraining.com/cisco-asa-firewall-commands-cheat-sheet/
-        # TODO: ask Jacob
         self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
