@@ -7,8 +7,10 @@ import re
 import time
 import warnings
 
+from netmiko import ConnectHandler
+from netmiko import FileTransfer
+
 from pyntc.utils import convert_dict_by_key, get_structured_data
-from pyntc.data_model.key_maps import ios_key_maps
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
@@ -21,8 +23,8 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 
-from netmiko import ConnectHandler
-from netmiko import FileTransfer
+
+BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 
 
 @fix_docs
@@ -196,7 +198,7 @@ class IOSDevice(BaseDevice):
     def facts(self):
         if self._facts is None:
             version_data = self._raw_version_data()
-            self._facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
+            self._facts = convert_dict_by_key(version_data, BASIC_FACTS_KM)
             self._facts["vendor"] = self.vendor
 
             uptime_full_string = version_data["uptime"]
