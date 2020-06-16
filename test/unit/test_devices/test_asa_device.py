@@ -38,6 +38,7 @@ class TestASADevice:
     def teardown(self):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
+        self.count_teardown += 1
 
     def test_enable_from_disable(self):
         self.device.native.check_enable_mode.return_value = False
