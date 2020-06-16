@@ -270,29 +270,6 @@ class TestASADevice:
         self.device.checkpoint("good_checkpoint")
         self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
 
-    # facts not implemented in asa device
-    # def test_facts(self):
-    #     expected = {
-    #         "uptime": 413940,
-    #         "vendor": "cisco",
-    #         "uptime_string": "04:18:59:00",
-    #         "interfaces": ["FastEthernet0/0", "FastEthernet0/1"],
-    #         "hostname": "rtr2811",
-    #         "fqdn": "N/A",
-    #         "os_version": "15.1(3)T4",
-    #         "serial_number": "",
-    #         "model": "2811",
-    #         "vlans": [],
-    #         "cisco_ios_ssh": {"config_register": "0x2102"},
-    #     }
-    #     facts = self.device.facts
-    #     assert facts == expected
-
-    #     self.device.native.send_command_timing.reset_mock()
-    #     facts = self.device.facts
-    #     assert facts == expected
-
-    #     self.device.native.send_command_timing.assert_not_called()
 
     def test_running_config(self):
         expected = self.device.show("show running config")
