@@ -1,1 +1,4 @@
-from .templates import get_structured_data  # noqa F401
+from .templates import get_structured_data
+
+
+__all__ = ["get_structured_data"]
