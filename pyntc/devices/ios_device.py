@@ -29,8 +29,12 @@ BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number":
 
 @fix_docs
 class IOSDevice(BaseDevice):
+    """Cisco IOS Device Implementation."""
+
+    vendor = "cisco"
+
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super().__init__(host, username, password, vendor="cisco", device_type="cisco_ios_ssh")
+        super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
         self.host = host

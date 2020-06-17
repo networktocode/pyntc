@@ -16,10 +16,13 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 class F5Device(BaseDevice):
-    def __init__(self, host, username, password, **kwargs):
-        super().__init__(host, username, password, vendor="f5", device_type="f5_tmos_icontrol")
+    """F5 LTM Device Implementation."""
 
-        self.vendor = "F5 Networks"
+    vendor = "f5"
+
+    def __init__(self, host, username, password, **kwargs):
+        super().__init__(host, username, password, device_type="f5_tmos_icontrol")
+
         self.hostname = host
         self.username = username
         self.password = password
