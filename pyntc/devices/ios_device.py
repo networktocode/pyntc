@@ -29,7 +29,7 @@ from netmiko import FileTransfer
 @fix_docs
 class IOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_ios_ssh")
+        super().__init__(host, username, password, vendor="cisco", device_type="cisco_ios_ssh")
 
         self.native = None
         self.host = host

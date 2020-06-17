@@ -368,7 +368,7 @@ class FileTransferError(NTCError):
 
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
-        super(RebootTimerError, self).__init__("Reboot timer not supported on %s." % device_type)
+        super().__init__("Reboot timer not supported on %s." % device_type)
 
 
 class RollbackError(NTCError):
