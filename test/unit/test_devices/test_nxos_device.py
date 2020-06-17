@@ -130,14 +130,11 @@ class TestNXOSDevice(unittest.TestCase):
         with self.assertRaises(RebootTimerError):
             self.device.reboot(confirm=True, timer=3)
 
-    def test_get_boot_options(self):
+    def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}
         self.device.native.get_boot_options.return_value = expected
-
-        result = self.device.get_boot_options()
-        self.assertEqual(result, expected)
-
-        self.device.native.get_boot_options.assert_called_with()
+        boot_options = self.device.boot_options
+        self.assertEqual(boot_options, expected)
 
     # TODO: Remove this skip when the test is fixed
     @pytest.mark.skip(reason="This test is broken")

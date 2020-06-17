@@ -41,14 +41,14 @@ enable password 8Ry2YjIyt7RRXU24 encrypted
 passwd 2KFQnbNIdI.2KYOU encrypted
 hostname example1
 domain-name example.com
-boot system flash:/cdisk.bin
+boot system disk0:/cdisk.bin
 ftp mode passive
 pager lines 24
 mtu test 1500
 mtu inside 1500
 monitor-interface test
 monitor-interface inside
-ASDM image flash:ASDM
+ASDM image disk0:ASDM
 no ASDM history enable
 arp timeout 14400
 route inside 0.0.0.0 0.0.0.0 10.1.1.2

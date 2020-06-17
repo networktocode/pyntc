@@ -1,6 +1,5 @@
 import pytest
 import os
-
 from unittest import mock
 
 from .device_mocks.asa import send_command, send_command_expect
@@ -9,7 +8,8 @@ from pyntc.devices.asa_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
 
-BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
+BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
+BOOT_OPTIONS_PATH = "pyntc.devices.asa_device.ASADevice.boot_options"
 
 
 class TestASADevice:
@@ -140,7 +140,7 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = True
@@ -153,7 +153,7 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_bad_md5(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = True
@@ -166,7 +166,7 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_not(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.return_value = False
@@ -179,13 +179,13 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("path/to/source_file")
 
-        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
+        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="disk0:")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
@@ -193,13 +193,13 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy_different_dest(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
         mock_ft_instance = mock_ft.return_value
 
         mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("source_file", "dest_file")
 
-        mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="flash:")
+        mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="disk0:")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
@@ -207,7 +207,7 @@ class TestASADevice:
     @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
     def test_file_copy_fail(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = Exception
         mock_ft_instance.check_file_exists.return_value = False
@@ -227,33 +227,51 @@ class TestASADevice:
         self.device.reboot()
         assert not self.device.native.send_command_timing.called
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="bootflash:")
-    def test_get_boot_options_show_boot(self, mock_boot):
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+    def test_boot_options_dir(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = f"Current BOOT variable = flash:/{BOOT_IMAGE}"
-        boot_options = self.device.get_boot_options()
+        self.device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
+        boot_options = self.device.boot_options
         assert boot_options == {"sys": BOOT_IMAGE}
         self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": BOOT_IMAGE})
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
-    def test_set_boot_options(self, mock_cl, mock_bo, mock_fs):
-        self.device.set_boot_options(BOOT_IMAGE)
-        mock_cl.assert_called_with([f"boot system flash:/{BOOT_IMAGE}"])
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+    def test_boot_options_none(self, mock_boot):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = ""
+        boot_options = self.device.boot_options
+        assert boot_options["sys"] is None
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    def test_set_boot_options(self, mock_cl, mock_fs):
+        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
+            mock_boot.return_value = {"sys": BOOT_IMAGE}
+            self.device.set_boot_options(BOOT_IMAGE)
+            mock_cl.assert_called_with([f"boot system disk0:/{BOOT_IMAGE}"])
+
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    def test_set_boot_options_dir(self, mock_cl, mock_fs):
+        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
+            mock_boot.return_value = {"sys": BOOT_IMAGE}
+            self.device.set_boot_options(BOOT_IMAGE, file_system="disk0:")
+            mock_fs.assert_not_called()
+            mock_cl.assert_called_with([f"boot system disk0:/{BOOT_IMAGE}"])
+
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_set_boot_options_no_file(self, mock_fs):
         with pytest.raises(NTCFileNotFoundError):
             self.device.set_boot_options("bad_image.bin")
 
-    @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(ASADevice, "get_boot_options", return_value={"sys": "bad_image.bin"})
+    @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     @mock.patch.object(ASADevice, "config_list", return_value=None)
-    def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
-        with pytest.raises(CommandError):
-            self.device.set_boot_options(BOOT_IMAGE)
-            mock_bo.assert_called_once()
+    def test_set_boot_options_bad_boot(self, mock_cl, mock_fs):
+        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
+            mock_boot.return_value = {"sys": "bad_image.bin"}
+            with pytest.raises(CommandError):
+                self.device.set_boot_options(BOOT_IMAGE)
+                mock_boot.assert_called_once()
 
     def test_backup_running_config(self):
         filename = "local_running_config"

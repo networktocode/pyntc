@@ -43,6 +43,10 @@ class NXOSDevice(BaseDevice):
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)
 
+    @property
+    def boot_options(self):
+        return self.native.get_boot_options()
+
     def checkpoint(self, filename):
         return self.native.checkpoint(filename)
 
@@ -89,9 +93,6 @@ class NXOSDevice(BaseDevice):
     def file_copy_remote_exists(self, src, dest=None, file_system="bootflash:"):
         dest = dest or os.path.basename(src)
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
-
-    def get_boot_options(self):
-        return self.native.get_boot_options()
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)

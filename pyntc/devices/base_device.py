@@ -1,8 +1,9 @@
-"""The module contains the base class that all device classes must inherit from.
-"""
+"""The module contains the base class that all device classes must inherit from."""
 
 import abc
 import importlib
+import warnings
+
 
 from pyntc.errors import NTCError, FeatureNotFoundError
 
@@ -52,6 +53,17 @@ class BaseDevice(object):
 
         Args:
             filename (str): The local file path on which to save the running config.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def boot_options(self):
+        """Get current boot variables
+        like system image and kickstart image.
+
+        Returns:
+            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         raise NotImplementedError
 
@@ -182,16 +194,6 @@ class BaseDevice(object):
         """
 
     @abc.abstractmethod
-    def get_boot_options(self):
-        """Get current boot variables
-        like system image and kickstart image.
-
-        Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name
 
@@ -282,7 +284,7 @@ class BaseDevice(object):
                 by the ``_get_file_system()`` method.
 
         Raises:
-            ValueError: When the boot options returned by the ``get_boot_options``
+            ValueError: When the boot options returned by the ``boot_options``
                 method does not match the ``image_name`` after the config command(s)
                 have been sent to the device.
         """
@@ -341,6 +343,16 @@ class BaseDevice(object):
             raise FeatureNotFoundError(feature_name, self.device_type)
         except AttributeError:
             raise
+
+    def get_boot_options(self):
+        """Get current boot variables
+        like system image and kickstart image.
+
+        Returns:
+            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+        """
+        warnings.warn("get_boot_options() is deprecated; use boot_options property.", DeprecationWarning)
+        return self.boot_options
 
     def refresh(self):
         """Refresh caches on device instance.
