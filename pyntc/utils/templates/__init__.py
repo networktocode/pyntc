@@ -1,6 +1,7 @@
 import os
 import textfsm
 
+
 TEMPLATE_PATH_ENV_VAR = "NTC_TEMPLATES"
 
 
@@ -15,10 +16,8 @@ def get_structured_data(template_name, rawtxt):
 
         structured_data = []
         for row in table:
-            temp_dict = {}
-            for index, element in enumerate(row):
-                temp_dict[fsm.header[index].lower()] = element
-            structured_data.append(temp_dict)
+            entry = {fsm.header[index].lower(): element for index, element in enumerate(row)}
+            structured_data.append(entry)
 
     return structured_data
 
