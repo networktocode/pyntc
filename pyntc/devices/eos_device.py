@@ -4,7 +4,7 @@
 import re
 import time
 
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key
+from pyntc.utils import convert_dict_by_key, convert_list_by_key
 from pyntc.data_model.key_maps import eos_key_maps
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
