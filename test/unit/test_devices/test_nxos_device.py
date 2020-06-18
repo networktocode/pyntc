@@ -1,21 +1,24 @@
 import unittest
 import mock
 
-import pytest
+from pynxos.errors import CLIError
 
 from .device_mocks.nxos import show, show_list
-
-from pyntc.devices import nxos_device
+from pyntc.devices.system_features.file_copy.base_file_copy import FileTransferError
+from pyntc.devices.nxos_device import NXOSDevice
 from pyntc.devices.base_device import RollbackError, RebootTimerError
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 
-from pynxos.errors import CLIError
+
+BOOT_IMAGE = "n9000-dk9.9.2.1.bin"
+KICKSTART_IMAGE = "n9000-kickstart.9.2.1.bin"
+FILE_SYSTEM = "bootflash:"
 
 
 class TestNXOSDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
     def setUp(self, mock_device):
-        self.device = nxos_device.NXOSDevice("host", "user", "pass")
+        self.device = NXOSDevice("host", "user", "pass")
         mock_device.show.side_effect = show
         mock_device.show_list.side_effect = show_list
 
@@ -100,7 +103,7 @@ class TestNXOSDevice(unittest.TestCase):
 
         self.assertTrue(result)
         self.device.native.file_copy_remote_exists.assert_called_with(
-            "source_file", "dest_file", file_system="bootflash:"
+            "source_file", "dest_file", file_system=FILE_SYSTEM
         )
 
     def test_file_copy_remote_exists_failure(self):
@@ -109,14 +112,31 @@ class TestNXOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
         self.device.native.file_copy_remote_exists.assert_called_with(
-            "source_file", "dest_file", file_system="bootflash:"
+            "source_file", "dest_file", file_system=FILE_SYSTEM
         )
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
-    def test_file_copy(self):
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
+    def test_file_copy(self, mock_fcre):
         self.device.file_copy("source_file", "dest_file")
-        self.device.native.file_copy.assert_called_with("source_file", "dest_file", file_system="bootflash:")
+        self.device.native.file_copy.assert_called_with("source_file", "dest_file", file_system=FILE_SYSTEM)
+        self.device.native.file_copy.assert_called()
+
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
+    def test_file_copy_no_dest(self, mock_fcre):
+        self.device.file_copy("source_file")
+        self.device.native.file_copy.assert_called_with("source_file", "source_file", file_system=FILE_SYSTEM)
+        self.device.native.file_copy.assert_called()
+
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[True])
+    def test_file_copy_file_exists(self, mock_fcre):
+        self.device.file_copy("source_file", "dest_file")
+        self.device.native.file_copy.assert_not_called()
+
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, False])
+    def test_file_copy_fail(self, mock_fcre):
+        with self.assertRaises(FileTransferError):
+            self.device.file_copy("source_file")
+        self.device.native.file_copy.assert_called()
 
     def test_reboot(self):
         self.device.reboot(confirm=True)
@@ -136,11 +156,31 @@ class TestNXOSDevice(unittest.TestCase):
         boot_options = self.device.boot_options
         self.assertEqual(boot_options, expected)
 
-    # TODO: Remove this skip when the test is fixed
-    @pytest.mark.skip(reason="This test is broken")
     def test_set_boot_options(self):
-        self.device.set_boot_options("new_image.swi")
-        self.device.native.set_boot_options.assert_called_with("new_image.swi", kickstart=None)
+        self.device.set_boot_options(BOOT_IMAGE)
+        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+
+    def test_set_boot_options_dir(self):
+        self.device.set_boot_options(BOOT_IMAGE, file_system=FILE_SYSTEM)
+        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+
+    def test_set_boot_options_kickstart(self):
+        self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
+        self.device.native.set_boot_options.assert_called_with(
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}"
+        )
+
+    @mock.patch.object(NXOSDevice, "show", return_value=FILE_SYSTEM)
+    def test_set_boot_options_no_file(self, mock_show):
+        with self.assertRaises(NTCFileNotFoundError) as no_file:
+            self.device.set_boot_options(BOOT_IMAGE)
+        self.assertIn(f"{BOOT_IMAGE} was not found in {FILE_SYSTEM}", no_file.exception.message)
+
+    @mock.patch.object(NXOSDevice, "show", return_value=f"{FILE_SYSTEM}\n{BOOT_IMAGE}")
+    def test_set_boot_options_no_kickstart(self, mock_show):
+        with self.assertRaises(NTCFileNotFoundError) as no_file:
+            self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
+        self.assertIn(f"{KICKSTART_IMAGE} was not found in {FILE_SYSTEM}", no_file.exception.message)
 
     def test_backup_running_config(self):
         filename = "local_running_config"
