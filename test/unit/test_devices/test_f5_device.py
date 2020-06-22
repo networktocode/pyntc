@@ -3,8 +3,7 @@ from unittest import mock
 # from .device_mocks.f5 import send_command, send_command_expect
 from pyntc.devices.f5_device import F5Device
 
-
-FILE_SYSTEM = "/shared/images"
+# import requests
 
 
 class TestF5Device:
@@ -30,18 +29,35 @@ class TestF5Device:
         self.count_teardown += 1
 
     def test_file_copy_remote_exists(self):
-        self.device.native.file_copy_remote_exists.return_value = False
-        with mock.patch.object(F5Device, "_image_match", return_value=True):
-            result = self.device.file_copy_remote_exists("source_file")
-            assert result
+        # Pull ManagementRoot mock instance off device
+        api = self.device.api_handler
+        # Patching out the _image_exists API call internal
+        api.tm.util.unix_ls.exec_cmd.return_value.commandResult = "source_file"
+        # Patching out the _file_copy_remote_md5 API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = "dd7192cc7ed95bde7ecd06202312f3fe"
+
+        name = "./test/unit/test_devices/device_mocks/f5/send_command/source_file"
+        self.device.file_copy_remote_exists(name, "/shared/images/dest_file")
+
+        api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
+        api.tm.util.bash.exec_cmd.assert_called_with("run", utilCmdArgs='-c "md5sum /shared/images/source_file"')
 
     @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[False, True])
-    @mock.patch.object(F5Device, "_check_free_space", return_value=7)
-    @mock.patch.object(F5Device, "_upload_image", return_value="source_file")
-    def test_file_copy(self, mock_fcre, mock_fs, mock_ui):
-        self.device.file_copy("source_file")
-        # self.device._upload_image.assert_called_with("source_file")
-        self.device.native.file_copy.assert_called()
+    @mock.patch("requests.post")
+    def test_file_copy(self, mock_post, mock_fcre):
+        # Pull ManagementRoot mock instance off device
+        api = self.device.api_handler
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+
+        name = "./test/unit/test_devices/device_mocks/f5/send_command/source_file"
+        self.device.file_copy(name, "/shared/images/dest_file")
+
+        api.tm.util.bash.exec_cmd.assert_called_with("run", utilCmdArgs='-c "vgdisplay -s --units G"')
+        URI = "https://host/mgmt/cm/autodeploy/software-image-uploads/source_file"
+        data = b"Space, the final fronteer..."
+        headers = {"Content-Type": "application/octet-stream", "Content-Range": "0-27/28"}
+        mock_post.assert_called_with(URI, auth=("user", "password"), data=data, headers=headers, verify=False)
 
     # @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[False, True])
     # def test_file_copy_no_dest(self, mock_fcre):
