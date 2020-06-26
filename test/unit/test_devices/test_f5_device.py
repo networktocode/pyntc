@@ -10,10 +10,22 @@ import pytest
 
 BOOT_IMAGE = "BIGIP-11.3.0.2806.0.iso"
 VOLUME = "HD1.1"
+
+
 class Volume:
-    def __init__(self, name, active):
+    def __init__(self, name, active, version, basebuild, status):
         self.name = name
         self.active = active
+        self.version = version
+        self.basebuild = basebuild
+        self.status = status
+
+
+class Image:
+    def __init__(self, fullPath, version, build):
+        self.fullPath = fullPath
+        self.version = version
+        self.build = build
 
 
 class TestF5Device:
@@ -227,7 +239,43 @@ class TestF5Device:
         api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
         api.tm.sys.software.images.exec_cmd.assert_not_called()
 
-    # image_installed, install_os
+    def test_image_installed(self):
+        api = self.device.api_handler
+        image_name = BOOT_IMAGE
+        volume = VOLUME
+
+        vol1 = Volume("HD1.1", True, "W503", "W503", "complete")
+        im1 = Image(BOOT_IMAGE, "W503", "W503")
+        # vol2 = Volume("HD1.2", False)
+        # Patch the _get_volumes return value, returns a list of volumes
+        # api.tm.sys.software.volumes.get_collection.return_value.name = "HD1.1"
+        # api.tm.sys.software.volumes.get_collection.return_value.active = True
+        api.tm.sys.software.images.get_collection.return_value = [im1]
+        api.tm.sys.software.volumes.get_collection.return_value = [vol1]
+
+        # import pdb
+
+        # pdb.set_trace()
+        installed = self.device.image_installed(image_name=image_name, volume=volume)
+        assert installed
+
+    def test_install_os(self):
+        api = self.device.api_handler
+        image_name = BOOT_IMAGE
+        volume = VOLUME
+
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+        # Patching out _image_exists
+        api.tm.util.unix_ls.exec_cmd.return_value.commandResult = image_name
+        # Patching out _image_install
+        api.tm.sys.software.volumes.volume.exists.return_value = True
+
+        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+            self.device.install_os(image_name=image_name, volume=volume)
+
+        api.tm.util.bash.exec_cmd.assert_called()
+        api.tm.sys.software.images.exec_cmd.assert_called_with("install", name=image_name, volume=volume, options=[])
 
     def test_count_setup(self):
         assert self.count_setup == 1
