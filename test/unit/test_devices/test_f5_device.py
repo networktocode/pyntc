@@ -8,6 +8,8 @@ from pyntc.errors import NTCFileNotFoundError
 import pytest
 
 
+BOOT_IMAGE = "BIGIP-11.3.0.2806.0.iso"
+VOLUME = "HD1.1"
 class Volume:
     def __init__(self, name, active):
         self.name = name
@@ -123,7 +125,7 @@ class TestF5Device:
         # api.tm.sys.software.volumes.get_collection.return_value.active = True
         # api.tm.sys.software.volumes.get_collection.return_value.volumes = [vol1, vol2]
 
-        volume = "HD1.1"
+        volume = VOLUME
         # skip the wait_for_device_reboot
         with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
             self.device.reboot(confirm=True, volume=volume)
@@ -136,7 +138,7 @@ class TestF5Device:
 
     def test_reboot_with_timer(self):
         api = self.device.api_handler
-        volume = "HD1.1"
+        volume = VOLUME
         api.tm.sys.software.volumes.volume.load.return_value.active = True
 
         # skipping timeout! It's too long!!
@@ -146,11 +148,11 @@ class TestF5Device:
         # # Check if _get_active_volume worked
         api.tm.sys.software.volumes.get_collection.assert_called()
         # Check if _reboot_to_volume worked
-        api.tm.sys.software.volumes.exec_cmd.assert_called_with("reboot", volume="HD1.1")
+        api.tm.sys.software.volumes.exec_cmd.assert_called_with("reboot", volume=volume)
 
     def test_reboot_no_confirm(self):
         api = self.device.api_handler
-        volume = "HD1.1"
+        volume = VOLUME
 
         self.device.reboot(confirm=False, volume=volume)
 
@@ -167,8 +169,9 @@ class TestF5Device:
 
     def test_set_boot_options(self):
         api = self.device.api_handler
-        image_name = "image"
-        volume = "HD1.1"
+        image_name = BOOT_IMAGE
+        volume = VOLUME
+
         # Patching out the __get_free_space API call internal
         api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
         # Patching out _image_exists
@@ -177,7 +180,7 @@ class TestF5Device:
         api.tm.sys.software.volumes.volume.exists.return_value = True
 
         with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
-            self.device.set_boot_options(image_name=image_name, volume="HD1.1")
+            self.device.set_boot_options(image_name=image_name, volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()
         api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
@@ -185,8 +188,9 @@ class TestF5Device:
 
     def test_set_boot_options_no_image(self):
         api = self.device.api_handler
-        image_name = "image"
-        volume = "HD1.1"
+        image_name = BOOT_IMAGE
+        volume = VOLUME
+
         # Patching out the __get_free_space API call internal
         api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
         # Patching out _image_exists
@@ -195,7 +199,7 @@ class TestF5Device:
         api.tm.sys.software.volumes.volume.exists.return_value = False
 
         with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
-            self.device.set_boot_options(image_name=image_name, volume="HD1.1")
+            self.device.set_boot_options(image_name=image_name, volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()
         api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
@@ -205,7 +209,9 @@ class TestF5Device:
 
     def test_set_boot_options_bad_boot(self):
         api = self.device.api_handler
-        image_name = "image"
+        image_name = BOOT_IMAGE
+        volume = VOLUME
+
         # Patching out the __get_free_space API call internal
         api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
         # Patching out _image_exists
@@ -215,7 +221,7 @@ class TestF5Device:
 
         with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
             with pytest.raises(NTCFileNotFoundError):
-                self.device.set_boot_options(image_name="bad_image", volume="HD1.1")
+                self.device.set_boot_options(image_name="bad_image", volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()
         api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
