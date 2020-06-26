@@ -2,8 +2,16 @@ from unittest import mock
 
 # from .device_mocks.f5 import send_command, send_command_expect
 from pyntc.devices.f5_device import F5Device
+from pyntc.devices.f5_device import FileTransferError
+from pyntc.errors import NTCFileNotFoundError
 
-# import requests
+import pytest
+
+
+class Volume:
+    def __init__(self, name, active):
+        self.name = name
+        self.active = active
 
 
 class TestF5Device:
@@ -64,9 +72,7 @@ class TestF5Device:
     @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[False, True])
     @mock.patch("requests.post")
     def test_file_copy_no_dest(self, mock_post, mock_fcre):
-        # Pull ManagementRoot mock instance off device
         api = self.device.api_handler
-        # Patching out the __get_free_space API call internal
         api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
 
         name = "./test/unit/test_devices/device_mocks/f5/send_command/source_file"
@@ -81,16 +87,141 @@ class TestF5Device:
         headers = {"Content-Type": "application/octet-stream", "Content-Range": "0-27/28"}
         mock_post.assert_called_with(URI, auth=("user", "password"), data=data, headers=headers, verify=False)
 
-    # @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[True])
-    # def test_file_copy_file_exists(self, mock_fcre):
-    #     self.device.native.file_copy("source_file", "dest_file")
-    #     self.device.native.file_copy.assert_not_called()
+    @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[True])
+    @mock.patch("requests.post")
+    def test_file_copy_file_exists(self, mock_post, mock_fcre):
+        api = self.device.api_handler
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
 
-    # @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[False, False])
-    # def test_file_copy_fail(self, mock_fcre):
-    #     with self.assertRaises(FileTransferError):
-    #         self.device.file_copy("source_file")
-    #     self.device.native.file_copy.assert_called()
+        name = "./test/unit/test_devices/device_mocks/f5/send_command/source_file"
+        self.device.file_copy(name, "/shared/images/dest_file")
+
+        # Check if _check_free_space has not been called since file exists
+        api.tm.util.bash.exec_cmd.assert_not_called()
+        # Check if _upload_image REST API request has not been called
+        mock_post.assert_not_called()
+
+    @mock.patch.object(F5Device, "file_copy_remote_exists", side_effect=[False, False])
+    @mock.patch("requests.post")
+    def test_file_copy_fail(self, mock_post, mock_fcre):
+        # Pull ManagementRoot mock instance off device
+        api = self.device.api_handler
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+
+        name = "./test/unit/test_devices/device_mocks/f5/send_command/source_file"
+        # Check if file transfer failed
+        with pytest.raises(FileTransferError):
+            self.device.file_copy(name, "/shared/images/source_file")
+
+    def test_reboot(self):
+        api = self.device.api_handler
+        # vol1 = Volume("HD1.1", True)
+        # vol2 = Volume("HD1.2", False)
+        # Patch the _get_volumes return value, returns a list of volumes
+        # api.tm.sys.software.volumes.get_collection.return_value.name = "HD1.1"
+        # api.tm.sys.software.volumes.get_collection.return_value.active = True
+        # api.tm.sys.software.volumes.get_collection.return_value.volumes = [vol1, vol2]
+
+        volume = "HD1.1"
+        # skip the wait_for_device_reboot
+        with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
+            self.device.reboot(confirm=True, volume=volume)
+            # self.device.reboot(confirm=True)
+
+        # # Check if _get_active_volume worked
+        api.tm.sys.software.volumes.get_collection.assert_called()
+        # Check if _reboot_to_volume worked
+        api.tm.sys.software.volumes.exec_cmd.assert_called_with("reboot", volume="HD1.1")
+
+    def test_reboot_with_timer(self):
+        api = self.device.api_handler
+        volume = "HD1.1"
+        api.tm.sys.software.volumes.volume.load.return_value.active = True
+
+        # skipping timeout! It's too long!!
+        with (mock.patch.object(self.device, "_wait_for_device_reboot", timeout=0)):
+            self.device.reboot(confirm=True, volume=volume)
+
+        # # Check if _get_active_volume worked
+        api.tm.sys.software.volumes.get_collection.assert_called()
+        # Check if _reboot_to_volume worked
+        api.tm.sys.software.volumes.exec_cmd.assert_called_with("reboot", volume="HD1.1")
+
+    def test_reboot_no_confirm(self):
+        api = self.device.api_handler
+        volume = "HD1.1"
+
+        self.device.reboot(confirm=False, volume=volume)
+
+        assert not api.tm.sys.software.volumes.exec_cmd.called
+
+    def test_reboot_no_volume(self):
+        api = self.device.api_handler
+
+        with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
+            self.device.reboot(confirm=True)
+
+        # Check if _reboot_to_volume worked
+        api.tm.util.bash.exec_cmd.assert_called_with("run", utilCmdArgs='-c "reboot"')
+
+    def test_set_boot_options(self):
+        api = self.device.api_handler
+        image_name = "image"
+        volume = "HD1.1"
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+        # Patching out _image_exists
+        api.tm.util.unix_ls.exec_cmd.return_value.commandResult = image_name
+        # Patching out _volume_exists for _image_install
+        api.tm.sys.software.volumes.volume.exists.return_value = True
+
+        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+            self.device.set_boot_options(image_name=image_name, volume="HD1.1")
+
+        api.tm.util.bash.exec_cmd.assert_called()
+        api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
+        api.tm.sys.software.images.exec_cmd.assert_called_with("install", name=image_name, volume=volume, options=[])
+
+    def test_set_boot_options_no_image(self):
+        api = self.device.api_handler
+        image_name = "image"
+        volume = "HD1.1"
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+        # Patching out _image_exists
+        api.tm.util.unix_ls.exec_cmd.return_value.commandResult = image_name
+        # Patching out _volume_exists for _image_install
+        api.tm.sys.software.volumes.volume.exists.return_value = False
+
+        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+            self.device.set_boot_options(image_name=image_name, volume="HD1.1")
+
+        api.tm.util.bash.exec_cmd.assert_called()
+        api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
+        api.tm.sys.software.images.exec_cmd.assert_called_with(
+            "install", name=image_name, volume=volume, options=[{"create-volume": True}]
+        )
+
+    def test_set_boot_options_bad_boot(self):
+        api = self.device.api_handler
+        image_name = "image"
+        # Patching out the __get_free_space API call internal
+        api.tm.util.bash.exec_cmd.return_value.commandResult = '"vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]'
+        # Patching out _image_exists
+        api.tm.util.unix_ls.exec_cmd.return_value.commandResult = image_name
+        # Patching out _volume_exists for _image_install
+        api.tm.sys.software.volumes.volume.exists.return_value = False
+
+        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+            with pytest.raises(NTCFileNotFoundError):
+                self.device.set_boot_options(image_name="bad_image", volume="HD1.1")
+
+        api.tm.util.bash.exec_cmd.assert_called()
+        api.tm.util.unix_ls.exec_cmd.assert_called_with("run", utilCmdArgs="/shared/images")
+        api.tm.sys.software.images.exec_cmd.assert_not_called()
+
+    # image_installed, install_os
 
     def test_count_setup(self):
         assert self.count_setup == 1
