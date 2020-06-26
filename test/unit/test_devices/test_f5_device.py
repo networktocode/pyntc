@@ -42,8 +42,6 @@ class TestF5Device:
         if not getattr(self, "count_teardown", None):
             self.count_teardown = 0
 
-        # api.send_command_timing.side_effect = send_command
-        # api.send_command_expect.side_effect = send_command_expect
         self.count_setup += 1
 
     def teardown(self):
@@ -133,9 +131,7 @@ class TestF5Device:
         # vol1 = Volume("HD1.1", True)
         # vol2 = Volume("HD1.2", False)
         # Patch the _get_volumes return value, returns a list of volumes
-        # api.tm.sys.software.volumes.get_collection.return_value.name = "HD1.1"
-        # api.tm.sys.software.volumes.get_collection.return_value.active = True
-        # api.tm.sys.software.volumes.get_collection.return_value.volumes = [vol1, vol2]
+        # api.tm.sys.software.volumes.get_collection.return_value = [vol1, vol2]
 
         volume = VOLUME
         # skip the wait_for_device_reboot
@@ -246,16 +242,9 @@ class TestF5Device:
 
         vol1 = Volume("HD1.1", True, "W503", "W503", "complete")
         im1 = Image(BOOT_IMAGE, "W503", "W503")
-        # vol2 = Volume("HD1.2", False)
-        # Patch the _get_volumes return value, returns a list of volumes
-        # api.tm.sys.software.volumes.get_collection.return_value.name = "HD1.1"
-        # api.tm.sys.software.volumes.get_collection.return_value.active = True
         api.tm.sys.software.images.get_collection.return_value = [im1]
         api.tm.sys.software.volumes.get_collection.return_value = [vol1]
 
-        # import pdb
-
-        # pdb.set_trace()
         installed = self.device.image_installed(image_name=image_name, volume=volume)
         assert installed
 
