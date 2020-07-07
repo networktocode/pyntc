@@ -1,0 +1,372 @@
+"""Module for using a Cisco WLC/AIREOS device over SSH."""
+
+# import os
+import re
+
+# import signal
+import time
+
+# import warnings
+
+
+from netmiko import ConnectHandler
+
+# from netmiko import FileTransfer
+
+from .base_device import BaseDevice, fix_docs
+
+# from .system_features.file_copy.base_file_copy import FileTransferError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    # FileSystemNotFoundError,
+    NTCError,
+    # NTCFileNotFoundError,
+    RebootTimeoutError,
+    # OSInstallError,
+)
+
+
+@fix_docs
+class AIREOSDevice(BaseDevice):
+    """Cisco AIREOS Device Implementation."""
+
+    vendor = "cisco"
+
+    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+        super().__init__(host, username, password, device_type="cisco_aireos_ssh")
+        self.native = None
+        self.host = host
+        self.username = username
+        self.password == password
+        self.secret = secret
+        self.port = int(port)
+        self.global_delay_factor = kwargs.get("global_delay_factor", 1)
+        self.delay_factor = kwargs.get("delay_factor", 1)
+        self._connected = False
+        self.open()
+
+    def _enter_config(self):
+        raise NotImplementedError
+        """
+        self.enable()
+        self.native.config_mode()
+        """
+
+    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+        raise NotImplementedError
+        """
+        if dest is None:
+            dest = os.path.basename(src)
+
+        fc = FileTransfer(self.native, src, dest, file_system=file_system)
+        return fc
+        """
+
+    def _get_file_system(self):
+        raise NotImplementedError
+        r'''
+        """Determines the default file system or directory for device.
+
+        Returns:
+            str: The name of the default file system or directory for the device.
+
+        Raises:
+            FileSystemNotFound: When the module is unable to determine the default file system.
+        """
+        raw_data = self.show("dir")
+        try:
+            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
+            return file_system
+        except AttributeError:
+            # TODO: Get proper hostname
+            raise FileSystemNotFoundError(hostname=self.host, command="dir")
+        '''
+
+    def _image_booted(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+        """
+        version_data = self.show("show version")
+        if re.search(image_name, version_data):
+            return True
+
+        return False
+        """
+
+    def _send_command(self, command, expect=False, expect_string=""):
+        if expect:
+            if expect_string:
+                response = self.native.send_command_expect(command, expect_string=expect_string)
+            else:
+                response = self.native.send_command_expect(command)
+        else:
+            response = self.native.send_command_timing(command)
+
+        if "% " in response or "Error:" in response:
+            raise CommandError(command, response)
+
+        return response
+
+    def _uptime_components(self):
+        sysinfo = self.show("show sysinfo")
+        re_uptime = r"^System\s+Up\s+Time\.+\s*(.+?)\s*$"
+        uptime = re.search(re_uptime, sysinfo, re.M)
+        uptime_string = uptime.group()
+
+        match_days = re.search(r"(\d+) days?", uptime_string)
+        match_hours = re.search(r"(\d+) hrs?", uptime_string)
+        match_minutes = re.search(r"(\d+) mins?", uptime_string)
+
+        days = int(match_days.group(1)) if match_days else 0
+        hours = int(match_hours.group(1)) if match_hours else 0
+        minutes = int(match_minutes.group(1)) if match_minutes else 0
+
+        return days, hours, minutes
+
+    def _wait_for_device_reboot(self, timeout=3600):
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                self.open()
+                return
+            except:  # noqa E722
+                pass
+
+        # TODO: Get proper hostname parameter
+        raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
+
+    @property
+    def boot_options(self):
+        show_boot_out = self.show("show boot")
+        re_boot_path = r"^Primary\s+Boot\s+Image\s*\.+\s*(?P<sys>\S+)"
+        match = re.search(re_boot_path, show_boot_out)
+        return match.groupdict() or {"sys": None}
+
+    def config(self, command):
+        raise NotImplementedError
+        """
+        self._enter_config()
+        self._send_command(command)
+        self.native.exit_config_mode()
+        """
+
+    def config_list(self, commands):
+        raise NotImplementedError
+        """
+        self._enter_config()
+        entered_commands = []
+        for command in commands:
+            entered_commands.append(command)
+            try:
+                self._send_command(command)
+            except CommandError as e:
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
+        self.native.exit_config_mode()
+        """
+
+    def close(self):
+        if self._connected:
+            self.native.disconnect()
+            self._connected = False
+
+    def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
+
+    def file_copy(self, src, dest=None, file_system=None):
+        raise NotImplementedError
+        """
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            #        if not self.fc.verify_space_available():
+            #            raise FileTransferError('Not enough space available.')
+
+            try:
+                fc.enable_scp()
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            except:  # noqa E722
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
+
+            if not self.file_copy_remote_exists(src, dest, file_system):
+                raise FileTransferError(
+                    message="Attempted file copy, but could not validate file existed after transfer"
+                )
+        """
+
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        raise NotImplementedError
+        """
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
+        if fc.check_file_exists() and fc.compare_md5():
+            return True
+        return False
+        """
+
+    def install_os(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+        """
+        timeout = vendor_specifics.get("timeout", 3600)
+        if not self._image_booted(image_name):
+            self.set_boot_options(image_name, **vendor_specifics)
+            self.reboot(confirm=True)
+            self._wait_for_device_reboot(timeout=timeout)
+            if not self._image_booted(image_name):
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+
+            return True
+
+        return False
+        """
+
+    def open(self):
+        if self._connected:
+            try:
+                self.native.find_prompt()
+            except:  # noqa E722
+                self._connected = False
+
+        if not self._connected:
+            self.native = ConnectHandler(
+                device_type="cisco_wlc",
+                ip=self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                global_delay_factor=self.global_delay_factor,
+                secret=self.secret,
+                verbose=False,
+            )
+            self._connected = True
+
+    def reboot(self, timer=0, confirm=False):
+        raise NotImplementedError
+        """
+        if confirm:
+
+            def handler(signum, frame):
+                raise RebootSignal("Interrupting after reload")
+
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(10)
+
+            try:
+                if timer > 0:
+                    first_response = self.show("reload in %d" % timer)
+                else:
+                    first_response = self.show("reload")
+
+                if "System configuration" in first_response:
+                    self.native.send_command_timing("no")
+
+                self.native.send_command_timing("\n")
+            except RebootSignal:
+                signal.alarm(0)
+
+            signal.alarm(0)
+        else:
+            print("Need to confirm reboot with confirm=True")
+        """
+
+    def rollback(self, rollback_to):
+        raise NotImplementedError
+
+    def save(self, filename="startup-config"):
+        raise NotImplementedError
+        """
+        command = "copy running-config %s" % filename
+        # Changed to send_command_timing to not require a direct prompt return.
+        self.native.send_command_timing(command)
+        # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
+        # This will send return without requiring an OK.
+        # Send a return to pass the [OK]? message - Increase delay_factor for looking for response.
+        self.native.send_command_timing("\n", delay_factor=2)
+        # Confirm that we have a valid prompt again before returning.
+        self.native.find_prompt()
+        return True
+        """
+
+    def set_boot_options(self, image_name, **vendor_specifics):
+        raise NotImplementedError
+        """
+        current_boot = self.show("show running-config | inc ^boot system ")
+        file_system = vendor_specifics.get("file_system")
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        file_system_files = self.show("dir {0}".format(file_system))
+        if re.search(image_name, file_system_files) is None:
+            raise NTCFileNotFoundError(
+                # TODO: Update to use hostname
+                hostname=self.host,
+                file=image_name,
+                dir=file_system,
+            )
+
+        current_images = current_boot.splitlines()
+        commands_to_exec = ["no {0}".format(image) for image in current_images]
+        commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
+        self.config_list(commands_to_exec)
+
+        self.save()
+        if self.boot_options["sys"] != image_name:
+            raise CommandError(
+                command="boot system {0}/{1}".format(file_system, image_name),
+                message="Setting boot command did not yield expected results",
+            )
+        """
+
+    def show(self, command, expect=False, expect_string=""):
+        self.enable()
+        return self._send_command(command, expect=expect, expect_string=expect_string)
+
+    def show_list(self, commands):
+        self.enable()
+
+        responses = []
+        entered_commands = []
+        for command in commands:
+            entered_commands.append(command)
+            try:
+                responses.append(self._send_command(command))
+            except CommandError as e:
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
+
+        return responses
+
+    @property
+    def uptime(self):
+        days, hours, minutes = self._uptime_components()
+        hours += days * 24
+        minutes += hours * 60
+        seconds = minutes * 60
+        return seconds
+
+    @property
+    def uptime_string(self):
+        days, hours, minutes = self._uptime_components()
+        return "%02d:%02d:%02d:00" % (days, hours, minutes)
+
+
+class RebootSignal(NTCError):
+    pass

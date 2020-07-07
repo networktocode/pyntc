@@ -13,13 +13,14 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 
 
 class TestInfra(unittest.TestCase):
+    @mock.patch("pyntc.devices.aireos_device.AIREOSDevice.open")
     @mock.patch("pyntc.devices.f5_device.F5Device._open_soap")
     @mock.patch("pyntc.devices.f5_device.ManagementRoot")
     @mock.patch("pyntc.devices.asa_device.ASADevice.open")
     @mock.patch("pyntc.devices.ios_device.IOSDevice.open")
     @mock.patch("pyntc.devices.jnpr_device.JunosNativeSW")
     @mock.patch("pyntc.devices.jnpr_device.JunosDevice.open")
-    def test_device_creation(self, j_open, j_nsw, i_open, a_open, f_mr, f_open):
+    def test_device_creation(self, j_open, j_nsw, i_open, a_open, f_mr, f_open, air_open):
         for device_type in supported_devices:
             device = ntc_device(device_type, "host", "user", "pass")
             self.assertIsInstance(device, supported_devices[device_type])
