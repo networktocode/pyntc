@@ -1,29 +1,20 @@
 """Module for using a Cisco WLC/AIREOS device over SSH."""
 
-# import os
+import os
 import re
-
-# import signal
 import time
-
-# import warnings
-
+import signal
 
 from netmiko import ConnectHandler
 
-# from netmiko import FileTransfer
-
 from .base_device import BaseDevice, fix_docs
-
-# from .system_features.file_copy.base_file_copy import FileTransferError
+from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
     CommandError,
     CommandListError,
-    # FileSystemNotFoundError,
     NTCError,
-    # NTCFileNotFoundError,
     RebootTimeoutError,
-    # OSInstallError,
+    OSInstallError,
 )
 
 
@@ -47,51 +38,17 @@ class AIREOSDevice(BaseDevice):
         self.open()
 
     def _enter_config(self):
-        raise NotImplementedError
-        """
         self.enable()
         self.native.config_mode()
-        """
-
-    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
-        raise NotImplementedError
-        """
-        if dest is None:
-            dest = os.path.basename(src)
-
-        fc = FileTransfer(self.native, src, dest, file_system=file_system)
-        return fc
-        """
-
-    def _get_file_system(self):
-        raise NotImplementedError
-        r'''
-        """Determines the default file system or directory for device.
-
-        Returns:
-            str: The name of the default file system or directory for the device.
-
-        Raises:
-            FileSystemNotFound: When the module is unable to determine the default file system.
-        """
-        raw_data = self.show("dir")
-        try:
-            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
-        except AttributeError:
-            # TODO: Get proper hostname
-            raise FileSystemNotFoundError(hostname=self.host, command="dir")
-        '''
 
     def _image_booted(self, image_name, **vendor_specifics):
-        raise NotImplementedError
-        """
-        version_data = self.show("show version")
-        if re.search(image_name, version_data):
+        re_version = r"^Product\s+Version\s*\.+\s*(\S+)"
+        sysinfo = self.show("show sysinfo")
+        booted_image = re.search(re_version, sysinfo, re.M)
+        if booted_image.group(1) == image_name:
             return True
 
         return False
-        """
 
     def _send_command(self, command, expect=False, expect_string=""):
         if expect:
@@ -102,6 +59,7 @@ class AIREOSDevice(BaseDevice):
         else:
             response = self.native.send_command_timing(command)
 
+        # TODO: Lookup actual error messages from system
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
 
@@ -143,16 +101,11 @@ class AIREOSDevice(BaseDevice):
         return match.groupdict() or {"sys": None}
 
     def config(self, command):
-        raise NotImplementedError
-        """
         self._enter_config()
         self._send_command(command)
         self.native.exit_config_mode()
-        """
 
     def config_list(self, commands):
-        raise NotImplementedError
-        """
         self._enter_config()
         entered_commands = []
         for command in commands:
@@ -160,14 +113,22 @@ class AIREOSDevice(BaseDevice):
             try:
                 self._send_command(command)
             except CommandError as e:
+                self.native.exit_config_mode()
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
-        """
+
+    @property
+    def connected(self):
+        return self._connected
+
+    @connected.setter
+    def connected(self, value):
+        self._connected = value
 
     def close(self):
-        if self._connected:
+        if self.connected:
             self.native.disconnect()
-            self._connected = False
+            self.connected = False
 
     def enable(self):
         """Ensure device is in enable mode.
@@ -182,71 +143,45 @@ class AIREOSDevice(BaseDevice):
         if self.native.check_config_mode():
             self.native.exit_config_mode()
 
-    def file_copy(self, src, dest=None, file_system=None):
-        raise NotImplementedError
-        """
+    def file_copy(self, username, password, server, filepath, protocol="sftp", filetype="code"):
         self.enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        if not self.file_copy_remote_exists(src, dest, file_system):
-            fc = self._file_copy_instance(src, dest, file_system=file_system)
-            #        if not self.fc.verify_space_available():
-            #            raise FileTransferError('Not enough space available.')
-
-            try:
-                fc.enable_scp()
-                fc.establish_scp_conn()
-                fc.transfer_file()
-            except:  # noqa E722
-                raise FileTransferError
-            finally:
-                fc.close_scp_chan()
-
-            if not self.file_copy_remote_exists(src, dest, file_system):
-                raise FileTransferError(
-                    message="Attempted file copy, but could not validate file existed after transfer"
-                )
-        """
-
-    # TODO: Make this an internal method since exposing file_copy should be sufficient
-    def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        raise NotImplementedError
-        """
-        self.enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
-        if fc.check_file_exists() and fc.compare_md5():
-            return True
-        return False
-        """
+        filedir, filename = os.path.split(filepath)
+        try:
+            self.show_list(
+                [
+                    f"transfer download datatype {filetype}",
+                    f"transfer download mode {protocol}",
+                    f"transfer download username {username}",
+                    f"transfer download password {password}",
+                    f"transfer download serverip {server}",
+                    f"transfer download path {filedir}/",
+                    f"transfer download filename {filename}",
+                ]
+            )
+        except:  # noqa E722
+            raise FileTransferError
 
     def install_os(self, image_name, **vendor_specifics):
-        raise NotImplementedError
-        """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.host, desired_boot=image_name)
 
             return True
 
         return False
-        """
 
     def open(self):
-        if self._connected:
+        if self.connected:
             try:
                 self.native.find_prompt()
             except:  # noqa E722
-                self._connected = False
+                self.connected = False
 
-        if not self._connected:
+        if not self.connected:
             self.native = ConnectHandler(
                 device_type="cisco_wlc",
                 ip=self.host,
@@ -257,11 +192,13 @@ class AIREOSDevice(BaseDevice):
                 secret=self.secret,
                 verbose=False,
             )
-            self._connected = True
+            self.connected = True
 
     def reboot(self, timer=0, confirm=False):
-        raise NotImplementedError
-        """
+        if timer > 0:
+            raise CommandError(
+                command="reset system", message="AIREOS does not support delayed reboots.",
+            )
         if confirm:
 
             def handler(signum, frame):
@@ -271,70 +208,26 @@ class AIREOSDevice(BaseDevice):
             signal.alarm(10)
 
             try:
-                if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
-                else:
-                    first_response = self.show("reload")
-
-                if "System configuration" in first_response:
-                    self.native.send_command_timing("no")
-
-                self.native.send_command_timing("\n")
+                self.show("reset system")
             except RebootSignal:
                 signal.alarm(0)
 
             signal.alarm(0)
         else:
             print("Need to confirm reboot with confirm=True")
-        """
 
-    def rollback(self, rollback_to):
-        raise NotImplementedError
-
-    def save(self, filename="startup-config"):
-        raise NotImplementedError
-        """
-        command = "copy running-config %s" % filename
-        # Changed to send_command_timing to not require a direct prompt return.
-        self.native.send_command_timing(command)
-        # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
-        # This will send return without requiring an OK.
-        # Send a return to pass the [OK]? message - Increase delay_factor for looking for response.
-        self.native.send_command_timing("\n", delay_factor=2)
-        # Confirm that we have a valid prompt again before returning.
-        self.native.find_prompt()
+    def save(self):
+        self.native.save_config()
         return True
-        """
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        raise NotImplementedError
-        """
-        current_boot = self.show("show running-config | inc ^boot system ")
-        file_system = vendor_specifics.get("file_system")
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        file_system_files = self.show("dir {0}".format(file_system))
-        if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(
-                # TODO: Update to use hostname
-                hostname=self.host,
-                file=image_name,
-                dir=file_system,
-            )
-
-        current_images = current_boot.splitlines()
-        commands_to_exec = ["no {0}".format(image) for image in current_images]
-        commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
-        self.config_list(commands_to_exec)
-
+        if not self.boot_options["sys"] == image_name:
+            self.config(f"boot {image_name}")
         self.save()
-        if self.boot_options["sys"] != image_name:
+        if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command="boot system {0}/{1}".format(file_system, image_name),
-                message="Setting boot command did not yield expected results",
+                command=f"boot {image_name}", message="Setting boot command did not yield expected results",
             )
-        """
 
     def show(self, command, expect=False, expect_string=""):
         self.enable()
