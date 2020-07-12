@@ -4,7 +4,11 @@ from unittest import mock
 from pyntc.devices import AIREOSDevice
 from .device_mocks.aireos import send_command, send_command_expect
 from pyntc.devices.aireos_device import (
-    CommandError, RebootTimeoutError, CommandListError, FileTransferError, OSInstallError
+    CommandError,
+    RebootTimeoutError,
+    CommandListError,
+    FileTransferError,
+    OSInstallError,
 )
 
 
@@ -168,15 +172,17 @@ class TestAIREOSDevice:
 
     def test_file_copy(self):
         self.device.file_copy("user", "pass", "10.1.1.1", "local/os_file")
-        self.device.native.send_command_timing.assert_has_calls([
-            mock.call("transfer download datatype code"),
-            mock.call("transfer download mode sftp"),
-            mock.call("transfer download username user"),
-            mock.call("transfer download password pass"),
-            mock.call("transfer download serverip 10.1.1.1"),
-            mock.call("transfer download path local/"),
-            mock.call("transfer download filename os_file"),
-        ])
+        self.device.native.send_command_timing.assert_has_calls(
+            [
+                mock.call("transfer download datatype code"),
+                mock.call("transfer download mode sftp"),
+                mock.call("transfer download username user"),
+                mock.call("transfer download password pass"),
+                mock.call("transfer download serverip 10.1.1.1"),
+                mock.call("transfer download path local/"),
+                mock.call("transfer download filename os_file"),
+            ]
+        )
 
     def test_file_copy_error(self):
         with pytest.raises(FileTransferError):
