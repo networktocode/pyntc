@@ -5,14 +5,15 @@ from pyntc.devices import AIREOSDevice
 from .device_mocks.aireos import send_command, send_command_expect
 from pyntc.devices.aireos_device import (
     CommandError,
-    RebootTimeoutError,
+    OSInstallError,
     CommandListError,
     FileTransferError,
-    OSInstallError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
 )
 
 
-BOOT_IMAGE = "8.2.170"
+BOOT_IMAGE = "8.2.170.0"
 BOOT_PATH = "pyntc.devices.aireos_device.AIREOSDevice.boot_options"
 
 
@@ -90,8 +91,35 @@ class TestAIREOSDevice:
         with pytest.raises(RebootTimeoutError):
             self.device._wait_for_device_reboot(1)
 
-    def test_boot_options(self):
-        assert self.device.boot_options["sys"] == BOOT_IMAGE
+    def test_boot_options_primary(self):
+        primary = self.device.boot_options["primary"]
+        assert primary == BOOT_IMAGE
+        assert self.device.boot_options["sys"] == primary
+
+    @mock.patch.object(AIREOSDevice, "show")
+    def test_boot_options_backup(self, mock_show):
+        mock_show.return_value = (
+            "Primary Boot Image............................... 8.5.110.0 (active)\n"
+            "Backup Boot Image................................ 8.2.170.0 (default)\n"
+        )
+        backup = self.device.boot_options["backup"]
+        assert backup == BOOT_IMAGE
+        assert self.device.boot_options["sys"] == backup
+
+    @mock.patch.object(AIREOSDevice, "show")
+    def test_boot_options_no_default(self, mock_show):
+        mock_show.return_value = (
+            "Primary Boot Image............................... 8.5.110.0 (active)\n"
+            "Backup Boot Image................................ 8.2.170.0\n"
+        )
+        assert self.device.boot_options["primary"] == "8.5.110.0"
+        assert self.device.boot_options["backup"] == "8.2.170.0"
+        assert self.device.boot_options["sys"] is None
+
+    @mock.patch.object(AIREOSDevice, "show")
+    def test_boot_options_none(self, mock_show):
+        mock_show.return_value = ""
+        assert self.device.boot_options["sys"] is None
 
     @mock.patch.object(AIREOSDevice, "_send_command")
     @mock.patch.object(AIREOSDevice, "_enter_config")
@@ -260,27 +288,49 @@ class TestAIREOSDevice:
         assert save is True
 
     @mock.patch.object(AIREOSDevice, "config")
-    def test_set_boot_options(self, mock_cfg):
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_set_boot_options_primary(self, mock_save, mock_cfg):
         with mock.patch(BOOT_PATH, new_callable=mock.PropertyMock) as boot_options:
-            boot_options.side_effect = [{"sys": "1"}, {"sys": BOOT_IMAGE}]
+            boot_options.return_value = {"sys": BOOT_IMAGE, "primary": BOOT_IMAGE}
             self.device.set_boot_options(BOOT_IMAGE)
-        mock_cfg.assert_called()
+        mock_cfg.assert_called_with("boot primary")
+        mock_save.assert_called()
 
     @mock.patch.object(AIREOSDevice, "config")
-    def test_set_boot_options_already_set(self, mock_cfg):
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_set_boot_options_backup(self, mock_save, mock_cfg):
         with mock.patch(BOOT_PATH, new_callable=mock.PropertyMock) as boot_options:
-            boot_options.return_value = {"sys": BOOT_IMAGE}
+            boot_options.return_value = {
+                "primary": "1",
+                "backup": BOOT_IMAGE,
+                "sys": BOOT_IMAGE,
+            }
             self.device.set_boot_options(BOOT_IMAGE)
-        mock_cfg.assert_not_called()
+        mock_cfg.assert_called_with("boot backup")
+        mock_save.assert_called()
 
     @mock.patch.object(AIREOSDevice, "config")
-    def test_set_boot_options_error(self, mock_cfg):
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_set_boot_options_image_not_an_option(self, mock_save, mock_cfg):
         with mock.patch(BOOT_PATH, new_callable=mock.PropertyMock) as boot_options:
-            with pytest.raises(CommandError) as ce:
-                boot_options.return_value = {"sys": "1"}
+            boot_options.return_value = {"primary": "1", "backup": "2"}
+            with pytest.raises(NTCFileNotFoundError) as fnfe:
                 self.device.set_boot_options(BOOT_IMAGE)
-                assert ce.command == f"boot {BOOT_IMAGE}"
+                expected = f"{BOOT_IMAGE} was not found in 'show boot' on {self.device.host}"
+                assert fnfe.message == expected
+        mock_cfg.assert_not_called()
+        mock_save.assert_not_called()
+
+    @mock.patch.object(AIREOSDevice, "config")
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_set_boot_options_error(self, mock_save, mock_cfg):
+        with mock.patch(BOOT_PATH, new_callable=mock.PropertyMock) as boot_options:
+            boot_options.return_value = {"primary": BOOT_IMAGE, "backup": "2", "sys": "1"}
+            with pytest.raises(CommandError) as ce:
+                self.device.set_boot_options(BOOT_IMAGE)
+                assert ce.command == "boot primary"
         mock_cfg.assert_called()
+        mock_save.assert_called()
 
     @mock.patch.object(AIREOSDevice, "enable")
     def test_show(self, mock_enable):  # command, expect=False, expect_string=""):
@@ -294,9 +344,9 @@ class TestAIREOSDevice:
 
     @mock.patch.object(AIREOSDevice, "enable")
     def test_show_list(self, mock_enable):
-        data = self.device.show_list(["test send command private", "show boot"])
+        data = self.device.show_list(["test send command private", "transfer download datatype code"])
         clean_data = [result.strip() for result in data]
-        assert clean_data == ["This is only a test", "Primary Boot Image.....8.2.170"]
+        assert clean_data == ["This is only a test", "success"]
         mock_enable.assert_called()
 
     @mock.patch.object(AIREOSDevice, "_uptime_components")

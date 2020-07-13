@@ -10,11 +10,12 @@ from netmiko import ConnectHandler
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
     NTCError,
-    RebootTimeoutError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
 )
 
 
@@ -59,8 +60,7 @@ class AIREOSDevice(BaseDevice):
         else:
             response = self.native.send_command_timing(command)
 
-        # TODO: Lookup actual error messages from system
-        if "% " in response or "Error:" in response:
+        if "Incorrect usage" in response or "Error:" in response:
             raise CommandError(command, response)
 
         return response
@@ -96,9 +96,24 @@ class AIREOSDevice(BaseDevice):
     @property
     def boot_options(self):
         show_boot_out = self.show("show boot")
-        re_boot_path = r"^Primary\s+Boot\s+Image\s*\.+\s*(?P<sys>\S+)"
-        match = re.search(re_boot_path, show_boot_out)
-        return match.groupdict() or {"sys": None}
+        re_primary_path = r"^Primary\s+Boot\s+Image\s*\.+\s*(?P<primary>\S+)(?P<status>.*)$"
+        re_backup_path = r"^Backup\s+Boot\s+Image\s*\.+\s*(?P<backup>\S+)(?P<status>.*)$"
+        primary = re.search(re_primary_path, show_boot_out, re.M)
+        backup = re.search(re_backup_path, show_boot_out, re.M)
+        if primary:
+            result = primary.groupdict()
+            primary_status = result.pop("status")
+            result.update(backup.groupdict())
+            backup_status = result.pop("status")
+            if "default" in primary_status:
+                result["sys"] = result["primary"]
+            elif "default" in backup_status:
+                result["sys"] = result["backup"]
+            else:
+                result["sys"] = None
+        else:
+            result = {"sys": None}
+        return result
 
     def config(self, command):
         self._enter_config()
@@ -221,12 +236,17 @@ class AIREOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
-        if not self.boot_options["sys"] == image_name:
-            self.config(f"boot {image_name}")
+        if self.boot_options["primary"] == image_name:
+            boot_command = "boot primary"
+        elif self.boot_options["backup"] == image_name:
+            boot_command = "boot backup"
+        else:
+            raise NTCFileNotFoundError(image_name, "'show boot'", self.host)
+        self.config(boot_command)
         self.save()
         if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command=f"boot {image_name}", message="Setting boot command did not yield expected results",
+                command=boot_command, message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):
