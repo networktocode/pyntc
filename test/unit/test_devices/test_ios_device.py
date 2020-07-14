@@ -199,12 +199,19 @@ class TestIOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show bootvar")
 
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
     def test_boot_options_show_boot(self, mock_boot):
-        results = [
-            CommandError("show bootvar", "fail"),
-            f"BOOT path-list : bootflash:{BOOT_IMAGE}",
-        ]
+        show_boot_out = (
+            "Current Boot Variables:\n"
+            "BOOT variable = flash:/cat3k_caa-universalk9.16.11.03a.SPA.bin;\n\n"
+            "Boot Variables on next reload:\n"
+            f"BOOT variable = flash:/{BOOT_IMAGE};\n"
+            "Manual Boot = no\n"
+            "Enable Break = no\n"
+            "Boot Mode = DEVICE\n"
+            "iPXE Timeout = 0"
+        )
+        results = [CommandError("show bootvar", "fail"), show_boot_out]
         self.device.native.send_command_timing.side_effect = results
         boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
