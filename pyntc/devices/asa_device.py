@@ -35,9 +35,6 @@ class ASADevice(BaseDevice):
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
         self.native = None
-        self.host = host
-        self.username = username
-        self.password = password
         self.secret = secret
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
