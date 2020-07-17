@@ -2,41 +2,33 @@ import unittest
 import mock
 import os
 
-import pytest
 from tempfile import NamedTemporaryFile
 
-from pyntc.devices.jnpr_device import JunosDevice
+from pyntc.devices import JunosDevice
 from pyntc.errors import CommandError, CommandListError
 
 from jnpr.junos.exception import ConfigLoadError
 
 
-# TODO: Remove this when these tests are fixed
-pytestmark = pytest.mark.skipif(os.environ.get("SKIP_BROKEN", True), reason="These tests are broken")
-
-
-class MockType:
-    def __init__(self, *args):
-        self.mock = mock.Mock()
-
-    def __call__(self, *args):
-        return self.mock
-
-
 class TestJnprDevice(unittest.TestCase):
-    __metaclass__ = MockType
+    def setUp(self):
+        self.mock_sw = mock.patch("pyntc.devices.jnpr_device.JunosNativeSW", autospec=True)
+        self.mock_fs = mock.patch("pyntc.devices.jnpr_device.JunosNativeFS", autospec=True)
+        self.mock_config = mock.patch("pyntc.devices.jnpr_device.JunosNativeConfig", autospec=True)
+        self.mock_device = mock.patch("pyntc.devices.jnpr_device.JunosNativeDevice", autospec=True)
 
-    @mock.patch("jnpr.junos.device.Device", autospec=True)
-    @mock.patch("jnpr.junos.utils.config", autospec=True)
-    @mock.patch("jnpr.junos.utils.fs", autospec=True)
-    @mock.patch("jnpr.junos.utils.sw", autospec=True)
-    @mock.patch("jnpr.junos.device.Device.open", autospec=True)
-    def setUp(self, mock_open, mock_sw, mock_fs, mock_config, mock_native_device):
+        self.mock_sw.start()
+        self.mock_fs.start()
+        self.mock_config.start()
+        self.mock_device.start()
+
         self.device = JunosDevice("host", "user", "pass")
-        self.device.cu = mock_config.return_value
-        self.device.fs = mock_fs.return_value
-        self.device.sw = mock_sw.return_value
-        self.device.native = mock_native_device
+
+    def tearDown(self):
+        self.mock_sw.stop()
+        self.mock_fs.stop()
+        self.mock_config.stop()
+        self.mock_device.stop()
 
     def test_config(self):
         command = "set interfaces lo0"
@@ -129,7 +121,7 @@ class TestJnprDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
     def test_save(self, mock_scp):
         self.device.show = mock.MagicMock()
-        self.device.show.return_value = "file contents"
+        self.device.show.return_value = b"file contents"
 
         result = self.device.save(filename="saved_config")
 
@@ -138,7 +130,7 @@ class TestJnprDevice(unittest.TestCase):
 
     def test_file_copy_remote_exists(self):
         temp_file = NamedTemporaryFile()
-        temp_file.write("file contents")
+        temp_file.write(b"file contents")
         temp_file.flush()
 
         local_checksum = "4a8ec4fa5f01b4ab1a0ab8cbccb709f0"
@@ -151,7 +143,7 @@ class TestJnprDevice(unittest.TestCase):
 
     def test_file_copy_remote_exists_failure(self):
         temp_file = NamedTemporaryFile()
-        temp_file.write("file contents")
+        temp_file.write(b"file contents")
         temp_file.flush()
 
         self.device.fs.checksum.return_value = "deadbeef"
@@ -163,7 +155,13 @@ class TestJnprDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.jnpr_device.SCP")
     def test_file_copy(self, mock_scp):
-        self.device.file_copy("source", "dest")
+        temp_file = NamedTemporaryFile()
+        temp_file.write(b"file contents")
+        temp_file.flush()
+
+        local_checksum = "4a8ec4fa5f01b4ab1a0ab8cbccb709f0"
+        self.device.fs.checksum.side_effect = ["", local_checksum]
+        self.device.file_copy(temp_file.name, "dest")
         mock_scp.assert_called_with(self.device.native)
 
     def test_reboot(self):
@@ -204,7 +202,7 @@ class TestJnprDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
     def test_checkpoint(self, mock_scp):
         self.device.show = mock.MagicMock()
-        self.device.show.return_value = "file contents"
+        self.device.show.return_value = b"file contents"
         self.device.checkpoint("saved_config")
         self.device.show.assert_called_with("show config")
 
@@ -242,7 +240,7 @@ class TestJnprDevice(unittest.TestCase):
         expected = {
             "uptime": 455,
             "vendor": "juniper",
-            "os_version": "15.1F4.15",
+            "version": "15.1F4.15",
             "interfaces": ["lo0", "ge0"],
             "hostname": "vmx3",
             "fqdn": "vmx3.ntc.com",

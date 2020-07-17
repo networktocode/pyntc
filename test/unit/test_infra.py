@@ -17,7 +17,7 @@ class TestInfra(unittest.TestCase):
     @mock.patch("pyntc.devices.f5_device.ManagementRoot")
     @mock.patch("pyntc.devices.asa_device.ASADevice.open")
     @mock.patch("pyntc.devices.ios_device.IOSDevice.open")
-    @mock.patch("pyntc.devices.jnpr_device.JunosNativdSW")
+    @mock.patch("pyntc.devices.jnpr_device.JunosNativeSW")
     @mock.patch("pyntc.devices.jnpr_device.JunosDevice.open")
     def test_device_creation(self, j_open, j_nsw, i_open, a_open, f_mr, f_open):
         for device_type in supported_devices:

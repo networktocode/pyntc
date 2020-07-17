@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
-from jnpr.junos.utils.sw import SW as JunosNativdSW
+from jnpr.junos.utils.sw import SW as JunosNativeSW
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.exception import ConfigLoadError
@@ -32,7 +32,7 @@ class JunosDevice(BaseDevice):
         self.open()
         self.cu = JunosNativeConfig(self.native)
         self.fs = JunosNativeFS(self.native)
-        self.sw = JunosNativdSW(self.native)
+        self.sw = JunosNativeSW(self.native)
 
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
@@ -196,6 +196,7 @@ class JunosDevice(BaseDevice):
             self.native.open()
 
     def reboot(self, timer=0, confirm=False):
+        self.sw = JunosNativeSW(self.native)
         if confirm:
             self.sw.reboot(in_min=timer)
         else:
