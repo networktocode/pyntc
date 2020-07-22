@@ -28,9 +28,6 @@ class AIREOSDevice(BaseDevice):
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
-        self.host = host
-        self.username = username
-        self.password == password
         self.secret = secret
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
@@ -171,16 +168,17 @@ class AIREOSDevice(BaseDevice):
                     f"transfer download serverip {server}",
                     f"transfer download path {filedir}/",
                     f"transfer download filename {filename}",
+                    "transfer download start",
                 ]
             )
         except:  # noqa E722
             raise FileTransferError
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, controller="both", save_config=True, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
-            self.reboot(confirm=True)
+            self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
@@ -209,27 +207,60 @@ class AIREOSDevice(BaseDevice):
             )
             self.connected = True
 
-    def reboot(self, timer=0, confirm=False):
-        if timer > 0:
-            raise CommandError(
-                command="reset system", message="AIREOS does not support delayed reboots.",
-            )
+        # This prevents open sessions from connecting to STANDBY WLC
+        if not self.redundancy_state:
+            self.close()
+
+    def reboot(self, timer=0, confirm=False, controller="self", save_config=True):
         if confirm:
 
             def handler(signum, frame):
                 raise RebootSignal("Interrupting after reload")
 
             signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
 
+            if self.redundancy_mode != "sso disabled":
+                reboot_command = f"reset system {controller}"
+            else:
+                reboot_command = "reset system"
+
+            if timer:
+                reboot_command += f" in {timer}"
+
+            if save_config:
+                self.save()
+
+            signal.alarm(15)
             try:
-                self.show("reset system")
+                response = self.native.send_command_timing(reboot_command)
+                if "save" in response:
+                    if not save_config:
+                        response = self.native.send_command_timing("n")
+                    else:
+                        response = self.native.send_command_timing("y")
+                if "reset" in response:
+                    self.native.send_command_timing("y")
             except RebootSignal:
                 signal.alarm(0)
 
             signal.alarm(0)
         else:
             print("Need to confirm reboot with confirm=True")
+
+    @property
+    def redundancy_mode(self):
+        ha = self.show("show redundancy summary")
+        ha_mode = re.search(r"^\s*Redundancy\s+Mode\s*=\s*(.+?)\s*$", ha, re.M)
+        return ha_mode.group(1).lower()
+
+    @property
+    def redundancy_state(self):
+        ha = self.show("show redundancy summary")
+        ha_state = re.search(r"^\s*Local\s+State\s*=\s*(.+?)\s*$", ha, re.M)
+        if ha_state.group(1).lower() == "active":
+            return True
+        else:
+            return False
 
     def save(self):
         self.native.save_config()

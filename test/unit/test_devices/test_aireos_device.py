@@ -15,15 +15,21 @@ from pyntc.devices.aireos_device import (
 
 BOOT_IMAGE = "8.2.170.0"
 BOOT_PATH = "pyntc.devices.aireos_device.AIREOSDevice.boot_options"
+REDUNANCY_STATE_PATH = "pyntc.devices.aireos_device.AIREOSDevice.redundancy_state"
+REDUNANCY_MODE_PATH = "pyntc.devices.aireos_device.AIREOSDevice.redundancy_mode"
 
 
 class TestAIREOSDevice:
     @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
     def setup(self, api):
+        with mock.patch(REDUNANCY_STATE_PATH, new_callable=mock.PropertyMock) as redundnacy_state:
+            redundnacy_state.return_value = True
 
-        if not getattr(self, "device", None):
-            self.device = AIREOSDevice("host", "user", "password")
+            if not getattr(self, "device", None):
+                self.device = AIREOSDevice("host", "user", "password")
 
+        api.send_command_timing.side_effect = send_command
+        api.send_command_expect.side_effect = send_command_expect
         self.device.native = api
         if not getattr(self, "count_setup", None):
             self.count_setup = 0
@@ -31,10 +37,6 @@ class TestAIREOSDevice:
         if not getattr(self, "count_teardown", None):
             self.count_teardown = 0
 
-        self.device = AIREOSDevice("host", "user", "password")
-        api.send_command_timing.side_effect = send_command
-        api.send_command_expect.side_effect = send_command_expect
-        self.device.native = api
         self.count_setup += 1
 
     def teardown(self):
@@ -209,6 +211,7 @@ class TestAIREOSDevice:
                 mock.call("transfer download serverip 10.1.1.1"),
                 mock.call("transfer download path local/"),
                 mock.call("transfer download filename os_file"),
+                mock.call("transfer download start"),
             ]
         )
 
@@ -224,6 +227,8 @@ class TestAIREOSDevice:
         mock_ib.side_effect = [False, True]
         assert self.device.install_os(BOOT_IMAGE) is True
         mock_ib.assert_has_calls([mock.call(BOOT_IMAGE)] * 2)
+        mock_sbo.assert_has_calls([mock.call(BOOT_IMAGE)])
+        mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
 
     @mock.patch.object(AIREOSDevice, "_image_booted", return_value=True)
     def test_install_os_no_install(self, mock_ib):
@@ -240,6 +245,15 @@ class TestAIREOSDevice:
             self.device.install_os(BOOT_IMAGE)
         mock_ib.assert_has_calls([mock.call(BOOT_IMAGE)] * 2)
 
+    @mock.patch.object(AIREOSDevice, "set_boot_options")
+    @mock.patch.object(AIREOSDevice, "reboot")
+    @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+    @mock.patch.object(AIREOSDevice, "_image_booted")
+    def test_install_os_pass_args(self, mock_ib, mock_wait, mock_reboot, mock_sbo):
+        mock_ib.side_effect = [False, True]
+        assert self.device.install_os(BOOT_IMAGE, controller="self", save_config=False) is True
+        mock_reboot.assert_called_with(confirm=True, controller="self", save_config=False)
+
     @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
     def test_open_prompt_found(self, mock_ch):
         self.device.connected = True
@@ -253,34 +267,110 @@ class TestAIREOSDevice:
     def test_open_prompt_not_found(self, mock_ch):
         self.device.connected = True
         self.device.native.find_prompt.side_effect = [Exception]
-        self.device.open()
+        with mock.patch(REDUNANCY_STATE_PATH, new_callable=mock.PropertyMock) as redundnacy_state:
+            redundnacy_state.return_value = True
+            self.device.open()
         mock_ch.assert_called()
         assert self.device.connected is True
 
     @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
     def test_open_not_connected(self, mock_ch):
         self.device.connected = False
-        self.device.open()
+        with mock.patch(REDUNANCY_STATE_PATH, new_callable=mock.PropertyMock) as redundnacy_state:
+            redundnacy_state.return_value = True
+            self.device.open()
         self.device.native.find_prompt.assert_not_called()
         mock_ch.assert_called()
         assert self.device.connected is True
 
+    @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
+    def test_open_standby(self, mock_ch):
+        self.device.connected = False
+        with mock.patch(REDUNANCY_STATE_PATH, new_callable=mock.PropertyMock) as redundnacy_state:
+            redundnacy_state.return_value = False
+            self.device.open()
+        self.device.native.find_prompt.assert_not_called()
+        mock_ch.assert_called()
+        assert self.device.connected is False
+
     @mock.patch("pyntc.devices.aireos_device.RebootSignal")
-    @mock.patch.object(AIREOSDevice, "show")
-    def test_reboot_confirm(self, mock_show, mock_reboot):
-        self.device.reboot(confirm=True)
-        mock_show.assert_called()
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_reboot_confirm(self, mock_save, mock_reboot):
+        self.device.native.send_command_timing.side_effect = [
+            "The system has unsaved changes.\nWould you like to save them now? (y/N)",
+            "restarting system!",
+        ]
+        with mock.patch(REDUNANCY_MODE_PATH, new_callable=mock.PropertyMock) as redundnacy_mode:
+            redundnacy_mode.return_value = "sso enabled"
+            self.device.reboot(confirm=True)
+        self.device.native.send_command_timing.assert_has_calls([mock.call("reset system self"), mock.call("y")])
+        mock_save.assert_called()
+
+    @mock.patch("pyntc.devices.aireos_device.RebootSignal")
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_reboot_confirm_args(self, mock_save, mock_reboot):
+        self.device.native.send_command_timing.side_effect = [
+            "The system has unsaved changes.\nWould you like to save them now? (y/N)",
+            "Configuration Not Saved!\nAre you sure you would like to reset the system? (y/N)",
+            "restarting system!",
+        ]
+        with mock.patch(REDUNANCY_MODE_PATH, new_callable=mock.PropertyMock) as redundnacy_mode:
+            redundnacy_mode.return_value = "sso enabled"
+            self.device.reboot(confirm=True, timer="00:00:10", controller="both", save_config=False)
+        self.device.native.send_command_timing.assert_has_calls(
+            [mock.call("reset system both in 00:00:10"), mock.call("n"), mock.call("y")]
+        )
+        mock_save.assert_not_called()
+
+    @mock.patch("pyntc.devices.aireos_device.RebootSignal")
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_reboot_confirm_standalone(self, mock_save, mock_reboot):
+        self.device.native.send_command_timing.side_effect = [
+            "The system has unsaved changes.\nWould you like to save them now? (y/N)",
+            "restarting system!",
+        ]
+        with mock.patch(REDUNANCY_MODE_PATH, new_callable=mock.PropertyMock) as redundnacy_mode:
+            redundnacy_mode.return_value = "sso disabled"
+            self.device.reboot(confirm=True)
+        self.device.native.send_command_timing.assert_has_calls([mock.call("reset system"), mock.call("y")])
+        mock_save.assert_called()
+
+    @mock.patch("pyntc.devices.aireos_device.RebootSignal")
+    @mock.patch.object(AIREOSDevice, "save")
+    def test_reboot_confirm_standalone_args(self, mock_save, mock_reboot):
+        self.device.native.send_command_timing.side_effect = [
+            "The system has unsaved changes.\nWould you like to save them now? (y/N)",
+            "Configuration Not Saved!\nAre you sure you would like to reset the system? (y/N)",
+            "restarting system!",
+        ]
+        with mock.patch(REDUNANCY_MODE_PATH, new_callable=mock.PropertyMock) as redundnacy_mode:
+            redundnacy_mode.return_value = "sso disabled"
+            self.device.reboot(confirm=True, timer="00:00:10", controller="both", save_config=False)
+        self.device.native.send_command_timing.assert_has_calls(
+            [mock.call("reset system in 00:00:10"), mock.call("n"), mock.call("y")]
+        )
+        mock_save.assert_not_called()
 
     @mock.patch("pyntc.devices.aireos_device.RebootSignal")
     def test_reboot_no_confirm(self, mock_reboot):
         self.device.reboot(confirm=False)
-        mock_reboot.assert_not_called()
+        self.device.native.send_command_timing.assert_not_called()
 
-    @mock.patch("pyntc.devices.aireos_device.RebootSignal")
-    def test_reboot_error(self, mock_reboot):
-        with pytest.raises(CommandError):
-            self.device.reboot(confirm=True, timer=30)
-        mock_reboot.assert_not_called()
+    def test_redundancy_mode_sso(self):
+        assert self.device.redundancy_mode == "sso enabled"
+
+    @mock.patch.object(AIREOSDevice, "show")
+    def test_redundancy_mode_standalone(self, mock_show):
+        mock_show.return_value = " Redundancy Mode = SSO DISABLED "
+        assert self.device.redundancy_mode == "sso disabled"
+
+    def test_redundancy_state_active(self):
+        assert self.device.redundancy_state is True
+
+    @mock.patch.object(AIREOSDevice, "show")
+    def test_redundancy_state_standby(self, mock_show):
+        mock_show.return_value = "     Local State = STANDBY HOT "
+        assert self.device.redundancy_state is False
 
     def test_save(self):
         save = self.device.save()
