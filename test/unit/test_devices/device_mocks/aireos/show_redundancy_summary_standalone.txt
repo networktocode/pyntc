@@ -1,0 +1,6 @@
+ Redundancy Mode = SSO DISABLED 
+     Local State = ACTIVE 
+            Unit = Primary
+         Unit ID = AB:12:CD:34:EF:56
+Redundancy State = SSO DISABLED
+    Mobility MAC = AB:12:CD:34:EF:56

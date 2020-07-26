@@ -19,6 +19,18 @@ from pyntc.errors import (
 )
 
 
+RE_FILENAME_FIND_VERSION = re.compile(r"^\S+?-[A-Za-z]{2}\d+-(?:\S+-?)?(?:K9-)?(?P<version>\d+-\d+-\d+-\d+)", re.M)
+
+
+def convert_filename_to_version(filename):
+    """
+    """
+    version_match = RE_FILENAME_FIND_VERSION.match(filename)
+    version_string = version_match.groupdict()["version"]
+    version = version_string.replace("-", ".")
+    return version
+
+
 @fix_docs
 class AIREOSDevice(BaseDevice):
     """Cisco AIREOS Device Implementation."""
@@ -90,6 +102,9 @@ class AIREOSDevice(BaseDevice):
         # TODO: Get proper hostname parameter
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
+    def backup_running_config(self, filename):
+        raise NotImplementedError
+
     @property
     def boot_options(self):
         show_boot_out = self.show("show boot")
@@ -111,6 +126,14 @@ class AIREOSDevice(BaseDevice):
         else:
             result = {"sys": None}
         return result
+
+    def checkpoint(self, filename):
+        raise NotImplementedError
+
+    def close(self):
+        if self._connected:
+            self.native.disconnect()
+            self._connected = False
 
     def config(self, command):
         self._enter_config()
@@ -137,11 +160,6 @@ class AIREOSDevice(BaseDevice):
     def connected(self, value):
         self._connected = value
 
-    def close(self):
-        if self.connected:
-            self.native.disconnect()
-            self.connected = False
-
     def enable(self):
         """Ensure device is in enable mode.
 
@@ -155,9 +173,17 @@ class AIREOSDevice(BaseDevice):
         if self.native.check_config_mode():
             self.native.exit_config_mode()
 
-    def file_copy(self, username, password, server, filepath, protocol="sftp", filetype="code"):
+    @property
+    def facts(self):
+        raise NotImplementedError
+
+    def file_copy(self, username, password, server, filepath, protocol="sftp", filetype="code", delay_factor=3):
         self.enable()
         filedir, filename = os.path.split(filepath)
+        if filetype == "code":
+            version = convert_filename_to_version(filename)
+            if version in self.boot_options.values():
+                return False
         try:
             self.show_list(
                 [
@@ -168,11 +194,21 @@ class AIREOSDevice(BaseDevice):
                     f"transfer download serverip {server}",
                     f"transfer download path {filedir}/",
                     f"transfer download filename {filename}",
-                    "transfer download start",
                 ]
             )
+            response = self.native.send_command_timing("transfer download start")
+            if "Are you sure you want to start? (y/N)" in response:
+                response = self.native.send_command(
+                    "y", expect_string="File transfer is successful.", delay_factor=delay_factor
+                )
+
         except:  # noqa E722
             raise FileTransferError
+
+        return True
+
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        raise NotImplementedError
 
     def install_os(self, image_name, controller="both", save_config=True, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -230,7 +266,7 @@ class AIREOSDevice(BaseDevice):
             if save_config:
                 self.save()
 
-            signal.alarm(15)
+            signal.alarm(20)
             try:
                 response = self.native.send_command_timing(reboot_command)
                 if "save" in response:
@@ -261,6 +297,13 @@ class AIREOSDevice(BaseDevice):
             return True
         else:
             return False
+
+    def rollback(self):
+        raise NotImplementedError
+
+    @property
+    def running_config(self):
+        raise NotImplementedError
 
     def save(self):
         self.native.save_config()
@@ -297,6 +340,10 @@ class AIREOSDevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
 
         return responses
+
+    @property
+    def startup_config(self):
+        raise NotImplementedError
 
     @property
     def uptime(self):

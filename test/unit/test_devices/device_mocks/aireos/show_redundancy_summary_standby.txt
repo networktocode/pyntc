@@ -1,0 +1,7 @@
+ Redundancy Mode = SSO ENABLED 
+     Local State = STANDBY HOT 
+      Peer State = ACTIVE
+            Unit = Primary
+         Unit ID = AB:12:CD:34:EF:56
+Redundancy State = SSO 
+    Mobility MAC = AB:12:CD:34:EF:56
