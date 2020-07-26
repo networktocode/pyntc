@@ -6,12 +6,6 @@ from unittest import mock
 from pyntc.devices import AIREOSDevice
 
 
-BOOT_IMAGE = "8.2.170.0"
-BOOT_PATH = "pyntc.devices.aireos_device.AIREOSDevice.boot_options"
-REDUNANCY_STATE_PATH = "pyntc.devices.aireos_device.AIREOSDevice.redundancy_state"
-REDUNANCY_MODE_PATH = "pyntc.devices.aireos_device.AIREOSDevice.redundancy_mode"
-
-
 def get_side_effects(mock_path, side_effects):
     effects = []
     for effect in side_effects:
@@ -21,6 +15,16 @@ def get_side_effects(mock_path, side_effects):
         else:
             effects.append(effect)
     return effects
+
+
+@pytest.fixture
+def aireos_boot_image():
+    return "8.2.170.0"
+
+
+@pytest.fixture
+def aireos_boot_path(aireos_device_path):
+    return f"{aireos_device_path}.boot_options"
 
 
 @pytest.fixture
@@ -45,6 +49,7 @@ def aireos_image_booted(aireos_device_path, aireos_device):
             mock_ib.side_effect = get_side_effects(aireos_device_path, side_effects)
             device._image_booted = mock_ib
         return device
+
     return _mock
 
 
@@ -54,10 +59,20 @@ def aireos_mock_path(mock_path):
 
 
 @pytest.fixture
-def aireos_redundancy_state(aireos_device_path):
-    with mock.patch(f"{aireos_device_path}.redundancy_state", new_callable=mock.PropertyMock) as rs:
+def aireos_redundancy_mode_path(aireos_device_path):
+    return f"{aireos_device_path}.redundancy_mode"
+
+
+@pytest.fixture
+def aireos_redundancy_state(aireos_redundancy_state_path):
+    with mock.patch(aireos_redundancy_state_path, new_callable=mock.PropertyMock) as rs:
         rs.return_value = True
         yield rs
+
+
+@pytest.fixture
+def aireos_redundancy_state_path(aireos_device_path):
+    return f"{aireos_device_path}.redundancy_state"
 
 
 @pytest.fixture
@@ -67,6 +82,7 @@ def aireos_send_command(aireos_device, aireos_mock_path):
             device = existing_device
         device.native.send_command.side_effect = get_side_effects(aireos_mock_path, side_effects)
         return device
+
     return _mock
 
 
@@ -77,6 +93,7 @@ def aireos_send_command_expect(aireos_device, aireos_mock_path):
             device = existing_device
         device.native.send_command_expect.side_effect = get_side_effects(aireos_mock_path, side_effects)
         return device
+
     return _mock
 
 
@@ -87,6 +104,7 @@ def aireos_send_command_timing(aireos_device, aireos_mock_path):
             device = existing_device
         device.native.send_command_timing.side_effect = get_side_effects(aireos_mock_path, side_effects)
         return device
+
     return _mock
 
 
@@ -99,6 +117,7 @@ def aireos_show(aireos_device, aireos_mock_path):
             mock_show.side_effect = get_side_effects(aireos_mock_path, side_effects)
         device.show = mock_show
         return device
+
     return _mock
 
 
@@ -111,6 +130,7 @@ def aireos_show_list(aireos_device, aireos_mock_path):
             mock_show_list.side_effect = get_side_effects(aireos_mock_path, side_effects)
         device.show = mock_show_list
         return device
+
     return _mock
 
 
