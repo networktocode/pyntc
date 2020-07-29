@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
-from jnpr.junos.utils.sw import SW as JunosNativdSW
+from jnpr.junos.utils.sw import SW as JunosNativeSW
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.exception import ConfigLoadError
@@ -21,16 +21,18 @@ from .system_features.file_copy.base_file_copy import FileTransferError
 
 @fix_docs
 class JunosDevice(BaseDevice):
+    """Juniper JunOS Device Implementation."""
+
+    vendor = "juniper"
+
     def __init__(self, host, username, password, *args, **kwargs):
-        super(JunosDevice, self).__init__(
-            host, username, password, *args, vendor="juniper", device_type="juniper_junos_netconf", **kwargs
-        )
+        super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
         self.open()
         self.cu = JunosNativeConfig(self.native)
         self.fs = JunosNativeFS(self.native)
-        self.sw = JunosNativdSW(self.native)
+        self.sw = JunosNativeSW(self.native)
 
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
@@ -95,7 +97,7 @@ class JunosDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -103,6 +105,10 @@ class JunosDevice(BaseDevice):
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
+
+    @property
+    def boot_options(self):
+        return self.facts["os_version"]
 
     def checkpoint(self, filename):
         self.save(filename)
@@ -182,9 +188,6 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def get_boot_options(self):
-        return self.facts["os_version"]
-
     def install_os(self, image_name, **vendor_specifics):
         raise NotImplementedError
 
@@ -193,6 +196,7 @@ class JunosDevice(BaseDevice):
             self.native.open()
 
     def reboot(self, timer=0, confirm=False):
+        self.sw = JunosNativeSW(self.native)
         if confirm:
             self.sw.reboot(in_min=timer)
         else:

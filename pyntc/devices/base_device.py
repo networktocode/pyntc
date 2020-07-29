@@ -1,8 +1,9 @@
-"""The module contains the base class that all device classes must inherit from.
-"""
+"""The module contains the base class that all device classes must inherit from."""
 
 import abc
 import importlib
+import warnings
+
 
 from pyntc.errors import NTCError, FeatureNotFoundError
 
@@ -20,13 +21,14 @@ def fix_docs(cls):
 
 
 class BaseDevice(object):
+    """Base Device ABC."""
+
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, username, password, vendor=None, device_type=None, **kwargs):
+    def __init__(self, host, username, password, device_type=None, **kwargs):
         self.host = host
         self.username = username
         self.password = password
-        self.vendor = vendor
         self.device_type = device_type
         self._facts = None
 
@@ -52,6 +54,17 @@ class BaseDevice(object):
 
         Args:
             filename (str): The local file path on which to save the running config.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def boot_options(self):
+        """Get current boot variables
+        like system image and kickstart image.
+
+        Returns:
+            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         raise NotImplementedError
 
@@ -94,7 +107,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def facts(self):
         """Return a dictionary of facts about the device.
 
@@ -182,16 +196,6 @@ class BaseDevice(object):
         """
 
     @abc.abstractmethod
-    def get_boot_options(self):
-        """Get current boot variables
-        like system image and kickstart image.
-
-        Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name
 
@@ -249,7 +253,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def running_config(self):
         """Return the running configuration of the device.
         """
@@ -282,7 +287,7 @@ class BaseDevice(object):
                 by the ``_get_file_system()`` method.
 
         Raises:
-            ValueError: When the boot options returned by the ``get_boot_options``
+            ValueError: When the boot options returned by the ``boot_options``
                 method does not match the ``image_name`` after the config command(s)
                 have been sent to the device.
         """
@@ -318,7 +323,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def startup_config(self):
         """Return the startup configuration of the device.
         """
@@ -341,6 +347,16 @@ class BaseDevice(object):
             raise FeatureNotFoundError(feature_name, self.device_type)
         except AttributeError:
             raise
+
+    def get_boot_options(self):
+        """Get current boot variables
+        like system image and kickstart image.
+
+        Returns:
+            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+        """
+        warnings.warn("get_boot_options() is deprecated; use boot_options property.", DeprecationWarning)
+        return self.boot_options
 
     def refresh(self):
         """Refresh caches on device instance.
@@ -368,7 +384,7 @@ class FileTransferError(NTCError):
 
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
-        super(RebootTimerError, self).__init__("Reboot timer not supported on %s." % device_type)
+        super().__init__("Reboot timer not supported on %s." % device_type)
 
 
 class RollbackError(NTCError):

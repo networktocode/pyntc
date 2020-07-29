@@ -5,10 +5,12 @@ import signal
 import os
 import re
 import time
+import warnings
 
-from pyntc.templates import get_structured_data
-from pyntc.data_model.converters import convert_dict_by_key
-from pyntc.data_model.key_maps import ios_key_maps
+from netmiko import ConnectHandler
+from netmiko import FileTransfer
+
+from pyntc.utils import convert_dict_by_key, get_structured_data
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
@@ -21,19 +23,20 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 
-from netmiko import ConnectHandler
-from netmiko import FileTransfer
+
+BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 
 
 @fix_docs
 class IOSDevice(BaseDevice):
+    """Cisco IOS Device Implementation."""
+
+    vendor = "cisco"
+
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super(IOSDevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_ios_ssh")
+        super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
-        self.host = host
-        self.username = username
-        self.password = password
         self.secret = secret
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
@@ -42,12 +45,11 @@ class IOSDevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        self.native.exit_config_mode()
-        if not self.native.check_enable_mode():
-            self.native.enable()
+        warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
+        self.enable()
 
     def _enter_config(self):
-        self._enable()
+        self.enable()
         self.native.config_mode()
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
@@ -69,9 +71,10 @@ class IOSDevice(BaseDevice):
         raw_data = self.show("dir")
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
         except AttributeError:
             raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+
+        return file_system
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -93,9 +96,10 @@ class IOSDevice(BaseDevice):
         show_version_out = self.show("show version")
         try:
             version_data = get_structured_data("cisco_ios_show_version.template", show_version_out)[0]
-            return version_data
         except IndexError:
             return {}
+
+        return version_data
 
     def _send_command(self, command, expect=False, expect_string=""):
         if expect:
@@ -147,7 +151,7 @@ class IOSDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -156,90 +160,8 @@ class IOSDevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
-    def checkpoint(self, checkpoint_file):
-        self.save(filename=checkpoint_file)
-
-    def close(self):
-        if self._connected:
-            self.native.disconnect()
-            self._connected = False
-
-    def config(self, command):
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
-
-    def config_list(self, commands):
-        self._enter_config()
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        self.native.exit_config_mode()
-
     @property
-    def facts(self):
-        if self._facts is None:
-            version_data = self._raw_version_data()
-            self._facts = convert_dict_by_key(version_data, ios_key_maps.BASIC_FACTS_KM)
-            self._facts["vendor"] = self.vendor
-
-            uptime_full_string = version_data["uptime"]
-            self._facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
-            self._facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
-            self._facts["fqdn"] = "N/A"
-            self._facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
-
-            if self._facts["model"].startswith("WS"):
-                self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
-            else:
-                self._facts["vlans"] = []
-
-            # ios-specific facts
-            self._facts[self.device_type] = {"config_register": version_data["config_register"]}
-
-        return self._facts
-
-    def file_copy(self, src, dest=None, file_system=None):
-        self._enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        if not self.file_copy_remote_exists(src, dest, file_system):
-            fc = self._file_copy_instance(src, dest, file_system=file_system)
-            #        if not self.fc.verify_space_available():
-            #            raise FileTransferError('Not enough space available.')
-
-            try:
-                fc.enable_scp()
-                fc.establish_scp_conn()
-                fc.transfer_file()
-            except:
-                raise FileTransferError
-            finally:
-                fc.close_scp_chan()
-
-            if not self.file_copy_remote_exists(src, dest, file_system):
-                raise FileTransferError(
-                    message="Attempted file copy, but could not validate file existed after transfer"
-                )
-
-    # TODO: Make this an internal method since exposing file_copy should be sufficient
-    def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        self._enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
-        if fc.check_file_exists() and fc.compare_md5():
-            return True
-        return False
-
-    def get_boot_options(self):
-        # TODO: CREATE A MOCK FOR TESTING THIS FUNCTION
+    def boot_options(self):
         boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
         try:
             # Try show bootvar command first
@@ -268,6 +190,101 @@ class IOSDevice(BaseDevice):
 
         return {"sys": boot_image}
 
+    def checkpoint(self, checkpoint_file):
+        self.save(filename=checkpoint_file)
+
+    def close(self):
+        if self._connected:
+            self.native.disconnect()
+            self._connected = False
+
+    def config(self, command):
+        self._enter_config()
+        self._send_command(command)
+        self.native.exit_config_mode()
+
+    def config_list(self, commands):
+        self._enter_config()
+        entered_commands = []
+        for command in commands:
+            entered_commands.append(command)
+            try:
+                self._send_command(command)
+            except CommandError as e:
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
+        self.native.exit_config_mode()
+
+    def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
+
+    @property
+    def facts(self):
+        if self._facts is None:
+            version_data = self._raw_version_data()
+            self._facts = convert_dict_by_key(version_data, BASIC_FACTS_KM)
+            self._facts["vendor"] = self.vendor
+
+            uptime_full_string = version_data["uptime"]
+            self._facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
+            self._facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
+            self._facts["fqdn"] = "N/A"
+            self._facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
+
+            if self._facts["model"].startswith("WS"):
+                self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
+            else:
+                self._facts["vlans"] = []
+
+            # ios-specific facts
+            self._facts[self.device_type] = {"config_register": version_data["config_register"]}
+
+        return self._facts
+
+    def file_copy(self, src, dest=None, file_system=None):
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            #        if not self.fc.verify_space_available():
+            #            raise FileTransferError('Not enough space available.')
+
+            try:
+                fc.enable_scp()
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            except:  # noqa E722
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
+
+            if not self.file_copy_remote_exists(src, dest, file_system):
+                raise FileTransferError(
+                    message="Attempted file copy, but could not validate file existed after transfer"
+                )
+
+    # TODO: Make this an internal method since exposing file_copy should be sufficient
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
+        if fc.check_file_exists() and fc.compare_md5():
+            return True
+        return False
+
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -285,7 +302,7 @@ class IOSDevice(BaseDevice):
         if self._connected:
             try:
                 self.native.find_prompt()
-            except:
+            except:  # noqa E722
                 self._connected = False
 
         if not self._connected:
@@ -367,7 +384,7 @@ class IOSDevice(BaseDevice):
             self.config_list(["no boot system", command])
 
         self.save()
-        new_boot_options = self.get_boot_options()["sys"]
+        new_boot_options = self.boot_options["sys"]
         if new_boot_options != image_name:
             raise CommandError(
                 command=command,
@@ -375,11 +392,11 @@ class IOSDevice(BaseDevice):
             )
 
     def show(self, command, expect=False, expect_string=""):
-        self._enable()
+        self.enable()
         return self._send_command(command, expect=expect, expect_string=expect_string)
 
     def show_list(self, commands):
-        self._enable()
+        self.enable()
 
         responses = []
         entered_commands = []

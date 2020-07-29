@@ -8,3 +8,5 @@ coverage_html_report/
 dist/
 .cache/
 .idea/
+.vscode/
+.pytest_cache/

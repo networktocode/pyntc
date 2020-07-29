@@ -5,11 +5,13 @@ import os
 import re
 import signal
 import time
+import warnings
+
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.templates import get_structured_data
+from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
 from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
@@ -22,15 +24,17 @@ from pyntc.errors import (
     OSInstallError,
 )
 
+
 @fix_docs
 class ASADevice(BaseDevice):
+    """Cisco ASA Device Implementation."""
+
+    vendor = "cisco"
+
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super(ASADevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_asa_ssh")
+        super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
         self.native = None
-        self.host = host
-        self.username = username
-        self.password = password
         self.secret = secret
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
@@ -39,12 +43,11 @@ class ASADevice(BaseDevice):
         self.open()
 
     def _enable(self):
-        self.native.exit_config_mode()
-        if not self.native.check_enable_mode():
-            self.native.enable()
+        warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
+        self.enable()
 
     def _enter_config(self):
-        self._enable()
+        self.enable()
         self.native.config_mode()
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
@@ -66,10 +69,12 @@ class ASADevice(BaseDevice):
         raw_data = self.show("dir")
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
+
         except AttributeError:
             # TODO: Get proper hostname
+
             raise FileSystemNotFoundError(hostname=self.host, command="dir")
+        return file_system
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -83,9 +88,6 @@ class ASADevice(BaseDevice):
         ip_int_data = get_structured_data("cisco_asa_show_interface.template", ip_int)
 
         return ip_int_data
-
-    def _is_catalyst(self):
-        return self.facts["model"].startswith("WS-")
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
@@ -145,7 +147,7 @@ class ASADevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         # TODO: Get proper hostname parameter
@@ -154,6 +156,20 @@ class ASADevice(BaseDevice):
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
+
+    @property
+    def boot_options(self):
+        show_boot_out = self.show("show boot | i BOOT variable")
+        # Improve regex to get only the first boot $var in the sequence!
+        boot_path_regex = r"Current BOOT variable = (\S+):\/(\S+)"
+
+        match = re.search(boot_path_regex, show_boot_out)
+        if match:
+            boot_image = match.group(2)
+        else:
+            boot_image = None
+
+        return dict(sys=boot_image)
 
     def checkpoint(self, checkpoint_file):
         self.save(filename=checkpoint_file)
@@ -179,13 +195,26 @@ class ASADevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
+
     @property
     def facts(self):
         """Implement this once facts' re-factor is done. """
         return {}
 
     def file_copy(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -198,7 +227,7 @@ class ASADevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
-            except:
+            except:  # noqa E722
                 raise FileTransferError
             finally:
                 fc.close_scp_chan()
@@ -210,7 +239,7 @@ class ASADevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        self._enable()
+        self.enable()
         if file_system is None:
             file_system = self._get_file_system()
 
@@ -218,19 +247,6 @@ class ASADevice(BaseDevice):
         if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
-
-    def get_boot_options(self):
-        show_boot_out = self.show("show boot | i BOOT variable")
-        # Improve regex to get only the first boot $var in the sequence!
-        boot_path_regex = r"Current BOOT variable = (\S+):\/(\S+)"
-
-        match = re.search(boot_path_regex, show_boot_out)
-        if match:
-            boot_image = match.group(2)
-        else:
-            boot_image = None
-
-        return dict(sys=boot_image)
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -249,7 +265,7 @@ class ASADevice(BaseDevice):
         if self._connected:
             try:
                 self.native.find_prompt()
-            except:
+            except:  # noqa E722
                 self._connected = False
 
         if not self._connected:
@@ -331,18 +347,18 @@ class ASADevice(BaseDevice):
         self.config_list(commands_to_exec)
 
         self.save()
-        if self.get_boot_options()["sys"] != image_name:
+        if self.boot_options["sys"] != image_name:
             raise CommandError(
                 command="boot system {0}/{1}".format(file_system, image_name),
                 message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):
-        self._enable()
+        self.enable()
         return self._send_command(command, expect=expect, expect_string=expect_string)
 
     def show_list(self, commands):
-        self._enable()
+        self.enable()
 
         responses = []
         entered_commands = []

@@ -4,7 +4,6 @@ import os
 import re
 import time
 
-from pyntc.data_model.converters import strip_unicode
 from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, RebootTimeoutError, OSInstallError
@@ -16,8 +15,12 @@ from pynxos.errors import CLIError
 
 @fix_docs
 class NXOSDevice(BaseDevice):
+    """Cisco NXOS Device Implementation."""
+
+    vendor = "cisco"
+
     def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):
-        super(NXOSDevice, self).__init__(host, username, password, vendor="cisco", device_type="cisco_nxos_nxapi")
+        super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
@@ -36,13 +39,17 @@ class NXOSDevice(BaseDevice):
                 self.refresh_facts()
                 if self.facts["uptime"] < 180:
                     return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)
+
+    @property
+    def boot_options(self):
+        return self.native.get_boot_options()
 
     def checkpoint(self, filename):
         return self.native.checkpoint(filename)
@@ -68,7 +75,7 @@ class NXOSDevice(BaseDevice):
             if hasattr(self.native, "_facts"):
                 del self.native._facts
 
-            self._facts = strip_unicode(self.native.facts)
+            self._facts = self.native.facts
             self._facts["vendor"] = self.vendor
         return self._facts
 
@@ -90,9 +97,6 @@ class NXOSDevice(BaseDevice):
     def file_copy_remote_exists(self, src, dest=None, file_system="bootflash:"):
         dest = dest or os.path.basename(src)
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
-
-    def get_boot_options(self):
-        return self.native.get_boot_options()
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -156,13 +160,13 @@ class NXOSDevice(BaseDevice):
 
     def show(self, command, raw_text=False):
         try:
-            return strip_unicode(self.native.show(command, raw_text=raw_text))
+            return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
             raise CommandError(command, str(e))
 
     def show_list(self, commands, raw_text=False):
         try:
-            return strip_unicode(self.native.show_list(commands, raw_text=raw_text))
+            return self.native.show_list(commands, raw_text=raw_text)
         except CLIError as e:
             raise CommandListError(commands, e.command, str(e))
 

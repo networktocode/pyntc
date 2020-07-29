@@ -4,8 +4,11 @@
 import re
 import time
 
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
-from pyntc.data_model.key_maps import eos_key_maps
+from pyeapi import connect as eos_connect
+from pyeapi.client import Node as EOSNative
+from pyeapi.eapilib import CommandError as EOSCommandError
+
+from pyntc.utils import convert_dict_by_key, convert_list_by_key
 from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
@@ -18,18 +21,27 @@ from pyntc.errors import (
     RebootTimeoutError,
     OSInstallError,
 )
-
-from pyeapi import connect as eos_connect
-from pyeapi.client import Node as EOSNative
-from pyeapi.eapilib import CommandError as EOSCommandError
-
 from .system_features.file_copy.base_file_copy import FileTransferError
+
+
+BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
+INTERFACES_KM = {
+    "speed": "bandwidth",
+    "duplex": "duplex",
+    "vlan": ["vlanInformation", "vlanId"],
+    "state": "linkStatus",
+    "description": "description",
+}
 
 
 @fix_docs
 class EOSDevice(BaseDevice):
+    """Arista EOS Device Implementation."""
+
+    vendor = "arista"
+
     def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
-        super(EOSDevice, self).__init__(host, username, password, vendor="arista", device_type="arista_eos_eapi")
+        super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
         self.timeout = timeout
         self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
@@ -47,9 +59,10 @@ class EOSDevice(BaseDevice):
         raw_data = self.show("dir", raw_text=True)
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-            return file_system
         except AttributeError:
             raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+
+        return file_system
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
@@ -78,7 +91,7 @@ class EOSDevice(BaseDevice):
             interface_dictionary["interface"] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(interfaces_list, eos_key_maps.INTERFACES_KM, fill_in=True, whitelist=["interface"])
+        return convert_list_by_key(interfaces_list, INTERFACES_KM, fill_in=True, whitelist=["interface"])
 
     def _parse_response(self, response, raw_text):
         if raw_text:
@@ -106,7 +119,7 @@ class EOSDevice(BaseDevice):
             try:
                 self.show("show hostname")
                 return
-            except:
+            except:  # noqa E722
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
@@ -114,6 +127,12 @@ class EOSDevice(BaseDevice):
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
+
+    @property
+    def boot_options(self):
+        image = self.show("show boot-config")["softwareImage"]
+        image = image.replace("flash:", "")
+        return dict(sys=image)
 
     def checkpoint(self, checkpoint_file):
         self.show("copy running-config %s" % checkpoint_file)
@@ -137,7 +156,7 @@ class EOSDevice(BaseDevice):
     def facts(self):
         if self._facts is None:
             sh_version_output = self.show("show version")
-            self._facts = convert_dict_by_key(sh_version_output, eos_key_maps.BASIC_FACTS_KM)
+            self._facts = convert_dict_by_key(sh_version_output, BASIC_FACTS_KM)
             self._facts["vendor"] = self.vendor
 
             uptime = int(time.time() - sh_version_output["bootupTimestamp"])
@@ -170,11 +189,6 @@ class EOSDevice(BaseDevice):
         if fc.remote_file_exists() and fc.already_transferred():
             return True
         return False
-
-    def get_boot_options(self):
-        image = self.show("show boot-config")["softwareImage"]
-        image = image.replace("flash:", "")
-        return dict(sys=image)
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -225,7 +239,7 @@ class EOSDevice(BaseDevice):
             raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
 
         self.show("install source {0}{1}".format(file_system, image_name))
-        if self.get_boot_options()["sys"] != image_name:
+        if self.boot_options["sys"] != image_name:
             raise CommandError(
                 command="install source {0}".format(image_name),
                 message="Setting install source did not yield expected results",
@@ -234,9 +248,10 @@ class EOSDevice(BaseDevice):
     def show(self, command, raw_text=False):
         try:
             response_list = self.show_list([command], raw_text=raw_text)
-            return response_list[0]
         except CommandListError as e:
             raise CommandError(e.command, e.message)
+
+        return response_list[0]
 
     def show_list(self, commands, raw_text=False):
         if raw_text:
@@ -245,9 +260,7 @@ class EOSDevice(BaseDevice):
             encoding = "json"
 
         try:
-            return strip_unicode(
-                self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
-            )
+            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
         except EOSCommandError as e:
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 

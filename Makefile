@@ -1,5 +1,7 @@
 unit_tests:
-	coverage run -m unittest discover ./test/unit -v
+	flake8 .
+	black --check .
+	coverage run -m pytest ./test/unit -v
 
 coverage_report:
 	coverage report -m

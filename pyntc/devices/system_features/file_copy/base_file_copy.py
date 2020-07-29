@@ -14,4 +14,4 @@ class FileTransferError(NTCError):
                 "Please make sure the local file exists and "
                 "that appropriate permissions are set on the remote device."
             )
-        super(FileTransferError, self).__init__(message)
+        super().__init__(message)

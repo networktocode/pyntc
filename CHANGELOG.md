@@ -13,6 +13,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Security
 
 
+## [0.0.10]
+### Added
+- Cisco WLC/AireOS Driver
+- [Poetry](https://python-poetry.org/)
+- `boot_options` property
+### Changed
+- Super calls migrated to Python 3 syntax
+- Moved templates package inside of utils package
+- Moved converters package inside of utils package
+- Moved constants to modules that used them instead of having separate modules
+### Deprecated
+- The `get_boot_options` method; replaced by `boot_options` property
+### Removed
+- Support for Python 2
+- `strip_unicode` function since support is not for Python 3
+### Fixed
+- All Unittests
+- IOS `enable` method failure condition when disabled
+### Security
+
+
 ## [0.0.9] - 2017-11-28
 ### Added
 - Method to fully install an OS on a device.

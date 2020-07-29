@@ -1,34 +1,41 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "flit.buildapi"
+requires = ["poetry>=^0.12"]
+build-backend = "poetry.masonry.api"
 
-[tool.flit.metadata]
-module = "pyntc"
-author = "Network to Code"
-author-email = "ntc@networktocode.com"
-home-page = "https://github.com/networktocode/pyntc"
-description-file = "README.md"
-requires = [
-    "requests>=2.7.0",
-    "jsonschema",
-    "future",
-    "netmiko",
-    "paramiko",
-    "pynxos>=0.0.3",
-    "coverage",
-    "mock>=1.3",
-    "textfsm",
-    "terminal",
-    "f5-sdk",
-    "bigsuds",
-    "pyeapi",
-    "junos-eznc",
-    "scp",
-]
+[tool.poetry]
+name = "pyntc"
+version = "0.0.10"
+description = "SDK to simplify common workflows for Network Devices."
+authors = ["NTC <info@networktocode.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+bigsuds = "^1.0.6"
+f5-sdk = "^3.0.21"
+junos-eznc = "^2.4.1"
+netmiko = "^3.1"
+paramiko = "^2.7"
+pyeapi = "^0.8.3"
+pynxos = "^0.0.5"
+requests = "^2.23"
+scp = "^0.13.2"
+textfsm = "^1.1"
+
+[tool.poetry.dev-dependencies]
+coverage = "^5.1"
+mock = "^4.0.2"
+tox = "^3.15.0"
+pylint = "^2.5.2"
+flake8 = "^3.8.1"
+black = "^19.10b0"
+pydocstyle = "^5.0.2"
+bandit = "^1.6.2"
+coveralls = "^2.0.0"
+pytest = "^5.4.2"
 
 [tool.black]
 line-length = 120
-py36 = true
 include = '\.pyi?$'
 exclude = '''
 /(

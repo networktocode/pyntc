@@ -8,7 +8,7 @@ from .ios_device import IOSDevice
 from .jnpr_device import JunosDevice
 from .asa_device import ASADevice
 from .f5_device import F5Device
-from .base_device import BaseDevice
+from .aireos_device import AIREOSDevice
 
 
 supported_devices = {
@@ -18,4 +18,5 @@ supported_devices = {
     "cisco_ios_ssh": IOSDevice,
     "juniper_junos_netconf": JunosDevice,
     "cisco_nxos_nxapi": NXOSDevice,
+    "cisco_aireos_ssh": AIREOSDevice,
 }

@@ -10,21 +10,20 @@ import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
-from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, \
-    NTCFileNotFoundError
+from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, NTCFileNotFoundError
 from .base_device import BaseDevice
 from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 class F5Device(BaseDevice):
-    def __init__(self, host, username, password, **kwargs):
-        super(F5Device, self).__init__(host, username, password, vendor="f5", device_type="f5_tmos_icontrol")
+    """F5 LTM Device Implementation."""
 
-        self.vendor = "F5 Networks"
-        self.hostname = host
-        self.username = username
-        self.password = password
-        self.api_handler = ManagementRoot(self.hostname, self.username, self.password)
+    vendor = "f5"
+
+    def __init__(self, host, username, password, **kwargs):
+        super().__init__(host, username, password, device_type="f5_tmos_icontrol")
+
+        self.api_handler = ManagementRoot(self.host, self.username, self.password)
         self._open_soap()
 
     def _check_free_space(self, min_space=0):
@@ -43,7 +42,7 @@ class F5Device(BaseDevice):
         elif free_space >= min_space:
             return
         elif free_space < min_space:
-            raise NotEnoughFreeSpaceError(hostname=self.facts.get("hostname"), min_space=min_space)
+            raise NotEnoughFreeSpaceError(hostname=self.facts.get("host"), min_space=min_space)
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct
@@ -124,7 +123,7 @@ class F5Device(BaseDevice):
         free_space_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "vgdisplay -s --units G"')
         if free_space_output:
             free_space = free_space_output.commandResult
-            free_space_regex = ".*\s\/\s(\d+\.?\d+) GB free"
+            free_space_regex = r".*\s\/\s(\d+\.?\d+) GB free"
             match = re.match(free_space_regex, free_space)
 
             if match:
@@ -238,7 +237,7 @@ class F5Device(BaseDevice):
 
     def _open_soap(self):
         try:
-            self.soap_handler = bigsuds.BIGIP(hostname=self.hostname, username=self.username, password=self.password)
+            self.soap_handler = bigsuds.BIGIP(hostname=self.host, username=self.username, password=self.password)
             self.devices = self.soap_handler.Management.Device.get_list()
         except bigsuds.OperationFailed as err:
             raise RuntimeError("ConfigSync API Error ({})".format(err))
@@ -260,7 +259,7 @@ class F5Device(BaseDevice):
         """ Reconnects to the device
 
         """
-        self.api_handler = ManagementRoot(self.hostname, self.username, self.password)
+        self.api_handler = ManagementRoot(self.host, self.username, self.password)
 
     def _upload_image(self, image_filepath):
         """Uploads an iso image to the device
@@ -270,7 +269,7 @@ class F5Device(BaseDevice):
         """
         image_filename = os.path.basename(image_filepath)
         _URI = "https://{hostname}/mgmt/cm/autodeploy/software-image-uploads/{filename}".format(
-            hostname=self.hostname, filename=image_filename
+            hostname=self.host, filename=image_filename
         )
         chunk_size = 512 * 1024
         size = os.path.getsize(image_filepath)
@@ -289,9 +288,7 @@ class F5Device(BaseDevice):
                     end = size
                 content_range = "{}-{}/{}".format(start, end - 1, size)
                 headers["Content-Range"] = content_range
-                resp = requests.post(
-                    _URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False
-                )
+                requests.post(_URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False)
 
                 start += len(payload)
 
@@ -357,13 +354,19 @@ class F5Device(BaseDevice):
             try:
                 if self.image_installed(image_name=image_name, volume=volume):
                     return
-            except:
+            except:  # noqa E722
                 pass
 
         raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
 
     def backup_running_config(self, filename):
         raise NotImplementedError
+
+    @property
+    def boot_options(self):
+        active_volume = self._get_active_volume()
+
+        return {"active_volume": active_volume}
 
     def checkpoint(self, filename):
         raise NotImplementedError
@@ -417,11 +420,6 @@ class F5Device(BaseDevice):
         else:
             return True
 
-    def get_boot_options(self):
-        active_volume = self._get_active_volume()
-
-        return {"active_volume": active_volume}
-
     def image_installed(self, image_name, volume):
         """Checks if image is installed on a specified volume
 
@@ -445,23 +443,20 @@ class F5Device(BaseDevice):
             for _volume in volumes:
                 if (
                     _volume.name == volume
-                    and _volume.version == image.version
-                    and _volume.basebuild == image.build
-                    and _volume.status == "complete"
+                    and _volume.version == image.version  # noqa W503
+                    and _volume.basebuild == image.build  # noqa W503
+                    and _volume.status == "complete"  # noqa W503
                 ):
                     return True
 
         return False
 
     def install_os(self, image_name, **vendor_specifics):
-        volume = vendor_specifics.get('volume')
+        volume = vendor_specifics.get("volume")
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
-                raise NTCFileNotFoundError(
-                    hostname=self._get_hostname(), file=image_name,
-                    dir='/shared/images'
-                )
+                raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -499,10 +494,7 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get("volume")
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
-            raise NTCFileNotFoundError(
-                hostname=self._get_hostname(), file=image_name,
-                dir='/shared/images'
-            )
+            raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 

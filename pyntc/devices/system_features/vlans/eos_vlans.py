@@ -1,6 +1,8 @@
 from .base_vlans import BaseVlans, vlan_not_in_range_error
-from pyntc.data_model.key_maps.eos_key_maps import VLAN_KM
-from pyntc.data_model.converters import convert_dict_by_key, convert_list_by_key, strip_unicode
+from pyntc.utils import convert_dict_by_key
+
+
+VLAN_KM = {"state": "state", "name": "name", "id": "vlan_id"}
 
 
 def instance(device):
@@ -27,19 +29,17 @@ class EOSVlans(BaseVlans):
         converted = convert_dict_by_key(native_vlan_response, VLAN_KM)
         converted["id"] = vlan_id
 
-        return strip_unicode(converted)
+        return converted
 
     #    def get_all(self):
     #        native_all_vlan_response = self.native_vlans.getall()
     #        detailed_vlan_list = convert_list_by_key(native_all_vlan_response.values(), VLAN_KM)
-    #
-    #        return strip_unicode(detailed_vlan_list)
 
     def get_list(self):
         native_all_vlan_response = self.native_vlans.getall()
         extracted_vlan_ids = sorted(list(native_all_vlan_response.keys()))
 
-        return strip_unicode(extracted_vlan_ids)
+        return extracted_vlan_ids
 
     def remove(self, vlan_id):
         vlan_not_in_range_error(vlan_id)
