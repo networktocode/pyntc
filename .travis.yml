@@ -12,9 +12,8 @@ install:
   # Install Tox, which is currently our testrunner and helper
   - pip install tox
 
+
 script:
   # Run all our tests
   - tox
-
-after_success:
-    - coveralls
+  - tox -e coveralls
