@@ -107,7 +107,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def facts(self):
         """Return a dictionary of facts about the device.
 
@@ -252,7 +253,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def running_config(self):
         """Return the running configuration of the device.
         """
@@ -321,7 +323,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def startup_config(self):
         """Return the startup configuration of the device.
         """

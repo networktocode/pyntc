@@ -42,7 +42,7 @@ class TestJnprDevice(unittest.TestCase):
         command = "asdf poknw"
         self.device.cu.load.side_effect = ConfigLoadError(command)
 
-        with self.assertRaisesRegexp(CommandError, command):
+        with self.assertRaisesRegex(CommandError, command):
             self.device.config(command)
 
     def test_config_list(self):
@@ -65,7 +65,7 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device.cu.load.side_effect = load_side_effect
 
-        with self.assertRaisesRegexp(CommandListError, commands[1]):
+        with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
 
     def test_show(self):
