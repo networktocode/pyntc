@@ -1,4 +1,5 @@
-[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=master)](https://travis-ci.org/networktocode/pyntc) [![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=master)](https://coveralls.io/github/networktocode/pyntc?branch=master)
+[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=master)](https://travis-ci.org/networktocode/pyntc)
+[![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=master)](https://coveralls.io/github/networktocode/pyntc?branch=master)
 
 # Introduction
 
@@ -13,20 +14,20 @@ It's main purpose is to simplify the execution of common tasks including:
 
 # Supported Platforms
 
+* Cisco AireOS - uses netmiko (SSH)
+* Cisco ASA - uses netmiko (SSH)
 * Cisco IOS platforms - uses netmiko (SSH)
 * Cisco NX-OS - uses pynxos (NX-API)
 * Arista EOS - uses pyeapi (eAPI)
 * Juniper Junos - uses PyEz (NETCONF)
 * F5 Networks - uses f5-sdk (ReST)
 
-It is a multi-vendor AND multi-API library.
-
 # Installing pyntc
 
 Option 1:
 
 ```
-"sudo pip install pyntc" or "sudo pip install pyntc --upgrade"
+"pip install pyntc" or "pip install pyntc --upgrade"
 ```
 
 Option 2:
@@ -43,7 +44,7 @@ poetry install
 
 There are two ways to get started with pyntc.
 
-The first way is to use the `ntc_device` object.  Just pass in all required parameters to the object to initialize your device.  Here we are showing the import, but renaming the object to `NTC`.
+The first way is to use the `ntc_device` object. Just pass in all required parameters to the object to initialize your device.  Here we are showing the import, but renaming the object to `NTC`.
 
 ```
 >>> from pyntc import ntc_device as NTC
@@ -53,10 +54,13 @@ The first way is to use the `ntc_device` object.  Just pass in all required para
 Like many libraries, we need to pass in the host/IP and credentials.  Because this is a multi-vendor/API library, we also use the `device_type` parameter to identify which device we are building an instance of.
 
 pyntc currently supports four device types:
+* cisco_aireos_ssh
+* cisco_asa_ssh
 * cisco_ios_ssh
 * cisco_nxos_nxapi
 * arista_eos_eapi
 * juniper_junos_netconf
+* f5_tmos_icontrol
 
 The example below shows how to build a device object when working with a Cisco IOS router.
 
