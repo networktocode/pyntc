@@ -417,11 +417,14 @@ class AIREOSDevice(BaseDevice):
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
+            peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
             self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
+            if not self.peer_redundancy_state == peer_redundancy:
+                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=image_name)
 
             return True
 
@@ -455,6 +458,24 @@ class AIREOSDevice(BaseDevice):
         # This prevents open sessions from connecting to STANDBY WLC
         if not self.redundancy_state:
             self.close()
+
+    @property
+    def peer_redundancy_state(self):
+        """
+        Determine the state of the peer device.
+
+        Returns:
+            str: The Peer State from the local device's perspective.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>>
+        """
+        ha = self.show("show redundancy summary")
+        ha_peer_state = re.search(r"^\s*Peer\s+State\s*=\s*(.+?)\s*$", ha, re.M)
+        return ha_peer_state.group(1).lower()
 
     def reboot(self, timer=0, confirm=False, controller="self", save_config=True):
         """
