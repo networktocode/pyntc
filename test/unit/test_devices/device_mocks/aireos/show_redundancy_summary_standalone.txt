@@ -1,6 +1,9 @@
  Redundancy Mode = SSO DISABLED 
      Local State = ACTIVE 
+      Peer State = N/A
             Unit = Primary
          Unit ID = AB:12:CD:34:EF:56
-Redundancy State = SSO DISABLED
+Redundancy State = N/A
     Mobility MAC = AB:12:CD:34:EF:56
+Redundancy Port = DOWN
+ Link Encryption = Enabled

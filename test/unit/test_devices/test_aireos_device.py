@@ -264,12 +264,14 @@ def test_file_copy_error(mock_cftv, aireos_device_path, aireos_send_command_timi
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
-def test_install_os(mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_install_os(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image) is True
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
     mock_sbo.assert_has_calls([mock.call(aireos_boot_image)])
     mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
+    mock_prs.assert_called()
 
 
 def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
@@ -281,17 +283,33 @@ def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
-def test_install_os_error(mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_install_os_error(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
     device = aireos_image_booted([False, False])
-    with pytest.raises(OSInstallError):
+    with pytest.raises(OSInstallError) as boot_error:
         device.install_os(aireos_boot_image)
+    assert boot_error.value.message == f"{device.host} was unable to boot into {aireos_boot_image}"
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
 
 
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
-def test_install_os_pass_args(mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_install_os_error_peer(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+    mock_prs.side_effect = ["standby hot", "unknown"]
+    device = aireos_image_booted([False, True])
+    with pytest.raises(OSInstallError) as boot_error:
+        device.install_os(aireos_boot_image)
+    assert boot_error.value.message == f"{device.host}-standby was unable to boot into {aireos_boot_image}"
+    device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
+
+
+@mock.patch.object(AIREOSDevice, "set_boot_options")
+@mock.patch.object(AIREOSDevice, "reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_install_os_pass_args(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image, controller="self", save_config=False) is True
     mock_reboot.assert_called_with(confirm=True, controller="self", save_config=False)
@@ -338,6 +356,16 @@ def test_open_standby(mock_ch, aireos_device, aireos_redundancy_state_path):
     aireos_device.native.find_prompt.assert_not_called()
     mock_ch.assert_called()
     assert aireos_device.connected is False
+
+
+def test_peer_redundancy_state_standby_hot(aireos_show):
+    device = aireos_show(["show_redundancy_summary_sso_enabled.txt"])
+    assert device.peer_redundancy_state == "standby hot"
+
+
+def test_peer_redundancy_state_standalone(aireos_show):
+    device = aireos_show(["show_redundancy_summary_standalone.txt"])
+    assert device.peer_redundancy_state == "n/a"
 
 
 @mock.patch("pyntc.devices.aireos_device.RebootSignal")
