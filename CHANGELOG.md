@@ -13,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Security
 
 
+##  [0.0.11]
+
+### Added
+- AIREOSDevice property, ``peer_redundancy_state`` for standby device status
+
+### Changed
+- AIREOSDevice ``os_install`` method verifies standby device is in same state as before install
+
 ## [0.0.10]
 ### Added
 - Cisco WLC/AireOS Driver
