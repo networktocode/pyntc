@@ -2,7 +2,7 @@ import unittest
 import mock
 import os
 
-from .device_mocks.eos import enable, config
+from .device_mocks.eos import send_command, send_command_expect
 from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError, RebootTimerError
 from pyntc.devices.system_features.file_copy.eos_file_copy import EOSFileCopy
@@ -11,21 +11,26 @@ from pyntc.errors import CommandError, CommandListError
 
 
 class TestEOSDevice(unittest.TestCase):
-    @mock.patch("pyeapi.client.Node", autospec=True)
-    def setUp(self, mock_node):
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def setUp(self, mock_miko, mock_close, mock_open):
         self.device = EOSDevice("host", "user", "pass")
-        self.maxDiff = None
 
-        mock_node.enable.side_effect = enable
-        mock_node.config.side_effect = config
-        self.device.native = mock_node
+        mock_miko.send_command_timing.side_effect = send_command
+        mock_miko.send_command_expect.side_effect = send_command_expect
+        self.device.native = mock_miko
+
+    def tearDown(self):
+        # Reset the mock so we don't have transient test effects
+        self.device.native.reset_mock()
 
     def test_config(self):
         command = "interface Eth1"
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.native.config.assert_called_with([command])
+        self.device.native.send_command_timing.assert_called_with(command)
 
     def test_bad_config(self):
         command = "asdf poknw"
@@ -38,10 +43,14 @@ class TestEOSDevice(unittest.TestCase):
         result = self.device.config_list(commands)
 
         self.assertIsNone(result)
-        self.device.native.config.assert_called_with(commands)
+        for cmd in commands:
+            self.device.native.send_command_timing.assert_any_call(cmd)
 
     def test_bad_config_list(self):
         commands = ["interface Eth1", "apons"]
+        results = ["ok", "Error: apons"]
+
+        self.device.native.send_command_timing.side_effect = results
 
         with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
@@ -50,24 +59,17 @@ class TestEOSDevice(unittest.TestCase):
         command = "show ip arp"
         result = self.device.show(command)
 
-        self.assertIsInstance(result, dict)
-        self.assertNotIn("command", result)
-        self.assertIn("dynamicEntries", result)
+        self.assertIsInstance(result, str)
+        self.assertIn("Address", result)
+        self.assertIn("Age", result)
 
-        self.device.native.enable.assert_called_with([command], encoding="json")
+        self.device.native.send_command_timing.assert_called_with(command)
 
     def test_bad_show(self):
         command = "show microsoft"
+        self.device.native.send_command_timing.return_value = "Error: Microsoft"
         with self.assertRaises(CommandError):
             self.device.show(command)
-
-    def test_show_raw_text(self):
-        command = "show hostname"
-        result = self.device.show(command, raw_text=True)
-
-        self.assertIsInstance(result, str)
-        self.assertEqual(result, "Hostname: spine1\nFQDN:     spine1.ntc.com\n")
-        self.device.native.enable.assert_called_with([command], encoding="text")
 
     def test_show_list(self):
         commands = ["show hostname", "show clock"]
@@ -75,30 +77,31 @@ class TestEOSDevice(unittest.TestCase):
         result = self.device.show_list(commands)
         self.assertIsInstance(result, list)
 
-        self.assertIn("hostname", result[0])
-        self.assertIn("fqdn", result[0])
-        self.assertIn("output", result[1])
+        self.assertIn("Hostname", result[0])
+        self.assertIn("FQDN", result[0])
+        self.assertIn("Timezone", result[1])
 
-        self.device.native.enable.assert_called_with(commands, encoding="json")
+        calls = list(mock.call(x) for x in commands)
+        self.device.native.send_command_timing.assert_has_calls(calls)
 
     def test_bad_show_list(self):
         commands = ["show badcommand", "show clock"]
+        results = ["Error: badcommand", "Fri Jan 22 23:29:21 2016 Timezone: UTC Clock source: local"]
+
+        self.device.native.send_command_timing.side_effect = results
+
         with self.assertRaisesRegex(CommandListError, "show badcommand"):
             self.device.show_list(commands)
 
     def test_save(self):
         result = self.device.save()
         self.assertTrue(result)
-        self.device.native.enable.assert_called_with(["copy running-config startup-config"], encoding="json")
+        self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
-    @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
-    @mock.patch.object(EOSFileCopy, "already_transferred", autospec=True)
-    def test_file_copy_remote_exists(self, mock_fc_at, mock_fc_rfe):
-        mock_fc_at.return_value = True
-        mock_fc_at.return_value = True
-        result = self.device.file_copy_remote_exists("source_file")
-
+    def test_file_copy_remote_exists(self):
+        result = self.device.save()
         self.assertTrue(result)
+        self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
     @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
     def test_file_copy_remote_exists_failure(self, mock_fc):

@@ -3,13 +3,15 @@
 
 import re
 import time
+import os
 
-from pyeapi import connect as eos_connect
-from pyeapi.client import Node as EOSNative
-from pyeapi.eapilib import CommandError as EOSCommandError
+from netmiko import ConnectHandler
+from netmiko import FileTransfer
+
 
 from pyntc.utils import convert_dict_by_key, convert_list_by_key
-from .system_features.file_copy.eos_file_copy import EOSFileCopy
+
+# from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
@@ -40,12 +42,19 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
-        super().__init__(host, username, password, device_type="arista_eos_eapi")
-        self.transport = transport
-        self.timeout = timeout
-        self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
-        self.native = EOSNative(self.connection)
+    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+        super().__init__(host, username, password, device_type="arista_eos_ssh")
+        self.secret = secret
+        self.port = int(port)
+        self.global_delay_factor = kwargs.get("global_delay_factor", 1)
+        self.delay_factor = kwargs.get("delay_factor", 1)
+        self.native = None
+        self._connected = False
+        self.open()
+
+    def _enter_config(self):
+        self.enable()
+        self.native.config_mode()
 
     def _get_file_system(self):
         """Determines the default file system or directory for device.
@@ -99,6 +108,20 @@ class EOSDevice(BaseDevice):
         else:
             return list(x["result"] for x in response)
 
+    def _send_command(self, command, expect=False, expect_string=""):
+        if expect:
+            if expect_string:
+                response = self.native.send_command_expect(command, expect_string=expect_string)
+            else:
+                response = self.native.send_command_expect(command)
+        else:
+            response = self.native.send_command_timing(command)
+
+        if "% " in response or "Error:" in response:
+            raise CommandError(command, response)
+
+        return response
+
     def _uptime_to_string(self, uptime):
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
@@ -124,6 +147,13 @@ class EOSDevice(BaseDevice):
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
+    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+        if dest is None:
+            dest = os.path.basename(src)
+
+        fc = FileTransfer(self.native, src, dest, file_system=file_system)
+        return fc
+
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
@@ -141,16 +171,34 @@ class EOSDevice(BaseDevice):
         pass
 
     def config(self, command):
-        try:
-            self.config_list([command])
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
+        self._enter_config()
+        self._send_command(command)
+        self.native.exit_config_mode()
 
     def config_list(self, commands):
-        try:
-            self.native.config(commands)
-        except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+        self._enter_config()
+        entered_commands = []
+
+        for cmd in commands:
+            entered_commands.append(cmd)
+            try:
+                self._send_command(cmd)
+            except CommandError as e:
+                raise CommandListError(entered_commands, cmd, e.cli_error_msg)
+        self.native.exit_config_mode()
+
+    def enable(self):
+        """Ensure device is in enable mode.
+
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native.check_enable_mode():
+            self.native.enable()
+        # Ensure device is not in config mode
+        if self.native.check_config_mode():
+            self.native.exit_config_mode()
 
     @property
     def facts(self):
@@ -173,22 +221,53 @@ class EOSDevice(BaseDevice):
 
         return self._facts
 
-    def file_copy(self, src, dest=None, **kwargs):
-        if not self.file_copy_remote_exists(src, dest, **kwargs):
-            fc = EOSFileCopy(self, src, dest)
-            fc.send()
+    def file_copy(self, src, dest=None, file_system=None):
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
 
-            if not self.file_copy_remote_exists(src, dest, **kwargs):
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            #        if not self.fc.verify_space_available():
+            #            raise FileTransferError('Not enough space available.')
+
+            try:
+                fc.enable_scp()
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            except:  # noqa E722
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
+
+            if not self.file_copy_remote_exists(src, dest, file_system):
                 raise FileTransferError(
                     message="Attempted file copy, but could not validate file existed after transfer"
                 )
+        # if not self.file_copy_remote_exists(src, dest, **kwargs):
+        #     fc = EOSFileCopy(self, src, dest)
+        #     fc.send()
+
+        #     if not self.file_copy_remote_exists(src, dest, **kwargs):
+        #         raise FileTransferError(
+        #             message="Attempted file copy, but could not validate file existed after transfer"
+        #         )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
-    def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        fc = EOSFileCopy(self, src, dest)
-        if fc.remote_file_exists() and fc.already_transferred():
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
+        if fc.check_file_exists() and fc.compare_md5():
             return True
         return False
+
+        # fc = EOSFileCopy(self, src, dest)
+        # if fc.remote_file_exists() and fc.already_transferred():
+        #     return True
+        # return False
 
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
@@ -204,7 +283,26 @@ class EOSDevice(BaseDevice):
         return False
 
     def open(self):
-        pass
+        """Opens ssh connection with Netmiko ConnectHandler to be used with FileTransfer
+        """
+        if self._connected:
+            try:
+                self.native.find_prompt()
+            except Exception:
+                self._connected = False
+
+        if not self._connected:
+            self.native = ConnectHandler(
+                device_type="arista_eos",
+                ip=self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                global_delay_factor=self.global_delay_factor,
+                secret=self.secret,
+                verbose=False,
+            )
+            self._connected = True
 
     def reboot(self, confirm=False, timer=0):
         if timer != 0:
@@ -226,7 +324,24 @@ class EOSDevice(BaseDevice):
         return self.show("show running-config", raw_text=True)
 
     def save(self, filename="startup-config"):
-        self.show("copy running-config %s" % filename)
+        """Seve startup configuration
+
+        Args:
+            filename (str, optional): filename to save. Defaults to "startup-config".
+
+        Returns:
+            bool: True if successful
+        """
+        self.native.send_command_timing("copy running-config %s" % filename)
+
+        # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
+        # This will send return without requiring an OK.
+        # Send a return to pass the [OK]? message - Incease delay_factor for looking for response.
+        self.native.send_command_timing("\n", delay_factor=2)
+
+        # Confirm that we have a valid prompt again before returning.
+        self.native.find_prompt()
+
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
@@ -245,24 +360,23 @@ class EOSDevice(BaseDevice):
                 message="Setting install source did not yield expected results",
             )
 
-    def show(self, command, raw_text=False):
-        try:
-            response_list = self.show_list([command], raw_text=raw_text)
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
+    def show(self, command, expect=False, expect_string=""):
+        self.enable()
+        return self._send_command(command, expect=expect, expect_string=expect_string)
 
-        return response_list[0]
+    def show_list(self, commands):
+        self.enable()
 
-    def show_list(self, commands, raw_text=False):
-        if raw_text:
-            encoding = "text"
-        else:
-            encoding = "json"
+        responses = []
+        entered_commands = []
+        for cmd in commands:
+            entered_commands.append(cmd)
+            try:
+                responses.append(self._send_command(cmd))
+            except CommandError as e:
+                raise CommandListError(entered_commands, cmd, e.cli_error_msg)
 
-        try:
-            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
-        except EOSCommandError as e:
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+        return responses
 
     @property
     def startup_config(self):

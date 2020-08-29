@@ -1,0 +1,3 @@
+Interface                  IP-Address      OK? Method Status                Protocol
+FastEthernet0/0            10.1.100.45     YES NVRAM  up                    up
+FastEthernet0/1            unassigned      YES NVRAM  up                    down
