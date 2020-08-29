@@ -65,7 +65,7 @@ class EOSDevice(BaseDevice):
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir", raw_text=True)
+        raw_data = self.show("dir")
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
@@ -160,9 +160,9 @@ class EOSDevice(BaseDevice):
 
     @property
     def boot_options(self):
-        image = self.show("show boot-config")["softwareImage"]
+        image = self.show("show boot-config")
         image = image.replace("flash:", "")
-        return dict(sys=image)
+        return image
 
     def checkpoint(self, checkpoint_file):
         self.show("copy running-config %s" % checkpoint_file)
@@ -264,11 +264,6 @@ class EOSDevice(BaseDevice):
             return True
         return False
 
-        # fc = EOSFileCopy(self, src, dest)
-        # if fc.remote_file_exists() and fc.already_transferred():
-        #     return True
-        # return False
-
     def install_os(self, image_name, **vendor_specifics):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -316,12 +311,12 @@ class EOSDevice(BaseDevice):
     def rollback(self, rollback_to):
         try:
             self.show("configure replace %s force" % rollback_to)
-        except (CommandError, CommandListError):
+        except CommandError:
             raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
 
     @property
     def running_config(self):
-        return self.show("show running-config", raw_text=True)
+        return self.show("show running-config")
 
     def save(self, filename="startup-config"):
         """Seve startup configuration
@@ -349,7 +344,7 @@ class EOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
+        file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
 
@@ -380,7 +375,7 @@ class EOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
-        return self.show("show startup-config", raw_text=True)
+        return self.show("show startup-config")
 
 
 class RebootSignal(NTCError):
