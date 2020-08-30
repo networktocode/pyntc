@@ -1,0 +1,5 @@
+VLAN  Name                             Status    Ports
+----- -------------------------------- --------- -------------------------------
+1     default                           active
+2148  VLAN2148                          active    Cpu, Et1, Et26
+2700  VLAN2700                          active    Cpu, Et18

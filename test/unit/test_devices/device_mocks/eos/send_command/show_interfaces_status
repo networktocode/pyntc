@@ -1,0 +1,6 @@
+Port      Name              Status       Vlan        Duplex  Speed Type
+Et1                         connected    1             full    10G 10GBASE-SRL
+Et2                         connected    1             full    10G 10GBASE-SRL
+Et3                         connected    1             full    10G 10GBASE-SRL
+Et4                         connected    1             full    10G 10GBASE-SRL
+Et5                         notconnect   1             full    10G Not Present

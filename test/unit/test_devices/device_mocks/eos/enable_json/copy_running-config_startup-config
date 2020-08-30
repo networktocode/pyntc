@@ -1,9 +1,0 @@
-{
-    "command": "copy running-config startup-config",
-    "result": {
-        "messages": [
-            "Copy completed successfully."
-        ]
-    },
-    "encoding": "json"
-}

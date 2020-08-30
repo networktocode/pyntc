@@ -9,10 +9,8 @@ from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
 
-from pyntc.utils import convert_dict_by_key, convert_list_by_key
+from pyntc.utils import convert_dict_by_key, get_structured_data
 
-# from .system_features.file_copy.eos_file_copy import EOSFileCopy
-from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
     CommandError,
@@ -26,7 +24,7 @@ from pyntc.errors import (
 from .system_features.file_copy.base_file_copy import FileTransferError
 
 
-BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
+BASIC_FACTS_KM = {"model": "model", "image": "image", "serial_number": "serial_number"}
 INTERFACES_KM = {
     "speed": "bandwidth",
     "duplex": "duplex",
@@ -75,38 +73,42 @@ class EOSDevice(BaseDevice):
 
     def _get_interface_list(self):
         iface_detailed_list = self._interfaces_status_list()
-        iface_list = sorted(list(x["interface"] for x in iface_detailed_list))
+        iface_list = sorted(list(x["name"] for x in iface_detailed_list))
 
         return iface_list
 
-    def _get_vlan_list(self):
-        vlans = EOSVlans(self)
-        vlan_list = vlans.get_list()
-
-        return vlan_list
-
     def _image_booted(self, image_name, **vendor_specifics):
-        version_data = self.show("show boot", raw_text=True)
+        version_data = self.show("show boot")
         if re.search(image_name, version_data):
             return True
 
         return False
 
     def _interfaces_status_list(self):
-        interfaces_list = []
-        interfaces_status_dictionary = self.show("show interfaces status")["interfaceStatuses"]
-        for key in interfaces_status_dictionary:
-            interface_dictionary = interfaces_status_dictionary[key]
-            interface_dictionary["interface"] = key
-            interfaces_list.append(interface_dictionary)
+        show_interfaces_status_out = self.show("show interfaces status")
+        try:
+            interface_data = get_structured_data(
+                "arista_eos_show_interfaces_status.template", show_interfaces_status_out
+            )
+        except IndexError:
+            return {}
 
-        return convert_list_by_key(interfaces_list, INTERFACES_KM, fill_in=True, whitelist=["interface"])
+        return interface_data
 
-    def _parse_response(self, response, raw_text):
-        if raw_text:
-            return list(x["result"]["output"] for x in response)
-        else:
-            return list(x["result"] for x in response)
+    def _raw_version_data(self):
+        show_version_out = self.show("show version")
+        try:
+            version_data = get_structured_data("arista_eos_show_version.template", show_version_out)[0]
+        except IndexError:
+            return {}
+
+        return version_data
+
+    def _show_vlan(self):
+        show_vlan_out = self.show("show vlan")
+        show_vlan_data = get_structured_data("arista_eos_show_vlan.template", show_vlan_out)
+
+        return show_vlan_data
 
     def _send_command(self, command, expect=False, expect_string=""):
         if expect:
@@ -203,13 +205,14 @@ class EOSDevice(BaseDevice):
     @property
     def facts(self):
         if self._facts is None:
-            sh_version_output = self.show("show version")
+            sh_version_output = self._raw_version_data()
+            print(sh_version_output)
             self._facts = convert_dict_by_key(sh_version_output, BASIC_FACTS_KM)
             self._facts["vendor"] = self.vendor
 
-            uptime = int(time.time() - sh_version_output["bootupTimestamp"])
-            self._facts["uptime"] = uptime
-            self._facts["uptime_string"] = self._uptime_to_string(uptime)
+            # uptime = int(time.time() - sh_version_output["bootupTimestamp"])
+            # self._facts["uptime"] = uptime
+            # self._facts["uptime_string"] = self._uptime_to_string(uptime)
 
             sh_hostname_output = self.show("show hostname")
             self._facts.update(
@@ -217,7 +220,7 @@ class EOSDevice(BaseDevice):
             )
 
             self._facts["interfaces"] = self._get_interface_list()
-            self._facts["vlans"] = self._get_vlan_list()
+            self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
 
         return self._facts
 
