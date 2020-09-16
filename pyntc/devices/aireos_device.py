@@ -20,6 +20,14 @@ from pyntc.errors import (
 
 
 RE_FILENAME_FIND_VERSION = re.compile(r"^\S+?-[A-Za-z]{2}\d+-(?:\S+-?)?(?:K9-)?(?P<version>\d+-\d+-\d+-\d+)", re.M)
+RE_AP_IMAGE_COUNT = re.compile(r"^[Tt]otal\s+number\s+of\s+APs\.+\s+(?P<count>\d+)\s*$", re.M)
+RE_AP_IMAGE_DOWNLOADED = re.compile(r"^\s*[Cc]ompleted\s+[Pp]redownloading\.+\s+(?P<downloaded>\d+)\s*$", re.M)
+RE_AP_IMAGE_UNSUPPORTED = re.compile(r"^\s*[Nn]ot\s+[Ss]upported\.+\s+(?P<unsupported>\d+)\s*$", re.M)
+RE_AP_IMAGE_FAILED = re.compile(r"^\s*[Ff]ailed\s+to\s+[Pp]redownload\.+\s+(?P<failed>\d+)\s*$", re.M)
+RE_AP_BOOT_OPTIONS = re.compile(
+    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+)\s+(?P<current>(?:\d+\.){3}\d+).+$",
+    re.M,
+)
 
 
 def convert_filename_to_version(filename):
@@ -59,6 +67,34 @@ class AIREOSDevice(BaseDevice):
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
         self.open()
+
+    def _ap_images_match_expected(self, image_option, image, ap_boot_options=None):
+        """
+        Test that all AP images have the ``image_option`` matching ``image``.
+
+        Args:
+            image_option (str): The boot_option dict key ("primary", "backup", "sys") to validate.
+            image (str): The image that the ``image_option`` should match.
+            ap_boot_options (dict): The results from
+
+        Returns:
+            bool: True if all APs have ``image_option`` equal to ``image``, else False.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.ap_boot_options()
+            {
+                'ap1': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0', 'sys': '8.10.105.0'},
+                'ap2': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0', 'sys': '8.10.105.0'},
+            }
+            >>> device._ap_images_match_expected("primary", "8.10.105.0")
+            True
+            >>>
+        """
+        if ap_boot_options is None:
+            ap_boot_options = self.ap_boot_options
+
+        return all([boot_option[image_option] == image for boot_option in ap_boot_options.values()])
 
     def _enter_config(self):
         """Enter into config mode."""
@@ -155,6 +191,59 @@ class AIREOSDevice(BaseDevice):
 
         return days, hours, minutes
 
+    def _wait_for_ap_image_download(self, timeout=3600):
+        """
+        Wait for all APs have completed downloading the image.
+
+        Args:
+            timeout (int): The max time to wait for all APs to download the image.
+
+        Raises:
+            FileTransferError: When an AP is unable to properly retrieve the image or ``timeout`` is reached.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.ap_image_stats()
+            {
+                "count": 2,
+                "downloaded": 0,
+                "unsupported": 0,
+                "failed": 0,
+            }
+            >>> device._wait_for_ap_image_download()
+            >>> device.ap_image_stats()
+            {
+                "count": 2,
+                "downloaded": 2,
+                "unsupported": 0,
+                "failed": 0,
+            }
+            >>>
+
+        TODO:
+            Change timeout to be a multiplier for number of APs attached to controller
+        """
+        start = time.time()
+        ap_image_stats = self.ap_image_stats
+        ap_count = ap_image_stats["count"]
+        downloaded = 0
+        while downloaded < ap_count:
+            ap_image_stats = self.ap_image_stats
+            downloaded = ap_image_stats["downloaded"]
+            unsupported = ap_image_stats["unsupported"]
+            failed = ap_image_stats["failed"]
+            # TODO: When adding logging, send log message of current stats
+            if unsupported or failed:
+                raise FileTransferError(
+                    "Failed transferring image to AP\n" f"Unsupported: {unsupported}\n" f"Failed: {failed}\n"
+                )
+            elapsed_time = time.time() - start
+            if elapsed_time > timeout:
+                raise FileTransferError(
+                    "Failed waiting for AP image to be transferred to all devices:\n"
+                    f"Total: {ap_count}\nDownloaded: {downloaded}"
+                )
+
     def _wait_for_device_reboot(self, timeout=3600):
         """
         Wait for the device to finish reboot process and become accessible.
@@ -183,6 +272,77 @@ class AIREOSDevice(BaseDevice):
 
         # TODO: Get proper hostname parameter
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
+
+    @property
+    def ap_boot_options(self):
+        """
+        Boot Options for all APs associated with the controller.
+
+        Returns:
+            dict: The name of each AP are the keys, and the values are the primary, backup, and sys values.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.ap_boot_options
+            {
+                'ap1': {
+                    'backup': '8.8.125.0',
+                    'primary': '8.9.110.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+                'ap2': {
+                    'backup': '8.8.125.0',
+                    'primary': '8.9.110.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+            }
+            >>>
+        """
+        ap_images = self.show("show ap image all")
+        ap_boot_options = RE_AP_BOOT_OPTIONS.finditer(ap_images)
+        boot_options_by_ap = {
+            ap["name"]: {
+                "primary": ap.group("primary"),
+                "backup": ap.group("backup"),
+                "sys": ap.group("current"),
+                "status": ap.group("status").lower(),
+            }
+            for ap in ap_boot_options
+        }
+        return boot_options_by_ap
+
+    @property
+    def ap_image_stats(self):
+        """
+        The stats of downloading the the image to all APs.
+
+        Returns:
+            dict: The AP count, and the downloaded, unsupported, and failed APs.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.ap_image_stats
+            {
+                'count': 2,
+                'downloaded': 2,
+                'unsupported': 0,
+                'failed': 0
+            }
+            >>>
+        """
+        ap_images = self.show("show ap image all")
+        count = RE_AP_IMAGE_COUNT.search(ap_images).group(1)
+        downloaded = RE_AP_IMAGE_DOWNLOADED.search(ap_images).group(1)
+        unsupported = RE_AP_IMAGE_UNSUPPORTED.search(ap_images).group(1)
+        failed = RE_AP_IMAGE_FAILED.search(ap_images).group(1)
+        return {
+            "count": int(count),
+            "downloaded": int(downloaded),
+            "unsupported": int(unsupported),
+            "failed": int(failed),
+        }
 
     def backup_running_config(self, filename):
         raise NotImplementedError
@@ -313,7 +473,18 @@ class AIREOSDevice(BaseDevice):
     def facts(self):
         raise NotImplementedError
 
-    def file_copy(self, username, password, server, filepath, protocol="sftp", filetype="code", delay_factor=3):
+    def file_copy(
+        self,
+        username,
+        password,
+        server,
+        filepath,
+        protocol="sftp",
+        filetype="code",
+        delay_factor=3,
+        transfer_to_ap=True,
+        ap_timeout=None,
+    ):
         """
         Copy a file from server to Controller.
 
@@ -627,7 +798,8 @@ class AIREOSDevice(BaseDevice):
         self.save()
         if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command=boot_command, message="Setting boot command did not yield expected results",
+                command=boot_command,
+                message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):
@@ -700,6 +872,80 @@ class AIREOSDevice(BaseDevice):
     @property
     def startup_config(self):
         raise NotImplementedError
+
+    def transfer_image_to_ap(self, image, timeout=None):
+        """
+        Transfer ``image`` file to all APs connected to the WLC.
+
+        Args:
+            image (str): The image that should be sent to the APs.
+            timeout (int): The max time to wait for all APs to download the image.
+
+        Returns:
+            bool: True if AP images are transferred or swapped, False otherwise.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.ap_boot_options
+            {
+                'ap1': {
+                    'backup': '8.8.125.0',
+                    'primary': '8.9.110.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+                'ap2': {
+                    'backup': '8.8.125.0',
+                    'primary': '8.9.110.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+            }
+            >>> device.transfer_image_to_ap("8.10.1.0")
+            >>> device.ap_boot_options
+            {
+                'ap1': {
+                    'backup': '8.9.110.0',
+                    'primary': '8.10.1.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+                'ap2': {
+                    'backup': '8.9.110.0',
+                    'primary': '8.10.1.0',
+                    'sys': '8.9.110.0',
+                    'status': 'complete'
+                },
+            }
+            >>>
+        """
+        boot_options = ["primary", "backup"]
+        ap_boot_options = self.ap_boot_options
+        changed = False
+        if self._ap_images_match_expected("sys", image, ap_boot_options):
+            return changed
+
+        if not any(self._ap_images_match_expected(option, image, ap_boot_options) for option in boot_options):
+            changed = True
+            download_image = None
+            for option in boot_options:
+                if self.boot_options[option] == image:
+                    download_image = option
+                    break
+            if download_image is None:
+                raise FileTransferError(f"Unable to find {image} on {self.host}")
+
+            self.config(f"ap image predownload {option} all")
+            self._wait_for_ap_image_download()
+
+        if self._ap_images_match_expected("backup", image):
+            changed = True
+            self.config("ap image swap all")
+
+        if not self._ap_images_match_expected("primary", image):
+            raise FileTransferError(f"Unable to set all APs to use {image}")
+
+        return changed
 
     @property
     def uptime(self):

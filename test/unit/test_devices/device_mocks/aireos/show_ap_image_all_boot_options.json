@@ -1,0 +1,14 @@
+{
+    "TEST1": {
+        "primary": "7.0.98.0",
+        "backup": "6.0.196.159",
+        "sys": "7.0.98.0",
+        "status": "complete"
+    },
+    "TEST 2": {
+        "primary": "7.0.98.0",
+        "backup": "6.0.196.159",
+        "sys": "7.0.98.0",
+        "status": "complete"
+    }
+}

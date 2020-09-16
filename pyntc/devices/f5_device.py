@@ -182,9 +182,9 @@ class F5Device(BaseDevice):
     def _image_booted(self, image_name, **vendor_specifics):
         """Checks if requested booted volume is an active volume.
 
-           F5 does not provide reliable way to rely on image_name once the
-           volume has been installed so check needs to be performed against
-           volume parameter.
+        F5 does not provide reliable way to rely on image_name once the
+        volume has been installed so check needs to be performed against
+        volume parameter.
         """
         volume = vendor_specifics.get("volume")
         return True if self._get_active_volume() == volume else False
@@ -256,9 +256,7 @@ class F5Device(BaseDevice):
             self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "reboot"')
 
     def _reconnect(self):
-        """ Reconnects to the device
-
-        """
+        """Reconnects to the device"""
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
 
     def _upload_image(self, image_filepath):
