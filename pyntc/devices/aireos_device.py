@@ -627,7 +627,8 @@ class AIREOSDevice(BaseDevice):
         self.save()
         if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command=boot_command, message="Setting boot command did not yield expected results",
+                command=boot_command,
+                message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):

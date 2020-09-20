@@ -1,5 +1,4 @@
-"""Module for using an Arista EOS device over the eAPI.
-"""
+"""Module for using an Arista EOS device over the eAPI."""
 
 import re
 import time
@@ -247,8 +246,7 @@ class EOSDevice(BaseDevice):
         return False
 
     def open(self):
-        """Opens ssh connection with Netmiko ConnectHandler to be used with FileTransfer
-        """
+        """Opens ssh connection with Netmiko ConnectHandler to be used with FileTransfer"""
         if self._connected:
             try:
                 self.native_ssh.find_prompt()

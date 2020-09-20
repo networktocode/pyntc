@@ -42,8 +42,7 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
 
 
 def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
-    """Apply a dictionary conversion for all dictionaries in original_list.
-    """
+    """Apply a dictionary conversion for all dictionaries in original_list."""
     converted_list = []
     for original in list(original_list):
         converted_list.append(
@@ -55,8 +54,7 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
 
 def recursive_key_lookup(keys, obj):
     """Return obj[keys] if keys is actually a single key.
-    Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
-    """
+    Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list."""
     if not isinstance(keys, list):
         return obj.get(keys)
 
