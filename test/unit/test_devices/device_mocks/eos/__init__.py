@@ -1,8 +1,9 @@
 import os
 import json
 from pyeapi.eapilib import CommandError as EOSCommandError
+import re
 
-CURRNENT_DIR = os.path.dirname(os.path.realpath(__file__))
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def enable(commands, encoding="json"):
@@ -10,7 +11,7 @@ def enable(commands, encoding="json"):
     executed_commands = []
     for command in commands:
         command = command.replace(" ", "_")
-        path = os.path.join(CURRNENT_DIR, "enable" + "_" + encoding, command)
+        path = os.path.join(CURRENT_DIR, "enable" + "_" + encoding, command)
 
         executed_commands.append(command)
         if not os.path.isfile(path):
@@ -32,7 +33,7 @@ def config(commands):
     executed_commands = []
     for command in commands:
         command = command.replace(" ", "_")
-        path = os.path.join(CURRNENT_DIR, "config", command)
+        path = os.path.join(CURRENT_DIR, "config", command)
 
         executed_commands.append(command)
         if not os.path.isfile(path):
@@ -41,3 +42,35 @@ def config(commands):
         responses.append({})
 
     return responses
+
+
+def send_command(command, **kwargs):
+    """
+    TODO: Document me
+    """
+    orig = command
+    command = command.replace(" ", "_")
+    command = command.replace("/", "_")
+
+    if command == "\n":
+        command = "return"
+
+    path = os.path.join(CURRENT_DIR, "send_command", command)
+
+    if not os.path.isfile(path):
+        return f"% Error: Cannot find mock: {orig}"
+
+    with open(path, "r") as f:
+        response = f.read()
+
+    return response
+
+
+def send_command_expect(command, expect_string=None, **kwargs):
+    response = send_command(command)
+
+    if expect_string:
+        if not re.search(expect_string, response):
+            raise IOError("Search pattern never detected.")
+
+    return response
