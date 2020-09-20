@@ -101,7 +101,6 @@ class TestEOSDevice(unittest.TestCase):
         self.assertTrue(result)
         self.device.native.enable.assert_called_with(["copy running-config startup-config"], encoding="json")
 
-    
     @mock.patch("pyeapi.client.Node", autospec=True)
     @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
     def setup_test_file_copy_remote_exists(self, test_file_copy_remote_exists, mock_ssh, mock_node):
