@@ -42,8 +42,7 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
 
 
 def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
-    """Apply a dictionary conversion for all dictionaries in original_list.
-    """
+    """Apply a dictionary conversion for all dictionaries in original_list."""
     converted_list = []
     for original in list(original_list):
         converted_list.append(
