@@ -36,16 +36,16 @@ def test_convert_filename_to_version(filename, version):
 )
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_ap_images_match_expected(
-    mock_abo, filename, expected, image_option, aireos_boot_image, aireos_device, aireos_mock_path
+    mock_ap_boot_options, filename, expected, image_option, aireos_boot_image, aireos_device, aireos_mock_path
 ):
     with open(f"{aireos_mock_path}/{filename}") as fh:
-        mock_abo.return_value = json.load(fh)
+        mock_ap_boot_options.return_value = json.load(fh)
     assert aireos_device._ap_images_match_expected(image_option, aireos_boot_image) is expected
-    mock_abo.assert_called()
+    mock_ap_boot_options.assert_called()
 
 
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
-def test_ap_images_pass_boot_options(mock_abo, aireos_device, aireos_boot_image):
+def test_ap_images_pass_boot_options(mock_ap_boot_options, aireos_device, aireos_boot_image):
     ap_boot_options = {
         "test1": {
             "primary": "8.2.170.0",
@@ -54,7 +54,7 @@ def test_ap_images_pass_boot_options(mock_abo, aireos_device, aireos_boot_image)
         },
     }
     aireos_device._ap_images_match_expected("primary", aireos_boot_image, ap_boot_options)
-    mock_abo.assert_not_called()
+    mock_ap_boot_options.assert_not_called()
 
 
 def test_enter_config(aireos_device):
@@ -106,8 +106,8 @@ def test_uptime_components(aireos_show):
 
 
 @mock.patch.object(AIREOSDevice, "ap_image_stats", new_callable=mock.PropertyMock)
-def test_wait_for_ap_image_download(mock_ais, aireos_device):
-    mock_ais.side_effect = [
+def test_wait_for_ap_image_download(mock_ap_image_stats, aireos_device):
+    mock_ap_image_stats.side_effect = [
         {"count": 2, "downloaded": 0, "unsupported": 0, "failed": 0},
         {"count": 2, "downloaded": 1, "unsupported": 0, "failed": 0},
         {"count": 2, "downloaded": 2, "unsupported": 0, "failed": 0},
@@ -121,9 +121,11 @@ def test_wait_for_ap_image_download(mock_ais, aireos_device):
     ids=("unsupported", "failed"),
 )
 @mock.patch.object(AIREOSDevice, "ap_image_stats", new_callable=mock.PropertyMock)
-def test_wait_for_ap_image_download_fail(mock_ais, filename, expected_counts, aireos_device, aireos_mock_path):
+def test_wait_for_ap_image_download_fail(
+    mock_ap_image_stats, filename, expected_counts, aireos_device, aireos_mock_path
+):
     with open(f"{aireos_mock_path}/{filename}") as fh:
-        mock_ais.side_effect = json.load(fh)
+        mock_ap_image_stats.side_effect = json.load(fh)
     with pytest.raises(FileTransferError) as fte:
         aireos_device._wait_for_ap_image_download()
     unsupported, failed = expected_counts
@@ -131,8 +133,8 @@ def test_wait_for_ap_image_download_fail(mock_ais, filename, expected_counts, ai
 
 
 @mock.patch.object(AIREOSDevice, "ap_image_stats", new_callable=mock.PropertyMock)
-def test_wait_for_ap_image_download_timeout(mock_ais, aireos_device):
-    mock_ais.return_value = {"count": 2, "downloaded": 1, "unsupported": 0, "failed": 0}
+def test_wait_for_ap_image_download_timeout(mock_ap_image_stats, aireos_device):
+    mock_ap_image_stats.return_value = {"count": 2, "downloaded": 1, "unsupported": 0, "failed": 0}
     with pytest.raises(FileTransferError) as fte:
         aireos_device._wait_for_ap_image_download(timeout=1)
     assert fte.value.message == (
@@ -292,15 +294,17 @@ def test_enable_from_config(aireos_device):
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy(mock_cftv, aireos_device_path, aireos_send_command_timing, aireos_send_command):
-    mock_cftv.return_value = "8.10.105.0"
+def test_file_copy(
+    mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing, aireos_send_command
+):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
     device = aireos_send_command_timing([""] * 7 + ["transfer_download_start.txt"])
     aireos_send_command(["transfer_download_start_yes.txt"], device)
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot:
-        mock_boot.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
+        mock_boot_optionsot.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
         file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot.assert_called_once()
-    mock_cftv.assert_called_once()
+        mock_boot_optionsot.assert_called_once()
+    mock_convert_filename_to_version.assert_called_once()
     device.native.send_command_timing.assert_has_calls(
         [
             mock.call("transfer download datatype code"),
@@ -320,12 +324,12 @@ def test_file_copy(mock_cftv, aireos_device_path, aireos_send_command_timing, ai
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_config(mock_cftv, aireos_send_command_timing, aireos_send_command):
-    mock_cftv.return_value = "8.10.105.0"
+def test_file_copy_config(mock_convert_filename_to_version, aireos_send_command_timing, aireos_send_command):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
     device = aireos_send_command_timing([""] * 8)
     aireos_send_command(["transfer_download_start_yes.txt"], device)
     device.file_copy("user", "pass", "10.1.1.1", "configs/host/latest.cfg", protocol="ftp", filetype="config")
-    mock_cftv.assert_not_called()
+    mock_convert_filename_to_version.assert_not_called()
     device.native.send_command_timing.assert_has_calls(
         [
             mock.call("transfer download datatype config"),
@@ -342,23 +346,23 @@ def test_file_copy_config(mock_cftv, aireos_send_command_timing, aireos_send_com
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_no_copy(mock_cftv, aireos_device_path, aireos_send_command_timing):
-    mock_cftv.return_value = "8.10.105.0"
+def test_file_copy_no_copy(mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
     device = aireos_send_command_timing([""])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot:
-        mock_boot.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
+        mock_boot_optionsot.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
         file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot.assert_called()
+        mock_boot_optionsot.assert_called()
     device.native.send_command_timing.assert_not_called()
     assert file_copied is False
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_error(mock_cftv, aireos_device_path, aireos_send_command_timing):
-    mock_cftv.return_value = "8.10.105.0"
+def test_file_copy_error(mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
     device = aireos_send_command_timing(["send_command_error.txt"])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot:
-        mock_boot.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
+        mock_boot_optionsot.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
         with pytest.raises(FileTransferError):
             device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
 
@@ -367,13 +371,15 @@ def test_file_copy_error(mock_cftv, aireos_device_path, aireos_send_command_timi
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_install_os(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+def test_install_os(
+    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image) is True
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
-    mock_sbo.assert_has_calls([mock.call(aireos_boot_image)])
+    mock_set_boot_options.assert_has_calls([mock.call(aireos_boot_image)])
     mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
-    mock_prs.assert_called()
+    mock_peer_redundancy_state.assert_called()
 
 
 def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
@@ -386,7 +392,9 @@ def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_install_os_error(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+def test_install_os_error(
+    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+):
     device = aireos_image_booted([False, False])
     with pytest.raises(OSInstallError) as boot_error:
         device.install_os(aireos_boot_image)
@@ -398,8 +406,10 @@ def test_install_os_error(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_ima
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_install_os_error_peer(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
-    mock_prs.side_effect = ["standby hot", "unknown"]
+def test_install_os_error_peer(
+    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+):
+    mock_peer_redundancy_state.side_effect = ["standby hot", "unknown"]
     device = aireos_image_booted([False, True])
     with pytest.raises(OSInstallError) as boot_error:
         device.install_os(aireos_boot_image)
@@ -411,52 +421,54 @@ def test_install_os_error_peer(mock_prs, mock_wait, mock_reboot, mock_sbo, aireo
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_install_os_pass_args(mock_prs, mock_wait, mock_reboot, mock_sbo, aireos_image_booted, aireos_boot_image):
+def test_install_os_pass_args(
+    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image, controller="self", save_config=False) is True
     mock_reboot.assert_called_with(confirm=True, controller="self", save_config=False)
 
 
 @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
-def test_open_prompt_found(mock_ch, aireos_device):
+def test_open_prompt_found(mock_connect_handler, aireos_device):
     aireos_device.connected = True
     aireos_device.native.find_prompt.side_effect = [True]
     aireos_device.open()
     aireos_device.native.find_prompt.assert_called()
-    mock_ch.assert_not_called()
+    mock_connect_handler.assert_not_called()
     assert aireos_device.connected is True
 
 
 @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
-def test_open_prompt_not_found(mock_ch, aireos_device, aireos_redundancy_state_path):
+def test_open_prompt_not_found(mock_connect_handler, aireos_device, aireos_redundancy_state_path):
     aireos_device.connected = True
     aireos_device.native.find_prompt.side_effect = [Exception]
     with mock.patch(aireos_redundancy_state_path, new_callable=mock.PropertyMock) as redundnacy_state:
         redundnacy_state.return_value = True
         aireos_device.open()
-    mock_ch.assert_called()
+    mock_connect_handler.assert_called()
     assert aireos_device.connected is True
 
 
 @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
-def test_open_not_connected(mock_ch, aireos_device, aireos_redundancy_state_path):
+def test_open_not_connected(mock_connect_handler, aireos_device, aireos_redundancy_state_path):
     aireos_device.connected = False
     with mock.patch(aireos_redundancy_state_path, new_callable=mock.PropertyMock) as redundnacy_state:
         redundnacy_state.return_value = True
         aireos_device.open()
     aireos_device.native.find_prompt.assert_not_called()
-    mock_ch.assert_called()
+    mock_connect_handler.assert_called()
     assert aireos_device.connected is True
 
 
 @mock.patch("pyntc.devices.aireos_device.ConnectHandler")
-def test_open_standby(mock_ch, aireos_device, aireos_redundancy_state_path):
+def test_open_standby(mock_connect_handler, aireos_device, aireos_redundancy_state_path):
     aireos_device.connected = False
     with mock.patch(aireos_redundancy_state_path, new_callable=mock.PropertyMock) as redundnacy_state:
         redundnacy_state.return_value = False
         aireos_device.open()
     aireos_device.native.find_prompt.assert_not_called()
-    mock_ch.assert_called()
+    mock_connect_handler.assert_called()
     assert aireos_device.connected is False
 
 
@@ -566,17 +578,17 @@ def test_save(aireos_device):
 
 @mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "save")
-def test_set_boot_options_primary(mock_save, mock_cfg, aireos_device, aireos_boot_image, aireos_boot_path):
+def test_set_boot_options_primary(mock_save, mock_config, aireos_device, aireos_boot_image, aireos_boot_path):
     with mock.patch(aireos_boot_path, new_callable=mock.PropertyMock) as boot_options:
         boot_options.return_value = {"sys": aireos_boot_image, "primary": aireos_boot_image}
         aireos_device.set_boot_options(aireos_boot_image)
-    mock_cfg.assert_called_with("boot primary")
+    mock_config.assert_called_with("boot primary")
     mock_save.assert_called()
 
 
 @mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "save")
-def test_set_boot_options_backup(mock_save, mock_cfg, aireos_device, aireos_boot_image, aireos_boot_path):
+def test_set_boot_options_backup(mock_save, mock_config, aireos_device, aireos_boot_image, aireos_boot_path):
     with mock.patch(aireos_boot_path, new_callable=mock.PropertyMock) as boot_options:
         boot_options.return_value = {
             "primary": "1",
@@ -584,32 +596,34 @@ def test_set_boot_options_backup(mock_save, mock_cfg, aireos_device, aireos_boot
             "sys": aireos_boot_image,
         }
         aireos_device.set_boot_options(aireos_boot_image)
-    mock_cfg.assert_called_with("boot backup")
+    mock_config.assert_called_with("boot backup")
     mock_save.assert_called()
 
 
 @mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "save")
-def test_set_boot_options_image_not_an_option(mock_save, mock_cfg, aireos_device, aireos_boot_image, aireos_boot_path):
+def test_set_boot_options_image_not_an_option(
+    mock_save, mock_config, aireos_device, aireos_boot_image, aireos_boot_path
+):
     with mock.patch(aireos_boot_path, new_callable=mock.PropertyMock) as boot_options:
         boot_options.return_value = {"primary": "1", "backup": "2"}
         with pytest.raises(NTCFileNotFoundError) as fnfe:
             aireos_device.set_boot_options(aireos_boot_image)
             expected = f"{aireos_boot_image} was not found in 'show boot' on {aireos_device.host}"
             assert fnfe.message == expected
-    mock_cfg.assert_not_called()
+    mock_config.assert_not_called()
     mock_save.assert_not_called()
 
 
 @mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "save")
-def test_set_boot_options_error(mock_save, mock_cfg, aireos_device, aireos_boot_image, aireos_boot_path):
+def test_set_boot_options_error(mock_save, mock_config, aireos_device, aireos_boot_image, aireos_boot_path):
     with mock.patch(aireos_boot_path, new_callable=mock.PropertyMock) as boot_options:
         boot_options.return_value = {"primary": aireos_boot_image, "backup": "2", "sys": "1"}
         with pytest.raises(CommandError) as ce:
             aireos_device.set_boot_options(aireos_boot_image)
             assert ce.command == "boot primary"
-    mock_cfg.assert_called()
+    mock_config.assert_called()
     mock_save.assert_called()
 
 
@@ -642,11 +656,13 @@ def test_show_list(mock_enable, aireos_send_command_timing):
 
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
-def test_transfer_image_to_ap_already_active(mock_abo, mock_aime, aireos_device, aireos_boot_image):
-    mock_aime.return_value = True
+def test_transfer_image_to_ap_already_active(
+    mock_ap_boot_options, mock_ap_image_matches_expected, aireos_device, aireos_boot_image
+):
+    mock_ap_image_matches_expected.return_value = True
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is False
-    mock_aime.assert_called_once()
-    mock_abo.assert_called_once()
+    mock_ap_image_matches_expected.assert_called_once()
+    mock_ap_boot_options.assert_called_once()
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -655,14 +671,21 @@ def test_transfer_image_to_ap_already_active(mock_abo, mock_aime, aireos_device,
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_already_transferred_primary(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_aime.side_effect = [False, True, False, True]
+    mock_ap_image_matches_expected.side_effect = [False, True, False, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is False
-    assert len(mock_aime.mock_calls) == 4
+    assert len(mock_ap_image_matches_expected.mock_calls) == 4
     mock_config.assert_not_called()
     mock_wait.assert_not_called()
-    mock_bo.assert_not_called()
+    mock_boot_options.assert_not_called()
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -671,14 +694,21 @@ def test_transfer_image_to_ap_already_transferred_primary(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_already_transferred_secondary(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_aime.side_effect = [False, False, True, True, True]
+    mock_ap_image_matches_expected.side_effect = [False, False, True, True, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
-    assert len(mock_aime.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
     mock_config.assert_has_calls([mock.call("ap image swap all")])
     mock_wait.assert_not_called()
-    mock_bo.assert_not_called()
+    mock_boot_options.assert_not_called()
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -687,15 +717,22 @@ def test_transfer_image_to_ap_already_transferred_secondary(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_already_transferred_secondary_fail(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_aime.side_effect = [False, False, True, True, False]
+    mock_ap_image_matches_expected.side_effect = [False, False, True, True, False]
     with pytest.raises(FileTransferError) as fte:
         aireos_device.transfer_image_to_ap(aireos_boot_image)
-    assert len(mock_aime.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
     mock_config.assert_has_calls([mock.call("ap image swap all")])
     mock_wait.assert_not_called()
-    mock_bo.assert_not_called()
+    mock_boot_options.assert_not_called()
     assert fte.value.message == f"Unable to set all APs to use {aireos_boot_image}"
 
 
@@ -705,15 +742,22 @@ def test_transfer_image_to_ap_already_transferred_secondary_fail(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_transfer_primary(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_bo.return_value = {"primary": aireos_boot_image, "backup": None}
-    mock_aime.side_effect = [False, False, False, False, True]
+    mock_boot_options.return_value = {"primary": aireos_boot_image, "backup": None}
+    mock_ap_image_matches_expected.side_effect = [False, False, False, False, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
-    assert len(mock_aime.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
     mock_config.assert_has_calls([mock.call("ap image predownload primary all")])
     mock_wait.assert_called()
-    mock_bo.assert_called_once()
+    mock_boot_options.assert_called_once()
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -722,15 +766,22 @@ def test_transfer_image_to_ap_transfer_primary(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_transfer_secondary(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_bo.return_value = {"primary": None, "backup": aireos_boot_image}
-    mock_aime.side_effect = [False, False, False, True, True]
+    mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
+    mock_ap_image_matches_expected.side_effect = [False, False, False, True, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
-    assert len(mock_aime.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
     mock_config.assert_has_calls([mock.call("ap image predownload backup all"), mock.call("ap image swap all")])
     mock_wait.assert_called()
-    mock_bo.assert_has_calls([mock.call(), mock.call()])
+    mock_boot_options.assert_has_calls([mock.call(), mock.call()])
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -739,16 +790,23 @@ def test_transfer_image_to_ap_transfer_secondary(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_to_ap_transfer_secondary_fail(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_bo.return_value = {"primary": None, "backup": aireos_boot_image}
-    mock_aime.side_effect = [False, False, False, True, False]
+    mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
+    mock_ap_image_matches_expected.side_effect = [False, False, False, True, False]
     with pytest.raises(FileTransferError) as fte:
         aireos_device.transfer_image_to_ap(aireos_boot_image)
-    assert len(mock_aime.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
     mock_config.assert_has_calls([mock.call("ap image predownload backup all"), mock.call("ap image swap all")])
     mock_wait.assert_called()
-    mock_bo.assert_has_calls([mock.call(), mock.call()])
+    mock_boot_options.assert_has_calls([mock.call(), mock.call()])
     assert fte.value.message == f"Unable to set all APs to use {aireos_boot_image}"
 
 
@@ -758,26 +816,33 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_does_not_exist(
-    mock_abo, mock_aime, mock_bo, mock_wait, mock_config, aireos_device, aireos_mock_path, aireos_boot_image
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
 ):
-    mock_bo.return_value = {"primary": None, "backup": None}
-    mock_aime.return_value = False
+    mock_boot_options.return_value = {"primary": None, "backup": None}
+    mock_ap_image_matches_expected.return_value = False
     with pytest.raises(FileTransferError) as fte:
         aireos_device.transfer_image_to_ap(aireos_boot_image)
-    assert len(mock_aime.mock_calls) == 3
+    assert len(mock_ap_image_matches_expected.mock_calls) == 3
     mock_config.assert_not_called()
     mock_wait.assert_not_called()
-    mock_bo.assert_has_calls([mock.call(), mock.call()])
+    mock_boot_options.assert_has_calls([mock.call(), mock.call()])
     assert fte.value.message == f"Unable to find {aireos_boot_image} on {aireos_device.host}"
 
 
 @mock.patch.object(AIREOSDevice, "_uptime_components")
-def test_uptime(mock_uc, aireos_device):
-    mock_uc.side_effect = [(3, 2, 20)]
+def test_uptime(mock_uptime_components, aireos_device):
+    mock_uptime_components.side_effect = [(3, 2, 20)]
     assert aireos_device.uptime == 267600
 
 
 @mock.patch.object(AIREOSDevice, "_uptime_components")
-def test_uptime_string(mock_uc, aireos_device):
-    mock_uc.side_effect = [(3, 2, 20)]
+def test_uptime_string(mock_uptime_components, aireos_device):
+    mock_uptime_components.side_effect = [(3, 2, 20)]
     assert aireos_device.uptime_string == "03:02:20:00"

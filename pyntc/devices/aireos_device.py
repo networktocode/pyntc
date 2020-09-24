@@ -479,8 +479,6 @@ class AIREOSDevice(BaseDevice):
         protocol="sftp",
         filetype="code",
         delay_factor=3,
-        transfer_to_ap=True,
-        ap_timeout=None,
     ):
         """
         Copy a file from server to Controller.
@@ -934,6 +932,8 @@ class AIREOSDevice(BaseDevice):
         if self._ap_images_match_expected("backup", image):
             changed = True
             self.config("ap image swap all")
+            # testing showed delay in reflecting changes when issuing `show ap image all`
+            time.sleep(1)
 
         if not self._ap_images_match_expected("primary", image):
             raise FileTransferError(f"Unable to set all APs to use {image}")
