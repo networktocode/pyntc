@@ -7,9 +7,8 @@ Number of APs
     Not Supported.................................... 0
     Failed to Predownload.......................... 1
 
-AP Name            Primary Image  Backup Image   Status          Version        Next Retry Time  Retry
-
------------------- -------------- -------------- --------------- -------------- ---------------- ------------
-
+                                                 Predownload     Predownload                                  Flexconnect
+AP Name            Primary Image  Backup Image   Status          Version        Next Retry Time  Retry Count  Predownload
+------------------ -------------- -------------- --------------- -------------- ---------------- ------------ --------------
 TEST1                 7.0.98.0      6.0.196.159    Complete        7.0.98.0       NA               NA        
 TEST 2                6.0.196.159   7.0.98.0       Complete        7.0.98.0       NA               NA  

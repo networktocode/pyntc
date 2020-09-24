@@ -25,7 +25,7 @@ RE_AP_IMAGE_DOWNLOADED = re.compile(r"^\s*[Cc]ompleted\s+[Pp]redownloading\.+\s+
 RE_AP_IMAGE_UNSUPPORTED = re.compile(r"^\s*[Nn]ot\s+[Ss]upported\.+\s+(?P<unsupported>\d+)\s*$", re.M)
 RE_AP_IMAGE_FAILED = re.compile(r"^\s*[Ff]ailed\s+to\s+[Pp]redownload\.+\s+(?P<failed>\d+)\s*$", re.M)
 RE_AP_BOOT_OPTIONS = re.compile(
-    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+)\s+(?P<current>(?:\d+\.){3}\d+).+$",
+    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
     re.M,
 )
 
@@ -73,7 +73,7 @@ class AIREOSDevice(BaseDevice):
         Test that all AP images have the ``image_option`` matching ``image``.
 
         Args:
-            image_option (str): The boot_option dict key ("primary", "backup", "sys") to validate.
+            image_option (str): The boot_option dict key ("primary", "backup") to validate.
             image (str): The image that the ``image_option`` should match.
             ap_boot_options (dict): The results from
 
@@ -84,8 +84,8 @@ class AIREOSDevice(BaseDevice):
             >>> device = AIREOSDevice(**connection_args)
             >>> device.ap_boot_options()
             {
-                'ap1': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0', 'sys': '8.10.105.0'},
-                'ap2': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0', 'sys': '8.10.105.0'},
+                'ap1': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0'},
+                'ap2': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0'},
             }
             >>> device._ap_images_match_expected("primary", "8.10.105.0")
             True
@@ -279,7 +279,7 @@ class AIREOSDevice(BaseDevice):
         Boot Options for all APs associated with the controller.
 
         Returns:
-            dict: The name of each AP are the keys, and the values are the primary, backup, and sys values.
+            dict: The name of each AP are the keys, and the values are the primary and backup values.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -288,13 +288,11 @@ class AIREOSDevice(BaseDevice):
                 'ap1': {
                     'backup': '8.8.125.0',
                     'primary': '8.9.110.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
                 'ap2': {
                     'backup': '8.8.125.0',
                     'primary': '8.9.110.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
             }
@@ -306,7 +304,6 @@ class AIREOSDevice(BaseDevice):
             ap["name"]: {
                 "primary": ap.group("primary"),
                 "backup": ap.group("backup"),
-                "sys": ap.group("current"),
                 "status": ap.group("status").lower(),
             }
             for ap in ap_boot_options
@@ -891,13 +888,11 @@ class AIREOSDevice(BaseDevice):
                 'ap1': {
                     'backup': '8.8.125.0',
                     'primary': '8.9.110.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
                 'ap2': {
                     'backup': '8.8.125.0',
                     'primary': '8.9.110.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
             }
@@ -907,13 +902,11 @@ class AIREOSDevice(BaseDevice):
                 'ap1': {
                     'backup': '8.9.110.0',
                     'primary': '8.10.1.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
                 'ap2': {
                     'backup': '8.9.110.0',
                     'primary': '8.10.1.0',
-                    'sys': '8.9.110.0',
                     'status': 'complete'
                 },
             }
@@ -922,7 +915,7 @@ class AIREOSDevice(BaseDevice):
         boot_options = ["primary", "backup"]
         ap_boot_options = self.ap_boot_options
         changed = False
-        if self._ap_images_match_expected("sys", image, ap_boot_options):
+        if self._ap_images_match_expected("primary", image, ap_boot_options):
             return changed
 
         if not any(self._ap_images_match_expected(option, image, ap_boot_options) for option in boot_options):

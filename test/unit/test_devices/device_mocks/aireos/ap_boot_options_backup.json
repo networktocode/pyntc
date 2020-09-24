@@ -2,11 +2,11 @@
     "test1": {
         "primary": "8.1.170.0",
         "backup": "8.2.170.0",
-        "sys": "8.1.170.0"
+        "status": "complete"
     },
     "test 2": {
         "primary": "8.1.170.0",
         "backup": "8.2.170.0",
-        "sys": "8.1.170.0"
+        "status": "complete"
     }
 }
