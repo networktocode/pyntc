@@ -49,9 +49,6 @@ class EOSDevice(BaseDevice):
         self.native = EOSNative(self.connection)
         # _connected indicates Netmiko ssh connection
         self._connected = False
-        # scp corresponds to file transfer and openning a netmiko connection
-        if self.transport == "scp":
-            self.open()
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
         if dest is None:
@@ -199,7 +196,19 @@ class EOSDevice(BaseDevice):
         return self._facts
 
     def file_copy(self, src, dest=None, file_system=None):
+        """[summary]
+
+        Args:
+            src (string): source file
+            dest (string, optional): Destintion file. Defaults to None.
+            file_system (string, optional): Describes device file system. Defaults to None.
+
+        Raises:
+            FileTransferError: raise exception if there is an error
+        """
+        self.open()
         self.enable()
+
         if file_system is None:
             file_system = self._get_file_system()
 

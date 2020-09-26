@@ -46,13 +46,7 @@ def test_ap_images_match_expected(
 
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_ap_images_pass_boot_options(mock_ap_boot_options, aireos_device, aireos_boot_image):
-    ap_boot_options = {
-        "test1": {
-            "primary": "8.2.170.0",
-            "backup": "8.1.170.0",
-            "sys": "8.2.170.0",
-        },
-    }
+    ap_boot_options = {"test1": {"primary": "8.2.170.0", "backup": "8.1.170.0", "sys": "8.2.170.0"}}
     aireos_device._ap_images_match_expected("primary", aireos_boot_image, ap_boot_options)
     mock_ap_boot_options.assert_not_called()
 
