@@ -28,9 +28,7 @@ def test_enter_config(aireos_device):
 
 
 @pytest.mark.parametrize(
-    "filename,expected",
-    (("show_sysinfo.txt", True), ("show_sysinfo_false.txt", False)),
-    ids=("True", "False"),
+    "filename,expected", (("show_sysinfo.txt", True), ("show_sysinfo_false.txt", False)), ids=("True", "False"),
 )
 def test_image_booted(aireos_show, aireos_boot_image, filename, expected):
     device = aireos_show([filename])

@@ -110,7 +110,7 @@ class TestEOSDevice(unittest.TestCase):
         mock_node.enable.side_effect = enable
         mock_node.config.side_effect = config
         self.device.native = mock_node
-        self.device.transport = "ftp"
+        self.device.transport = "scp"
         mock_ssh.send_command_timing.side_effect = send_command
         mock_ssh.send_command_expect.side_effect = send_command_expect
         self.device.native_ssh = mock_ssh
@@ -145,7 +145,7 @@ class TestEOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
     def test_file_copy_remote_not_exist(self, mock_ft):
-        self.device.transport = "ftp"
+        self.device.transport = "scp"
         self.device.native_ssh.send_command_timing.side_effect = None
         self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
