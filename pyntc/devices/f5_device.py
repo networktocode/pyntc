@@ -255,7 +255,7 @@ class F5Device(BaseDevice):
             self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "reboot"')
 
     def _reconnect(self):
-        """ Reconnects to the device"""
+        """Reconnects to the device"""
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
 
     def _upload_image(self, image_filepath):
