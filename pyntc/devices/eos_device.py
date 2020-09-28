@@ -1,15 +1,16 @@
-"""Module for using an Arista EOS device over the eAPI.
-"""
+"""Module for using an Arista EOS device over the eAPI."""
 
 import re
 import time
+import os
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
+from netmiko import ConnectHandler
+from netmiko import FileTransfer
 
 from pyntc.utils import convert_dict_by_key, convert_list_by_key
-from .system_features.file_copy.eos_file_copy import EOSFileCopy
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
@@ -46,6 +47,15 @@ class EOSDevice(BaseDevice):
         self.timeout = timeout
         self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
         self.native = EOSNative(self.connection)
+        # _connected indicates Netmiko ssh connection
+        self._connected = False
+
+    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+        if dest is None:
+            dest = os.path.basename(src)
+
+        fc = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
+        return fc
 
     def _get_file_system(self):
         """Determines the default file system or directory for device.
@@ -152,6 +162,18 @@ class EOSDevice(BaseDevice):
         except EOSCommandError as e:
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
+    def enable(self):
+        """Ensure device is in enable mode.
+        Returns:
+            None: Device prompt is set to enable mode.
+        """
+        # Netmiko reports enable and config mode as being enabled
+        if not self.native_ssh.check_enable_mode():
+            self.native_ssh.enable()
+        # Ensure device is not in config mode
+        if self.native_ssh.check_config_mode():
+            self.native_ssh.exit_config_mode()
+
     @property
     def facts(self):
         if self._facts is None:
@@ -173,21 +195,50 @@ class EOSDevice(BaseDevice):
 
         return self._facts
 
-    def file_copy(self, src, dest=None, **kwargs):
-        if not self.file_copy_remote_exists(src, dest, **kwargs):
-            fc = EOSFileCopy(self, src, dest)
-            fc.send()
+    def file_copy(self, src, dest=None, file_system=None):
+        """[summary]
 
-            if not self.file_copy_remote_exists(src, dest, **kwargs):
+        Args:
+            src (string): source file
+            dest (string, optional): Destintion file. Defaults to None.
+            file_system (string, optional): Describes device file system. Defaults to None.
+
+        Raises:
+            FileTransferError: raise exception if there is an error
+        """
+        self.open()
+        self.enable()
+
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc = self._file_copy_instance(src, dest, file_system=file_system)
+
+            try:
+                fc.enable_scp()
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            except:  # noqa E722
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
+
+            if not self.file_copy_remote_exists(src, dest, file_system):
                 raise FileTransferError(
                     message="Attempted file copy, but could not validate file existed after transfer"
                 )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
-    def file_copy_remote_exists(self, src, dest=None, **kwargs):
-        fc = EOSFileCopy(self, src, dest)
-        if fc.remote_file_exists() and fc.already_transferred():
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        fc = self._file_copy_instance(src, dest, file_system=file_system)
+        if fc.check_file_exists() and fc.compare_md5():
             return True
+
         return False
 
     def install_os(self, image_name, **vendor_specifics):
@@ -204,7 +255,25 @@ class EOSDevice(BaseDevice):
         return False
 
     def open(self):
-        pass
+        """Opens ssh connection with Netmiko ConnectHandler to be used with FileTransfer"""
+        if self._connected:
+            try:
+                self.native_ssh.find_prompt()
+            except Exception:
+                self._connected = False
+
+        if not self._connected:
+            self.native_ssh = ConnectHandler(
+                device_type="arista_eos",
+                ip=self.host,
+                username=self.username,
+                password=self.password,
+                # port=self.port,
+                # global_delay_factor=self.global_delay_factor,
+                # secret=self.secret,
+                verbose=False,
+            )
+            self._connected = True
 
     def reboot(self, confirm=False, timer=0):
         if timer != 0:

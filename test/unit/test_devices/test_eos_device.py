@@ -3,9 +3,10 @@ import mock
 import os
 
 from .device_mocks.eos import enable, config
+from .device_mocks.eos import send_command, send_command_expect
 from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError, RebootTimerError
-from pyntc.devices.system_features.file_copy.eos_file_copy import EOSFileCopy
+from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
 
@@ -19,6 +20,10 @@ class TestEOSDevice(unittest.TestCase):
         mock_node.enable.side_effect = enable
         mock_node.config.side_effect = config
         self.device.native = mock_node
+
+    def tearDown(self):
+        # Reset the mock so we don't have transient test effects
+        self.device.native.reset_mock()
 
     def test_config(self):
         command = "interface Eth1"
@@ -91,29 +96,124 @@ class TestEOSDevice(unittest.TestCase):
         self.assertTrue(result)
         self.device.native.enable.assert_called_with(["copy running-config startup-config"], encoding="json")
 
-    @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
-    @mock.patch.object(EOSFileCopy, "already_transferred", autospec=True)
-    def test_file_copy_remote_exists(self, mock_fc_at, mock_fc_rfe):
-        mock_fc_at.return_value = True
-        mock_fc_at.return_value = True
+    @mock.patch("pyeapi.client.Node", autospec=True)
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def setup_test_file_copy_remote_exists(self, test_file_copy_remote_exists, mock_ssh, mock_node):
+        self.device = EOSDevice("host", "user", "pass")
+        self.maxDiff = None
+
+        mock_node.enable.side_effect = enable
+        mock_node.config.side_effect = config
+        self.device.native = mock_node
+        mock_ssh.send_command_timing.side_effect = send_command
+        mock_ssh.send_command_expect.side_effect = send_command_expect
+        self.device.native_ssh = mock_ssh
+
+    def teardown_test_file_copy_remote_exists(self, test_file_copy_remote_exists):
+        self.device.native.reset_mock()
+        self.device.native_ssh.reset_mock()
+
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy_remote_exists(self, mock_open, mock_close, mock_ssh, mock_ft):
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.return_value = True
+        mock_ft_instance.compare_md5.return_value = True
+
         result = self.device.file_copy_remote_exists("source_file")
 
         self.assertTrue(result)
 
-    @mock.patch.object(EOSFileCopy, "remote_file_exists", autospec=True)
-    def test_file_copy_remote_exists_failure(self, mock_fc):
-        mock_fc.return_value = False
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy_remote_exists_bad_md5(self, mock_open, mock_close, mock_ssh, mock_ft):
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.return_value = True
+        mock_ft_instance.compare_md5.return_value = False
+
         result = self.device.file_copy_remote_exists("source_file")
 
         self.assertFalse(result)
 
-    @mock.patch("pyntc.devices.eos_device.EOSFileCopy", autospec=True)
-    def test_file_copy(self, mock_fc):
-        instance = mock_fc.return_value
-        instance.remote_file_exists.side_effect = [False, True]
-        self.device.file_copy("source_file")
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy_remote_not_exist(self, mock_open, mock_close, mock_ssh, mock_ft):
 
-        instance.send.assert_called_with()
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.return_value = False
+        mock_ft_instance.compare_md5.return_value = True
+
+        result = self.device.file_copy_remote_exists("source_file")
+
+        self.assertFalse(result)
+
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy(self, mock_open, mock_close, mock_ssh, mock_ft):
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        self.device.file_copy("path/to/source_file")
+
+        mock_ft.assert_called_with(self.device.native_ssh, "path/to/source_file", "source_file", file_system="flash:")
+        mock_ft_instance.enable_scp.assert_any_call()
+        mock_ft_instance.establish_scp_conn.assert_any_call()
+        mock_ft_instance.transfer_file.assert_any_call()
+
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy_different_dest(self, mock_open, mock_close, mock_ssh, mock_ft):
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        self.device.file_copy("source_file", "dest_file")
+
+        mock_ft.assert_called_with(self.device.native_ssh, "source_file", "dest_file", file_system="flash:")
+        mock_ft_instance.enable_scp.assert_any_call()
+        mock_ft_instance.establish_scp_conn.assert_any_call()
+        mock_ft_instance.transfer_file.assert_any_call()
+
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
+    def test_file_copy_fail(self, mock_open, mock_close, mock_ssh, mock_ft):
+        self.device.native_ssh = mock_open
+        self.device.native_ssh.send_command_timing.side_effect = None
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.transfer_file.side_effect = Exception
+        mock_ft_instance.check_file_exists.return_value = False
+
+        with self.assertRaises(FileTransferError):
+            self.device.file_copy("source_file")
 
     def test_reboot(self):
         self.device.reboot(confirm=True)

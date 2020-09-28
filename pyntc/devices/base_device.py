@@ -79,8 +79,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def close(self):
-        """Close the connection to the device.
-        """
+        """Close the connection to the device."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -230,8 +229,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def open(self):
-        """Open a connection to the device.
-        """
+        """Open a connection to the device."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -256,8 +254,7 @@ class BaseDevice(object):
     @property
     @abc.abstractmethod
     def running_config(self):
-        """Return the running configuration of the device.
-        """
+        """Return the running configuration of the device."""
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -326,8 +323,7 @@ class BaseDevice(object):
     @property
     @abc.abstractmethod
     def startup_config(self):
-        """Return the startup configuration of the device.
-        """
+        """Return the startup configuration of the device."""
         raise NotImplementedError
 
     #################################
@@ -336,8 +332,7 @@ class BaseDevice(object):
 
     def feature(self, feature_name):
         """Return a feature class based on the ``feature_name`` for the
-        appropriate subclassed device type.
-        """
+        appropriate subclassed device type."""
         try:
             feature_module = importlib.import_module(
                 "pyntc.devices.system_features.%s.%s_%s" % (feature_name, self.device_type, feature_name)
@@ -359,13 +354,11 @@ class BaseDevice(object):
         return self.boot_options
 
     def refresh(self):
-        """Refresh caches on device instance.
-        """
+        """Refresh caches on device instance."""
         self.refresh_facts()
 
     def refresh_facts(self):
-        """Refresh cached facts.
-        """
+        """Refresh cached facts."""
         # Persist values that were not added by facts getter
         if isinstance(self._facts, dict):
             facts_backup = self._facts.copy()

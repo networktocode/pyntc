@@ -1,0 +1,7 @@
+{
+    "command": "dir",
+    "result": {
+        "output": "Directory of flash:/\n1  -rw-    15183868                c2600-ik9o3s3-mz.122-15.T9.bin\n16777216 bytes total (1592488 bytes free)\n"
+    },
+    "encoding": "text"
+}
