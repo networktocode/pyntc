@@ -332,8 +332,7 @@ class BaseDevice(object):
 
     def feature(self, feature_name):
         """Return a feature class based on the ``feature_name`` for the
-        appropriate subclassed device type.
-        """
+        appropriate subclassed device type."""
         try:
             feature_module = importlib.import_module(
                 "pyntc.devices.system_features.%s.%s_%s" % (feature_name, self.device_type, feature_name)

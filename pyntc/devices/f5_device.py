@@ -1,5 +1,4 @@
-"""Module for using an F5 TMOS device over the REST / SOAP.
-"""
+"""Module for using an F5 TMOS device over the REST / SOAP."""
 
 import hashlib
 import os
