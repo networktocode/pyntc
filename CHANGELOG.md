@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Security
 
 
+## [0.0.12]
+### Added
+- AIREOSDevice methods for pre-downloading images to Access Points (``transfer_image_to_ap``)
+### Changed
+- EOSDevice ``file_copy`` now uses Netmiko instead of custom code
+- Code format was updated with new `black` release
+
 ##  [0.0.11]
 
 ### Added
