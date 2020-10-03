@@ -80,9 +80,9 @@ def test_send_command_timing(aireos_send_command_timing):
 def test_send_command_expect(aireos_send_command_expect):
     command = "send_command_expect"
     device = aireos_send_command_expect([f"{command}.txt"])
-    device._send_command(command, True, expect_string="Continue?")
-    device.native.send_command_expect.assert_called()
-    device.native.send_command_expect.assert_called_with("send_command_expect", expect_string="Continue?")
+    device._send_command(command, expect_string="Continue?")
+    device.native.send_command.assert_called()
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
 
 
 def test_send_command_error(aireos_send_command_timing):
@@ -947,7 +947,7 @@ def test_show(mock_enable, aireos_send_command_timing):
 @mock.patch.object(AIREOSDevice, "enable")
 def test_show_expect(mock_enable, aireos_send_command_expect):
     device = aireos_send_command_expect(["send_command_expect.txt"])
-    data = device.show("send command expect", expect=True, expect_string="Continue?")
+    data = device.show("send command expect", expect_string="Continue?")
     assert data.strip() == "This is only a test\nContinue?"
     device.native.send_command_expect.assert_called()
 
