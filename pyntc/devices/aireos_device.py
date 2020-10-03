@@ -977,7 +977,6 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             commands (list): The list of commands to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
 
         Returns:
