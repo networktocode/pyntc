@@ -233,7 +233,7 @@ class TestASADevice:
         self.device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
         boot_options = self.device.boot_options
         assert boot_options == {"sys": BOOT_IMAGE}
-        self.device.native.send_command.assert_called_with("show boot | i BOOT variable")
+        self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_none(self, mock_boot):
