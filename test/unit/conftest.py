@@ -135,17 +135,6 @@ def aireos_send_command(aireos_device, aireos_mock_path):
 
 
 @pytest.fixture
-def aireos_send_command_expect(aireos_device, aireos_mock_path):
-    def _mock(side_effects, existing_device=None, device=aireos_device):
-        if existing_device is not None:
-            device = existing_device
-        device.native.send_command_expect.side_effect = get_side_effects(aireos_mock_path, side_effects)
-        return device
-
-    return _mock
-
-
-@pytest.fixture
 def aireos_send_command_timing(aireos_device, aireos_mock_path):
     def _mock(side_effects, existing_device=None, device=aireos_device):
         if existing_device is not None:
