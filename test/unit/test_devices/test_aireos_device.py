@@ -928,12 +928,12 @@ def test_set_boot_options_error(mock_save, mock_config, aireos_device, aireos_bo
 
 
 @mock.patch.object(AIREOSDevice, "enable")
-def test_show(mock_enable, aireos_send_command):
-    device = aireos_send_command(["send_command_timing.txt"])
+def test_show(mock_enable, aireos_send_command_timing):
+    device = aireos_send_command_timing(["send_command_timing.txt"])
     data = device.show("send command timing")
     assert data.strip() == "This is only a test"
     mock_enable.assert_called()
-    device.native.send_command.assert_called()
+    device.native.send_command_timing.assert_called()
 
 
 @mock.patch.object(AIREOSDevice, "enable")

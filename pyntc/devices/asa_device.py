@@ -350,7 +350,7 @@ class ASADevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect_string=""):
+    def show(self, command, expect_string=None):
         self.enable()
         return self._send_command(command, expect_string=expect_string)
 

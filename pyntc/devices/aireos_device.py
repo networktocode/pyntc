@@ -945,7 +945,7 @@ class AIREOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect_string=""):
+    def show(self, command, expect_string=None):
         """
         Send an operational command to the device.
 

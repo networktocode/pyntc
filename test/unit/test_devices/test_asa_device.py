@@ -2,7 +2,7 @@ import pytest
 import os
 from unittest import mock
 
-from .device_mocks.asa import send_command, send_command_expect
+from .device_mocks.asa import send_command
 from pyntc.devices import ASADevice
 from pyntc.devices.asa_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
@@ -31,7 +31,7 @@ class TestASADevice:
 
         self.device = ASADevice("host", "user", "password")
         api.send_command_timing.side_effect = send_command
-        api.send_command_expect.side_effect = send_command_expect
+        api.send_command.side_effect = send_command
         self.device.native = api
         self.count_setup += 1
 
@@ -233,7 +233,7 @@ class TestASADevice:
         self.device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
         boot_options = self.device.boot_options
         assert boot_options == {"sys": BOOT_IMAGE}
-        self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
+        self.device.native.send_command.assert_called_with("show boot | i BOOT variable")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_none(self, mock_boot):
