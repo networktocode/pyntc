@@ -585,8 +585,10 @@ class AIREOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
+            wlans = self._disable_ssids()
             self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
+            self._enable_ssids(wlans)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
             if not self.peer_redundancy_state == peer_redundancy:
@@ -978,6 +980,32 @@ class AIREOSDevice(BaseDevice):
         days, hours, minutes = self._uptime_components()
         return "%02d:%02d:%02d:00" % (days, hours, minutes)
 
+    def _disable_ssids(self):
+        """
+        Disable all SSIDs on the device.
+
+        Returns:
+            list: previously enabled WLAN ids
+        """
+        wlans = []
+        show_wlan_summary_out = self.show("show wlan summary")
+        for line in show_wlan_summary_out.split("\n"):
+            if re.search("Enabled", line):
+                wlans.append(line.split()[0])
+        self.config("wlan disable all")
+        self.save()
+        return wlans
+
+    def _enable_ssids(self, wlans):
+        """
+        Enable all SSIDs that were enabled before the reboot.
+
+        Args:
+            wlans (list): The image that should be sent to the APs.
+        """
+        commands = [f"wlan enable {wlan}" for wlan in wlans]
+        self.config_list(commands)
+        self.save()
 
 class RebootSignal(NTCError):
     """Handles reboot interrupts."""
