@@ -25,8 +25,7 @@ RE_AP_IMAGE_DOWNLOADED = re.compile(r"^\s*[Cc]ompleted\s+[Pp]redownloading\.+\s+
 RE_AP_IMAGE_UNSUPPORTED = re.compile(r"^\s*[Nn]ot\s+[Ss]upported\.+\s+(?P<unsupported>\d+)\s*$", re.M)
 RE_AP_IMAGE_FAILED = re.compile(r"^\s*[Ff]ailed\s+to\s+[Pp]redownload\.+\s+(?P<failed>\d+)\s*$", re.M)
 RE_AP_BOOT_OPTIONS = re.compile(
-    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
-    re.M,
+    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$", re.M,
 )
 
 
@@ -471,14 +470,7 @@ class AIREOSDevice(BaseDevice):
         raise NotImplementedError
 
     def file_copy(
-        self,
-        username,
-        password,
-        server,
-        filepath,
-        protocol="sftp",
-        filetype="code",
-        delay_factor=3,
+        self, username, password, server, filepath, protocol="sftp", filetype="code", delay_factor=3,
     ):
         """
         Copy a file from server to Controller.
@@ -585,7 +577,8 @@ class AIREOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
-            wlans = self._disable_ssids()
+            wlans = self.enabled_ssids
+            self.config("wlan disable all")
             self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
             self._enable_ssids(wlans)
@@ -795,8 +788,7 @@ class AIREOSDevice(BaseDevice):
         self.save()
         if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command=boot_command,
-                message="Setting boot command did not yield expected results",
+                command=boot_command, message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):
@@ -980,32 +972,33 @@ class AIREOSDevice(BaseDevice):
         days, hours, minutes = self._uptime_components()
         return "%02d:%02d:%02d:00" % (days, hours, minutes)
 
-    def _disable_ssids(self):
+    @property
+    def enabled_ssids(self):
         """
-        Disable all SSIDs on the device.
+        Show all enabled ssids.
 
         Returns:
-            list: previously enabled WLAN ids
+            list: enabled WLAN ids
         """
         wlans = []
         show_wlan_summary_out = self.show("show wlan summary")
         for line in show_wlan_summary_out.split("\n"):
-            if re.search("Enabled", line):
-                wlans.append(line.split()[0])
-        self.config("wlan disable all")
-        self.save()
+            wlan_id = re.search(r"^(\d+).*Enabled.*$", line)
+            if wlan_id is not None and wlan_id.group(1):
+                wlans.append(wlan_id.group(1))
         return wlans
 
     def _enable_ssids(self, wlans):
         """
-        Enable all SSIDs that were enabled before the reboot.
+        Enable all given SSIDs.
 
         Args:
-            wlans (list): The image that should be sent to the APs.
+            wlans (list): WLAN IDs.
         """
-        commands = [f"wlan enable {wlan}" for wlan in wlans]
-        self.config_list(commands)
-        self.save()
+        if wlans:
+            commands = [f"wlan enable {wlan}" for wlan in wlans]
+            self.config_list(commands)
+
 
 class RebootSignal(NTCError):
     """Handles reboot interrupts."""

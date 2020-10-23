@@ -57,9 +57,7 @@ def test_enter_config(aireos_device):
 
 
 @pytest.mark.parametrize(
-    "filename,expected",
-    (("show_sysinfo.txt", True), ("show_sysinfo_false.txt", False)),
-    ids=("True", "False"),
+    "filename,expected", (("show_sysinfo.txt", True), ("show_sysinfo_false.txt", False)), ids=("True", "False"),
 )
 def test_image_booted(aireos_show, aireos_boot_image, filename, expected):
     device = aireos_show([filename])
@@ -840,3 +838,19 @@ def test_uptime(mock_uptime_components, aireos_device):
 def test_uptime_string(mock_uptime_components, aireos_device):
     mock_uptime_components.side_effect = [(3, 2, 20)]
     assert aireos_device.uptime_string == "03:02:20:00"
+
+
+# @mock.patch.object(AIREOSDevice, "show")
+def test_enabled_ssids(aireos_show):
+    device = aireos_show(["show_wlan_summary.txt"])
+    assert device.enabled_ssids == ["5", "15", "16", "20", "22", "24"]
+
+
+@pytest.mark.parametrize("wlans", (([]), ([1, 2, 3])))
+@mock.patch.object(AIREOSDevice, "config_list")
+def test_enable_ssids(mock_config_list, aireos_device, wlans):
+    aireos_device._enable_ssids(wlans)
+    if wlans:
+        mock_config_list.assert_called()
+    else:
+        mock_config_list.assert_not_called()
