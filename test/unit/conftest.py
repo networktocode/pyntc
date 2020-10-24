@@ -58,7 +58,7 @@ def aireos_expected_wlans():
         16: {
             "profile": "Test1_WIGA",
             "ssid": "testguest",
-            "status": "Enabled",
+            "status": "Disabled",
             "interface": "management",
         },
         20: {
@@ -82,7 +82,7 @@ def aireos_expected_wlans():
         24: {
             "profile": "TestAirway",
             "ssid": "TestAirway",
-            "status": "Enabled",
+            "status": "Disabled",
             "interface": "wireless client 102",
         },
     }

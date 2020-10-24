@@ -7,7 +7,9 @@ from pyntc.devices import AIREOSDevice
 from pyntc.devices.aireos_device import (
     CommandError,
     OSInstallError,
+    WLANEnableError,
     CommandListError,
+    WLANDisableError,
     FileTransferError,
     RebootTimeoutError,
     NTCFileNotFoundError,
@@ -263,6 +265,102 @@ def test_close_not_connected(aireos_device):
     aireos_device.native.disconnect.assert_not_called()
 
 
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_all(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_disabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
+    aireos_device.disable_wlans("all")
+    mock_wlans.assert_called()
+    mock_config_list.assert_called_with(["wlan disable all"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_all_already_disabled(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_disabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
+    aireos_device.disable_wlans("all")
+    mock_config_list.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_all_fail(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_disabled_wlans.return_value = [16, 21, 24]
+    with pytest.raises(WLANDisableError) as disable_err:
+        aireos_device.disable_wlans("all")
+
+    assert disable_err.value.message == (
+        "Unable to disable WLAN IDs on host\n"
+        "Expected: [5, 15, 16, 20, 21, 22, 24]\n"
+        "Found:    [16, 21, 24]\n"
+    )
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_all_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_disabled_wlans.side_effect = [[16, 21, 24], [5, 15, 16, 20, 21, 22, 24]]
+    aireos_device.disable_wlans("all")
+    mock_wlans.assert_called()
+    mock_config_list.assert_called_with(["wlan disable all"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_subset(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+    mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 22, 24]]
+    aireos_device.disable_wlans([15, 22])
+    mock_wlans.assert_not_called()
+    mock_config_list.assert_called_with(["wlan disable 15", "wlan disable 22"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_subset_already_disabled(mock_disabled_wlans, mock_config_list, aireos_device):
+    mock_disabled_wlans.return_value = [16, 21, 24]
+    aireos_device.disable_wlans([16, 21])
+    mock_config_list.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config_list, aireos_device):
+    mock_disabled_wlans.return_value = [16, 21, 24]
+    with pytest.raises(WLANDisableError) as disable_err:
+        aireos_device.disable_wlans([15])
+
+    assert disable_err.value.message == (
+        "Unable to disable WLAN IDs on host\n"
+        "Expected: [15, 16, 21, 24]\n"
+        "Found:    [16, 21, 24]\n"
+    )
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
+def test_disable_wlans_subset_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+    mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 24]]
+    aireos_device.disable_wlans([15, 21])
+    mock_wlans.assert_not_called()
+    mock_config_list.assert_called_with(["wlan disable 15"])
+
+
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+def test_disabled_wlans(mock_wlans, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    assert aireos_device.disabled_wlans == [16, 21, 24]
+
+
 def test_enable_from_disable(aireos_device):
     aireos_device.native.check_enable_mode.side_effect = [False]
     aireos_device.native.check_config_mode.side_effect = [False]
@@ -285,6 +383,102 @@ def test_enable_from_config(aireos_device):
     aireos_device.enable()
     aireos_device.native.enable.assert_not_called()
     aireos_device.native.exit_config_mode.assert_called()
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_all(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_enabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
+    aireos_device.enable_wlans("all")
+    mock_wlans.assert_called()
+    mock_config_list.assert_called_with(["wlan enable all"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_all_already_enabled(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_enabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
+    aireos_device.enable_wlans("all")
+    mock_config_list.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_enabled_wlans.return_value = [5, 15, 20, 22]
+    with pytest.raises(WLANEnableError) as enable_err:
+        aireos_device.enable_wlans("all")
+
+    assert enable_err.value.message == (
+        "Unable to enable WLAN IDs on host\n"
+        "Expected: [5, 15, 16, 20, 21, 22, 24]\n"
+        "Found:    [5, 15, 20, 22]\n"
+    )
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_all_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 21, 22, 24]]
+    aireos_device.enable_wlans("all")
+    mock_wlans.assert_called()
+    mock_config_list.assert_called_with(["wlan enable all"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_subset(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+    mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 21, 22]]
+    aireos_device.enable_wlans([16, 21])
+    mock_wlans.assert_not_called()
+    mock_config_list.assert_called_with(["wlan enable 16", "wlan enable 21"])
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_subset_already_enabled(mock_enabled_wlans, mock_config_list, aireos_device):
+    mock_enabled_wlans.return_value = [5, 15, 20, 22]
+    aireos_device.enable_wlans([5, 15])
+    mock_config_list.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config_list, aireos_device):
+    mock_enabled_wlans.return_value = [5, 15, 20, 22]
+    with pytest.raises(WLANEnableError) as enable_err:
+        aireos_device.enable_wlans([16])
+
+    assert enable_err.value.message == (
+        "Unable to enable WLAN IDs on host\n"
+        "Expected: [5, 15, 16, 20, 22]\n"
+        "Found:    [5, 15, 20, 22]\n"
+    )
+
+
+@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
+def test_enable_wlans_subset_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+    mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 22]]
+    aireos_device.enable_wlans([16, 22])
+    mock_wlans.assert_not_called()
+    mock_config_list.assert_called_with(["wlan enable 16"])
+
+
+@mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
+def test_enabled_wlans(mock_wlans, aireos_device, aireos_expected_wlans):
+    mock_wlans.return_value = aireos_expected_wlans
+    assert aireos_device.enabled_wlans == [5, 15, 20, 22]
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
@@ -840,26 +1034,6 @@ def test_uptime(mock_uptime_components, aireos_device):
 def test_uptime_string(mock_uptime_components, aireos_device):
     mock_uptime_components.side_effect = [(3, 2, 20)]
     assert aireos_device.uptime_string == "03:02:20:00"
-
-
-
-
-
-
-# @mock.patch.object(AIREOSDevice, "show")
-def test_enabled_ssids(aireos_show):
-    device = aireos_show(["show_wlan_summary.txt"])
-    assert device.enabled_ssids == ["5", "15", "16", "20", "22", "24"]
-
-
-@pytest.mark.parametrize("wlans", (([]), ([1, 2, 3])))
-@mock.patch.object(AIREOSDevice, "config_list")
-def test_enable_ssids(mock_config_list, aireos_device, wlans):
-    aireos_device._enable_ssids(wlans)
-    if wlans:
-        mock_config_list.assert_called()
-    else:
-        mock_config_list.assert_not_called()
 
 
 def test_wlans(aireos_show, aireos_expected_wlans):
