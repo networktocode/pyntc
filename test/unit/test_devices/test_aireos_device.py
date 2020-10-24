@@ -842,6 +842,10 @@ def test_uptime_string(mock_uptime_components, aireos_device):
     assert aireos_device.uptime_string == "03:02:20:00"
 
 
+
+
+
+
 # @mock.patch.object(AIREOSDevice, "show")
 def test_enabled_ssids(aireos_show):
     device = aireos_show(["show_wlan_summary.txt"])
@@ -856,3 +860,8 @@ def test_enable_ssids(mock_config_list, aireos_device, wlans):
         mock_config_list.assert_called()
     else:
         mock_config_list.assert_not_called()
+
+
+def test_wlans(aireos_show, aireos_expected_wlans):
+    device = aireos_show(["show_wlan_summary.txt"])
+    assert device.wlans == aireos_expected_wlans

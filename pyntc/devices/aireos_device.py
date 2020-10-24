@@ -28,6 +28,10 @@ RE_AP_BOOT_OPTIONS = re.compile(
     r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
     re.M,
 )
+RE_WLANS = re.compile(
+    r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$",
+    re.M
+)
 
 
 def convert_filename_to_version(filename):
@@ -425,7 +429,7 @@ class AIREOSDevice(BaseDevice):
             >>>
 
         Raises:
-            COmmandListError: When the device's response indicates an error from sending one of the commands.
+            CommandListError: When the device's response indicates an error from sending one of the commands.
         """
         self._enter_config()
         entered_commands = []
@@ -452,6 +456,50 @@ class AIREOSDevice(BaseDevice):
     def connected(self, value):
         self._connected = value
 
+    def disable_wlans(self, wlan_ids):
+        """
+        Disable all given WLAN IDs.
+        
+        The string `all` can be passed to disable all WLANs.
+
+        Args:
+            wlan_ids (str|list): List of WLAN IDs or `all`.
+
+        Example:
+            >>> 
+        """
+        if ssids is None:
+            ssids = ["all"]
+
+        commands = [f"wlan disable {wlan}" for wlan in ssids]
+        self.config_list(commands)
+
+    @property
+    def disabled_wlans(self):
+        """
+        The IDs for all disabled WLANs.
+
+        Returns:
+            list: Disabled WLAN IDs.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>> device.disabled_wlans
+            [2, 4, 8]
+            >>>
+        """
+        enabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans if wlan_data["status"] == "Disabled"]
+        return enabled_ssids
+
     def enable(self):
         """
         Ensure device is in enable mode.
@@ -465,6 +513,50 @@ class AIREOSDevice(BaseDevice):
         # Ensure device is not in config mode
         if self.native.check_config_mode():
             self.native.exit_config_mode()
+
+    def enable_wlans(self, wlan_ids):
+        """
+        Enable all given WLAN IDs.
+        
+        The string `all` can be passed to disable all WLANs.
+
+        Args:
+            wlan_ids (str|list): List of WLAN IDs or `all`.
+
+        Example:
+
+        """
+        if ssids is None:
+            ssids = ["all"]
+
+        commands = [f"wlan enable {wlan}" for wlan in ssids]
+        self.config_list(commands)
+
+    @property
+    def enabled_ssids(self):
+        """
+        The IDs for all enabled WLANs.
+
+        Returns:
+            list: Enabled WLAN IDs.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>> device.enabled_wlans
+            [1, 3, 7]
+            >>>
+        """
+        enabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans if wlan_data["status"] == "Enabled"]
+        return enabled_ssids
 
     @property
     def facts(self):
@@ -982,31 +1074,32 @@ class AIREOSDevice(BaseDevice):
         return "%02d:%02d:%02d:00" % (days, hours, minutes)
 
     @property
-    def enabled_ssids(self):
+    def wlans(self):
         """
-        Show all enabled ssids.
+        All configured WLANs.
 
         Returns:
-            list: enabled WLAN ids
+            dict: WLAN IDs mapped to their operational data.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>>
         """
+        wlan_keys = ("profile", "ssid", "status", "interface")
         wlans = []
         show_wlan_summary_out = self.show("show wlan summary")
-        for line in show_wlan_summary_out.split("\n"):
-            wlan_id = re.search(r"^(\d+).*Enabled.*$", line)
-            if wlan_id is not None and wlan_id.group(1):
-                wlans.append(wlan_id.group(1))
+        re_wlans = RE_WLANS.finditer(show_wlan_summary_out)
+        wlans = {int(wlan.group("wlan_id")): dict(zip(wlan_keys, wlan.groups()[1:])) for wlan in re_wlans}
         return wlans
-
-    def _enable_ssids(self, wlans):
-        """
-        Enable all given SSIDs.
-
-        Args:
-            wlans (list): WLAN IDs.
-        """
-        if wlans:
-            commands = [f"wlan enable {wlan}" for wlan in wlans]
-            self.config_list(commands)
 
 
 class RebootSignal(NTCError):
