@@ -25,7 +25,8 @@ RE_AP_IMAGE_DOWNLOADED = re.compile(r"^\s*[Cc]ompleted\s+[Pp]redownloading\.+\s+
 RE_AP_IMAGE_UNSUPPORTED = re.compile(r"^\s*[Nn]ot\s+[Ss]upported\.+\s+(?P<unsupported>\d+)\s*$", re.M)
 RE_AP_IMAGE_FAILED = re.compile(r"^\s*[Ff]ailed\s+to\s+[Pp]redownload\.+\s+(?P<failed>\d+)\s*$", re.M)
 RE_AP_BOOT_OPTIONS = re.compile(
-    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$", re.M,
+    r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
+    re.M,
 )
 
 
@@ -470,7 +471,14 @@ class AIREOSDevice(BaseDevice):
         raise NotImplementedError
 
     def file_copy(
-        self, username, password, server, filepath, protocol="sftp", filetype="code", delay_factor=3,
+        self,
+        username,
+        password,
+        server,
+        filepath,
+        protocol="sftp",
+        filetype="code",
+        delay_factor=3,
     ):
         """
         Copy a file from server to Controller.
@@ -788,7 +796,8 @@ class AIREOSDevice(BaseDevice):
         self.save()
         if not self.boot_options["sys"] == image_name:
             raise CommandError(
-                command=boot_command, message="Setting boot command did not yield expected results",
+                command=boot_command,
+                message="Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect=False, expect_string=""):
