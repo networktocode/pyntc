@@ -31,8 +31,7 @@ RE_AP_BOOT_OPTIONS = re.compile(
     re.M,
 )
 RE_WLANS = re.compile(
-    r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$",
-    re.M
+    r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$", re.M
 )
 
 
@@ -461,7 +460,7 @@ class AIREOSDevice(BaseDevice):
     def disable_wlans(self, wlan_ids):
         """
         Disable all given WLAN IDs.
-        
+
         The string `all` can be passed to disable all WLANs.
         Commands are sent to disable WLAN IDs that are not in `self.disabled_wlans`.
         If trying to disable `all` WLANS, then "all" will be sent,
@@ -469,7 +468,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             wlan_ids (str|list): List of WLAN IDs or `all`.
-        
+
         Raises:
             WLANDisableError: When ``wlan_ids`` are not in `self.disabled_wlans` after configuration.
 
@@ -493,10 +492,7 @@ class AIREOSDevice(BaseDevice):
         disabled_wlans = self.disabled_wlans
         # Only send commands for enabled wlan ids
         if not wlans_to_validate.issubset(disabled_wlans):
-            commands = [
-                f"wlan disable {wlan}" for wlan in wlan_ids
-                if wlan not in disabled_wlans
-            ]
+            commands = [f"wlan disable {wlan}" for wlan in wlan_ids if wlan not in disabled_wlans]
             self.config_list(commands)
 
             post_disabled_wlans = self.disabled_wlans
@@ -547,7 +543,7 @@ class AIREOSDevice(BaseDevice):
     def enable_wlans(self, wlan_ids):
         """
         Enable all given WLAN IDs.
-        
+
         The string `all` can be passed to enable all WLANs.
         Commands are sent to enable WLAN IDs that are not in `self.enabled_wlans`.
         If trying to enable `all` WLANS, then "all" will be sent,
@@ -555,7 +551,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             wlan_ids (str|list): List of WLAN IDs or `all`.
-        
+
         Raises:
             WLANEnableError: When ``wlan_ids`` are not in `self.enabled_wlans` after configuration.
 
@@ -580,10 +576,7 @@ class AIREOSDevice(BaseDevice):
         enabled_wlans = self.enabled_wlans
         # Only send commands for disabled wlan ids
         if not wlans_to_validate.issubset(enabled_wlans):
-            commands = [
-                f"wlan enable {wlan}" for wlan in wlan_ids
-                if wlan not in enabled_wlans
-            ]
+            commands = [f"wlan enable {wlan}" for wlan in wlan_ids if wlan not in enabled_wlans]
             self.config_list(commands)
 
             post_enabled_wlans = self.enabled_wlans
@@ -698,7 +691,7 @@ class AIREOSDevice(BaseDevice):
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         raise NotImplementedError
 
-    def install_os(self, image_name, controller="both", save_config=True, **vendor_specifics):
+    def install_os(self, image_name, controller="both", save_config=True, disable_wlans=None, **vendor_specifics):
         """
         Install an operating system on the controller.
 
@@ -706,6 +699,8 @@ class AIREOSDevice(BaseDevice):
             image_name (str): The version to install on the device.
             controller (str): The controller(s) to reboot for install (only applies to HA device).
             save_config (bool): Whether the config should be saved to the device before reboot.
+            disable_wlans (str|list): Which WLANs to disable/enable before/after upgrade. Default is None.
+                To disable all WLANs, pass `"all"`. To disable select WLANs, pass a list of WLAN IDs.
 
         Returns:
             bool: True when the install is successful, False when the version is deemed to already be running.
@@ -713,6 +708,8 @@ class AIREOSDevice(BaseDevice):
         Raises:
             OSInstallError: When the device is not booted with the specified image after reload.
             RebootTimeoutError: When the device is unreachable longer than the reboot timeout value.
+            WLANDisableError: When WLANs are not disabled properly before the upgrade.
+            WLANEnableError: When WLANs are not enabled properly after the upgrade.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -736,11 +733,12 @@ class AIREOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
-            #wlans = self.enabled_ssids
-            #self.config("wlan disable all")
+            if disable_wlans is not None:
+                self.disable_wlans(disable_wlans)
             self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
-            #self._enable_ssids(wlans)
+            if disable_wlans is not None:
+                self.enable_wlans(disable_wlans)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
             if not self.peer_redundancy_state == peer_redundancy:

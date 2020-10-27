@@ -87,6 +87,7 @@ def aireos_expected_wlans():
         },
     }
 
+
 @pytest.fixture
 def aireos_image_booted(aireos_device_path, aireos_device):
     def _mock(side_effects, existing_device=None, device=aireos_device):
