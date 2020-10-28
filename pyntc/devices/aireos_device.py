@@ -13,7 +13,9 @@ from pyntc.errors import (
     NTCError,
     CommandError,
     OSInstallError,
+    WLANEnableError,
     CommandListError,
+    WLANDisableError,
     RebootTimeoutError,
     NTCFileNotFoundError,
 )
@@ -27,6 +29,9 @@ RE_AP_IMAGE_FAILED = re.compile(r"^\s*[Ff]ailed\s+to\s+[Pp]redownload\.+\s+(?P<f
 RE_AP_BOOT_OPTIONS = re.compile(
     r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
     re.M,
+)
+RE_WLANS = re.compile(
+    r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$", re.M
 )
 
 
@@ -425,7 +430,7 @@ class AIREOSDevice(BaseDevice):
             >>>
 
         Raises:
-            COmmandListError: When the device's response indicates an error from sending one of the commands.
+            CommandListError: When the device's response indicates an error from sending one of the commands.
         """
         self._enter_config()
         entered_commands = []
@@ -452,6 +457,75 @@ class AIREOSDevice(BaseDevice):
     def connected(self, value):
         self._connected = value
 
+    def disable_wlans(self, wlan_ids):
+        """
+        Disable all given WLAN IDs.
+
+        The string `all` can be passed to disable all WLANs.
+        Commands are sent to disable WLAN IDs that are not in `self.disabled_wlans`.
+        If trying to disable `all` WLANS, then "all" will be sent,
+        unless all WLANs in `self.wlans` are in `self.disabled_wlans`.
+
+        Args:
+            wlan_ids (str|list): List of WLAN IDs or `all`.
+
+        Raises:
+            WLANDisableError: When ``wlan_ids`` are not in `self.disabled_wlans` after configuration.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.disabled_wlans
+            [2, 4, 8]
+            >>> device.disable_wlans([1])
+            >>> device.disabled_wlans
+            [1, 2, 4, 8]
+            >>> device.disable_wlans("all")
+            [1, 2, 3, 4, 7, 8]
+            >>>
+        """
+        if wlan_ids == "all":
+            wlan_ids = ["all"]
+            wlans_to_validate = set(self.wlans)
+        else:
+            wlans_to_validate = set(wlan_ids)
+
+        disabled_wlans = self.disabled_wlans
+        # Only send commands for enabled wlan ids
+        if not wlans_to_validate.issubset(disabled_wlans):
+            commands = [f"wlan disable {wlan}" for wlan in wlan_ids if wlan not in disabled_wlans]
+            self.config_list(commands)
+
+            post_disabled_wlans = self.disabled_wlans
+            if not wlans_to_validate.issubset(post_disabled_wlans):
+                desired_wlans = wlans_to_validate.union(disabled_wlans)
+                raise WLANDisableError(self.host, desired_wlans, post_disabled_wlans)
+
+    @property
+    def disabled_wlans(self):
+        """
+        The IDs for all disabled WLANs.
+
+        Returns:
+            list: Disabled WLAN IDs.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>> device.disabled_wlans
+            [2, 4, 8]
+            >>>
+        """
+        disabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Disabled"]
+        return disabled_wlans
+
     def enable(self):
         """
         Ensure device is in enable mode.
@@ -465,6 +539,76 @@ class AIREOSDevice(BaseDevice):
         # Ensure device is not in config mode
         if self.native.check_config_mode():
             self.native.exit_config_mode()
+
+    def enable_wlans(self, wlan_ids):
+        """
+        Enable all given WLAN IDs.
+
+        The string `all` can be passed to enable all WLANs.
+        Commands are sent to enable WLAN IDs that are not in `self.enabled_wlans`.
+        If trying to enable `all` WLANS, then "all" will be sent,
+        unless all WLANs in `self.wlans` are in `self.enabled_wlans`.
+
+        Args:
+            wlan_ids (str|list): List of WLAN IDs or `all`.
+
+        Raises:
+            WLANEnableError: When ``wlan_ids`` are not in `self.enabled_wlans` after configuration.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.enabled_wlans
+            [1, 3, 7]
+            >>> device.enable_wlans([2])
+            >>> device.enabled_wlans
+            [1, 2, 3, 7]
+            >>> device.enable_wlans("all")
+            >>> dev.enabled_wlans
+            [1, 2, 3, 4, 7, 8]
+            >>>
+        """
+        if wlan_ids == "all":
+            wlan_ids = ["all"]
+            wlans_to_validate = set(self.wlans)
+        else:
+            wlans_to_validate = set(wlan_ids)
+
+        enabled_wlans = self.enabled_wlans
+        # Only send commands for disabled wlan ids
+        if not wlans_to_validate.issubset(enabled_wlans):
+            commands = [f"wlan enable {wlan}" for wlan in wlan_ids if wlan not in enabled_wlans]
+            self.config_list(commands)
+
+            post_enabled_wlans = self.enabled_wlans
+            if not wlans_to_validate.issubset(post_enabled_wlans):
+                desired_wlans = wlans_to_validate.union(enabled_wlans)
+                raise WLANEnableError(self.host, desired_wlans, post_enabled_wlans)
+
+    @property
+    def enabled_wlans(self):
+        """
+        The IDs for all enabled WLANs.
+
+        Returns:
+            list: Enabled WLAN IDs.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>> device.enabled_wlans
+            [1, 3, 7]
+            >>>
+        """
+        enabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Enabled"]
+        return enabled_wlans
 
     @property
     def facts(self):
@@ -547,7 +691,7 @@ class AIREOSDevice(BaseDevice):
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         raise NotImplementedError
 
-    def install_os(self, image_name, controller="both", save_config=True, **vendor_specifics):
+    def install_os(self, image_name, controller="both", save_config=True, disable_wlans=None, **vendor_specifics):
         """
         Install an operating system on the controller.
 
@@ -555,6 +699,8 @@ class AIREOSDevice(BaseDevice):
             image_name (str): The version to install on the device.
             controller (str): The controller(s) to reboot for install (only applies to HA device).
             save_config (bool): Whether the config should be saved to the device before reboot.
+            disable_wlans (str|list): Which WLANs to disable/enable before/after upgrade. Default is None.
+                To disable all WLANs, pass `"all"`. To disable select WLANs, pass a list of WLAN IDs.
 
         Returns:
             bool: True when the install is successful, False when the version is deemed to already be running.
@@ -562,6 +708,8 @@ class AIREOSDevice(BaseDevice):
         Raises:
             OSInstallError: When the device is not booted with the specified image after reload.
             RebootTimeoutError: When the device is unreachable longer than the reboot timeout value.
+            WLANDisableError: When WLANs are not disabled properly before the upgrade.
+            WLANEnableError: When WLANs are not enabled properly after the upgrade.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -585,11 +733,12 @@ class AIREOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
-            wlans = self.enabled_ssids
-            self.config("wlan disable all")
+            if disable_wlans is not None:
+                self.disable_wlans(disable_wlans)
             self.reboot(confirm=True, controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
-            self._enable_ssids(wlans)
+            if disable_wlans is not None:
+                self.enable_wlans(disable_wlans)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
             if not self.peer_redundancy_state == peer_redundancy:
@@ -982,31 +1131,32 @@ class AIREOSDevice(BaseDevice):
         return "%02d:%02d:%02d:00" % (days, hours, minutes)
 
     @property
-    def enabled_ssids(self):
+    def wlans(self):
         """
-        Show all enabled ssids.
+        All configured WLANs.
 
         Returns:
-            list: enabled WLAN ids
+            dict: WLAN IDs mapped to their operational data.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.wlans
+            {
+                1: {'profile': 'wlan 1', 'ssid': 'wifi', 'status': 'enabled', 'interface': '1'},
+                2: {'profile': 'wlan 2', 'ssid': 'corp', 'status': 'disabled', 'interface': '1'},
+                3: {'profile': 'wlan 3', 'ssid': 'guest', 'status': 'enabled', 'interface': '1'},
+                4: {'profile': 'wlan 4', 'ssid': 'test', 'status': 'disabled', 'interface': '1'},
+                7: {'profile': 'wlan 7', 'ssid': 'internet', 'status': 'enabled', 'interface': '1'},
+                8: {'profile': 'wlan 8', 'ssid': 'wifi-v', 'status': 'disabled', 'interface': '1'}
+            }
+            >>>
         """
+        wlan_keys = ("profile", "ssid", "status", "interface")
         wlans = []
         show_wlan_summary_out = self.show("show wlan summary")
-        for line in show_wlan_summary_out.split("\n"):
-            wlan_id = re.search(r"^(\d+).*Enabled.*$", line)
-            if wlan_id is not None and wlan_id.group(1):
-                wlans.append(wlan_id.group(1))
+        re_wlans = RE_WLANS.finditer(show_wlan_summary_out)
+        wlans = {int(wlan.group("wlan_id")): dict(zip(wlan_keys, wlan.groups()[1:])) for wlan in re_wlans}
         return wlans
-
-    def _enable_ssids(self, wlans):
-        """
-        Enable all given SSIDs.
-
-        Args:
-            wlans (list): WLAN IDs.
-        """
-        if wlans:
-            commands = [f"wlan enable {wlan}" for wlan in wlans]
-            self.config_list(commands)
 
 
 class RebootSignal(NTCError):
