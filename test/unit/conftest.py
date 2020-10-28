@@ -41,6 +41,54 @@ def aireos_device_path():
 
 
 @pytest.fixture
+def aireos_expected_wlans():
+    return {
+        5: {
+            "profile": "guest_cppm",
+            "ssid": "guest_cppm",
+            "status": "Enabled",
+            "interface": "management",
+        },
+        15: {
+            "profile": "Smartphone_xx",
+            "ssid": "TestInternet;WLANXX",
+            "status": "Enabled",
+            "interface": "management",
+        },
+        16: {
+            "profile": "Test1_WIGA",
+            "ssid": "testguest",
+            "status": "Disabled",
+            "interface": "management",
+        },
+        20: {
+            "profile": "Campus;WLAN-002",
+            "ssid": "TestCampus;WLAN-002",
+            "status": "Enabled",
+            "interface": "wireless client 104",
+        },
+        21: {
+            "profile": "testpoc",
+            "ssid": "testpoc",
+            "status": "Disabled",
+            "interface": "management",
+        },
+        22: {
+            "profile": "TestNewAirway",
+            "ssid": "TestNewAirway",
+            "status": "Enabled",
+            "interface": "rcn",
+        },
+        24: {
+            "profile": "TestAirway",
+            "ssid": "TestAirway",
+            "status": "Disabled",
+            "interface": "wireless client 102",
+        },
+    }
+
+
+@pytest.fixture
 def aireos_image_booted(aireos_device_path, aireos_device):
     def _mock(side_effects, existing_device=None, device=aireos_device):
         if existing_device is not None:
