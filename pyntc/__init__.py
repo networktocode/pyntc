@@ -12,7 +12,7 @@ try:
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-__version__ = "0.0.12"
+__version__ = "0.0.13"
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
