@@ -78,3 +78,23 @@ class NTCFileNotFoundError(NTCError):
     def __init__(self, hostname, file, dir):
         message = "{0} was not found in {1} on {2}".format(file, dir, hostname)
         super().__init__(message)
+
+
+class WLANEnableError(NTCError):
+    def __init__(self, hostname, desired_wlans, actual_wlans):
+        message = (
+            f"Unable to enable WLAN IDs on {hostname}\n"
+            f"Expected: {sorted(desired_wlans)}\n"
+            f"Found:    {sorted(actual_wlans)}\n"
+        )
+        super().__init__(message)
+
+
+class WLANDisableError(NTCError):
+    def __init__(self, hostname, desired_wlans, actual_wlans):
+        message = (
+            f"Unable to disable WLAN IDs on {hostname}\n"
+            f"Expected: {sorted(desired_wlans)}\n"
+            f"Found:    {sorted(actual_wlans)}\n"
+        )
+        super().__init__(message)
