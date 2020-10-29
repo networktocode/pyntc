@@ -13,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Security
 
 
+## [0.0.13]
+### Added
+- AIREOSDevice methods for disabling and enabling WLANs by ID (`disable_wlans`, `enable_wlans`)
+- AIREOSDevice properties for getting disabled and enabled WLAN IDs (`disabled_wlans`, `enabled_wlans`)
+- AIREOSDevice property for getting all WLANs (`wlans`)
+### Changed
+- AIREOSDevice `install_os` method now supports disabling and enabling WLANs before and after install respectively.
+
 ## [0.0.12]
 ### Added
 - AIREOSDevice methods for pre-downloading images to Access Points (``transfer_image_to_ap``)
@@ -21,7 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 - Code format was updated with new `black` release
 
 ##  [0.0.11]
-
 ### Added
 - AIREOSDevice property, ``peer_redundancy_state`` for standby device status
 
