@@ -10,3 +10,4 @@ dist/
 .idea/
 .vscode/
 .pytest_cache/
+venv/

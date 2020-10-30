@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=master)](https://travis-ci.org/networktocode/pyntc)
-[![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=master)](https://coveralls.io/github/networktocode/pyntc?branch=master)
+[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=main)](https://travis-ci.org/networktocode/pyntc)
+[![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=main)](https://coveralls.io/github/networktocode/pyntc?branch=main)
 
 # Introduction
 
@@ -356,7 +356,7 @@ tests, and make sure you are a good contributor.
 
 <!-- TODO: Correct/complete documentation. -->
 
-- `master` - Reserved for released code
+- `main` - Reserved for released code
 - `develop` - Work in progress on the main roadmap
 - `<feature>` - Individual feature branches, should be PR'd to `develop`.
 
