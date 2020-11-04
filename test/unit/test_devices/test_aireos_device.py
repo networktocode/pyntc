@@ -77,11 +77,11 @@ def test_send_command_timing(aireos_send_command_timing):
     device.native.send_command_timing.assert_called_with(command)
 
 
-def test_send_command_expect(aireos_send_command_timing):
+def test_send_command_expect(aireos_send_command):
     command = "send_command_expect"
-    device = aireos_send_command_timing([f"{command}.txt"])
-    device._send_command(command)
-    device.native.send_command_timing.assert_called_with("send_command_expect")
+    device = aireos_send_command([f"{command}.txt"])
+    device._send_command(command, expect_string="Continue?")
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
 
 
 def test_send_command_error(aireos_send_command_timing):
