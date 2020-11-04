@@ -3,7 +3,7 @@ import os
 import pytest
 from unittest import mock
 
-from pyntc.devices import AIREOSDevice
+from pyntc.devices import AIREOSDevice, ASADevice
 
 
 def get_side_effects(mock_path, side_effects):
@@ -176,3 +176,39 @@ def mock_path():
     filepath = os.path.abspath(__file__)
     dirpath = os.path.dirname(filepath)
     return f"{dirpath}/test_devices/device_mocks"
+
+
+@pytest.fixture
+def asa_device():
+    with mock.patch("pyntc.devices.asa_device.ConnectHandler") as ch:
+        device = ASADevice("host", "user", "password")
+        device.native = ch
+        yield device
+
+
+@pytest.fixture
+def asa_mock_path(mock_path):
+    return f"{mock_path}/asa"
+
+
+@pytest.fixture
+def asa_send_command(asa_device, asa_mock_path):
+    def _mock(side_effects, existing_device=None, device=asa_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command.side_effect = get_side_effects(asa_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def asa_send_command_timing(asa_device, asa_mock_path):
+    def _mock(side_effects, existing_device=None, device=asa_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command_timing.side_effect = get_side_effects(asa_mock_path, side_effects)
+        return device
+
+    return _mock
+
