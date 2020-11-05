@@ -2,6 +2,8 @@ import unittest
 import mock
 import os
 
+import pytest
+
 from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
@@ -344,3 +346,26 @@ class TestIOSDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_send_command_timing(ios_send_command_timing):
+    command = "send_command_timing"
+    device = ios_send_command_timing([f"{command}.txt"])
+    device._send_command(command)
+    device.native.send_command_timing.assert_called()
+    device.native.send_command_timing.assert_called_with(command)
+
+
+def test_send_command_expect(ios_send_command):
+    command = "send_command_expect"
+    device = ios_send_command([f"{command}.txt"])
+    device._send_command(command, expect_string="Continue?")
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
+
+
+def test_send_command_error(ios_send_command_timing):
+    command = "send_command_error"
+    device = ios_send_command_timing([f"{command}.txt"])
+    with pytest.raises(CommandError):
+        device._send_command(command)
+    device.native.send_command_timing.assert_called()
