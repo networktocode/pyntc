@@ -101,14 +101,11 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect=False, expect_string=""):
-        if expect:
-            if expect_string:
-                response = self.native.send_command_expect(command, expect_string=expect_string)
-            else:
-                response = self.native.send_command_expect(command)
-        else:
+    def _send_command(self, command, expect_string=None):
+        if expect_string is None:
             response = self.native.send_command_timing(command)
+        else:
+            response = self.native.send_command(command, expect_string=expect_string)
 
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
@@ -352,7 +349,7 @@ class IOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show("show running-config", expect=True)
+        return self.show("show running-config")
 
     def save(self, filename="startup-config"):
         command = "copy running-config %s" % filename
@@ -391,9 +388,9 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect=False, expect_string=""):
+    def show(self, command, expect_string=None):
         self.enable()
-        return self._send_command(command, expect=expect, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
         self.enable()

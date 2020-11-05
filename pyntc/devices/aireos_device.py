@@ -130,13 +130,12 @@ class AIREOSDevice(BaseDevice):
 
         return False
 
-    def _send_command(self, command, expect=False, expect_string=""):
+    def _send_command(self, command, expect_string=None):
         """
         Send single command to device.
 
         Args:
             command (str): The command to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
 
         Returns:
@@ -154,13 +153,10 @@ class AIREOSDevice(BaseDevice):
             ...
             >>>
         """
-        if expect:
-            if expect_string:
-                response = self.native.send_command_expect(command, expect_string=expect_string)
-            else:
-                response = self.native.send_command_expect(command)
-        else:
+        if expect_string is None:
             response = self.native.send_command_timing(command)
+        else:
+            response = self.native.send_command(command, expect_string=expect_string)
 
         if "Incorrect usage" in response or "Error:" in response:
             raise CommandError(command, response)
@@ -949,13 +945,12 @@ class AIREOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect=False, expect_string=""):
+    def show(self, command, expect_string=None):
         """
         Send an operational command to the device.
 
         Args:
             command (str): The command to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
 
         Returns:
@@ -974,7 +969,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         self.enable()
-        return self._send_command(command, expect=expect, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
         """
@@ -982,7 +977,6 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             commands (list): The list of commands to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
 
         Returns:

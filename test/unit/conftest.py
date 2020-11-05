@@ -3,7 +3,7 @@ import os
 import pytest
 from unittest import mock
 
-from pyntc.devices import AIREOSDevice
+from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice
 
 
 def get_side_effects(mock_path, side_effects):
@@ -135,17 +135,6 @@ def aireos_send_command(aireos_device, aireos_mock_path):
 
 
 @pytest.fixture
-def aireos_send_command_expect(aireos_device, aireos_mock_path):
-    def _mock(side_effects, existing_device=None, device=aireos_device):
-        if existing_device is not None:
-            device = existing_device
-        device.native.send_command_expect.side_effect = get_side_effects(aireos_mock_path, side_effects)
-        return device
-
-    return _mock
-
-
-@pytest.fixture
 def aireos_send_command_timing(aireos_device, aireos_mock_path):
     def _mock(side_effects, existing_device=None, device=aireos_device):
         if existing_device is not None:
@@ -187,3 +176,73 @@ def mock_path():
     filepath = os.path.abspath(__file__)
     dirpath = os.path.dirname(filepath)
     return f"{dirpath}/test_devices/device_mocks"
+
+
+@pytest.fixture
+def asa_device():
+    with mock.patch("pyntc.devices.asa_device.ConnectHandler") as ch:
+        device = ASADevice("host", "user", "password")
+        device.native = ch
+        yield device
+
+
+@pytest.fixture
+def asa_mock_path(mock_path):
+    return f"{mock_path}/asa"
+
+
+@pytest.fixture
+def asa_send_command(asa_device, asa_mock_path):
+    def _mock(side_effects, existing_device=None, device=asa_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command.side_effect = get_side_effects(asa_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def asa_send_command_timing(asa_device, asa_mock_path):
+    def _mock(side_effects, existing_device=None, device=asa_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command_timing.side_effect = get_side_effects(asa_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def ios_device():
+    with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
+        device = IOSDevice("host", "user", "password")
+        device.native = ch
+        yield device
+
+
+@pytest.fixture
+def ios_mock_path(mock_path):
+    return f"{mock_path}/ios"
+
+
+@pytest.fixture
+def ios_send_command(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command.side_effect = get_side_effects(ios_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def ios_send_command_timing(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command_timing.side_effect = get_side_effects(ios_mock_path, side_effects)
+        return device
+
+    return _mock

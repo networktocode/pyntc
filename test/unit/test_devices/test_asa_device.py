@@ -2,7 +2,7 @@ import pytest
 import os
 from unittest import mock
 
-from .device_mocks.asa import send_command, send_command_expect
+from .device_mocks.asa import send_command
 from pyntc.devices import ASADevice
 from pyntc.devices.asa_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
@@ -31,7 +31,7 @@ class TestASADevice:
 
         self.device = ASADevice("host", "user", "password")
         api.send_command_timing.side_effect = send_command
-        api.send_command_expect.side_effect = send_command_expect
+        api.send_command.side_effect = send_command
         self.device.native = api
         self.count_setup += 1
 
@@ -302,3 +302,26 @@ class TestASADevice:
     def test_count_teardown(self):
         # This class is reinstantiated in every test, so the counter is reset
         assert self.count_teardown == 0
+
+
+def test_send_command_timing(asa_send_command_timing):
+    command = "send_command_timing"
+    device = asa_send_command_timing([f"{command}.txt"])
+    device._send_command(command)
+    device.native.send_command_timing.assert_called()
+    device.native.send_command_timing.assert_called_with(command)
+
+
+def test_send_command_expect(asa_send_command):
+    command = "send_command_expect"
+    device = asa_send_command([f"{command}.txt"])
+    device._send_command(command, expect_string="Continue?")
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
+
+
+def test_send_command_error(asa_send_command_timing):
+    command = "send_command_error"
+    device = asa_send_command_timing([f"{command}.txt"])
+    with pytest.raises(CommandError):
+        device._send_command(command)
+    device.native.send_command_timing.assert_called()
