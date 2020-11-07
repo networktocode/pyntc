@@ -227,6 +227,52 @@ def ios_mock_path(mock_path):
 
 
 @pytest.fixture
+def ios_redundancy_info():
+    return (
+        "       Available system uptime = 5 weeks, 3 days, 15 hours, 8 minutes\n"
+        "Switchovers system experienced = 0\n"
+        "              Standby failures = 0\n"
+        "        Last switchover reason = none\n"
+        "\n"
+        "                 Hardware Mode = Duplex\n"
+        "    Configured Redundancy Mode = Stateful Switchover\n"
+        "     Operating Redundancy Mode = Stateful Switchover\n"
+        "              Maintenance Mode = Disabled\n"
+        "                Communications = Up\n"
+        "          "
+    )
+
+
+@pytest.fixture
+def ios_redundancy_other():
+    return (
+        "              Standby Location = slot 2/1\n"
+        "        Current Software state = STANDBY HOT\n"
+        "       Uptime in current state = 5 weeks, 3 days, 14 hours, 35 minutes\n"
+        "                 Image Version = Cisco IOS Software, IOS-XE Software, Catalyst 4500 L3 Switch  Software (cat4500e-UNIVERSALK9-M), Version 03.10.03.E RELEASE SOFTWARE (fc3)\n"
+        "Technical Support: http://www.cisco.com/techsupport\n"
+        "Copyright (c) 1986-2019 by Cisco Systems, Inc.\n"
+        "Compiled Mon 15-Jul-19 08:51 by pr\n"
+        "               BOOT = bootflash:/cat4500e-universalk9.SPA.03.10.03.E.152-6.E3.bin,12;bootflash:/cat4500e-universalk9.SPA.03.08.08.E.152-4.E8.bin,12;\n"
+        "        Configuration register = 0x2102\n"
+    )
+
+
+@pytest.fixture
+def ios_redundancy_self():
+    return (
+        "               Active Location = slot 1/1\n"
+        "        Current Software state = ACTIVE\n"
+        "       Uptime in current state = 5 weeks, 3 days, 15 hours, 4 minutes\n"
+        "                 Image Version = Cisco IOS Software, IOS-XE Software, Catalyst 4500 L3 Switch  Software (cat4500e-UNIVERSALK9-M), Version 03.10.03.E RELEASE SOFTWARE (fc3)\n"
+        "Technical Support: http://www.cisco.com/techsupport\n"
+        "Copyright (c) 1986-2019 by Cisco Systems, Inc.\n"
+        "Compiled Mon 15-Jul-19 08:51 by prod\n"
+        "               BOOT = bootflash:/cat4500e-universalk9.SPA.03.10.03.E.152-6.E3.bin,12;bootflash:/cat4500e-universalk9.SPA.03.08.08.E.152-4.E8.bin,12;\n"
+        "        Configuration register = 0x2102\n"
+    )
+
+@pytest.fixture
 def ios_send_command(ios_device, ios_mock_path):
     def _mock(side_effects, existing_device=None, device=ios_device):
         if existing_device is not None:
@@ -243,6 +289,19 @@ def ios_send_command_timing(ios_device, ios_mock_path):
         if existing_device is not None:
             device = existing_device
         device.native.send_command_timing.side_effect = get_side_effects(ios_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def ios_show(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(IOSDevice, "show") as mock_show:
+            mock_show.side_effect = get_side_effects(ios_mock_path, side_effects)
+        device.show = mock_show
         return device
 
     return _mock
