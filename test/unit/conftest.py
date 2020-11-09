@@ -272,6 +272,7 @@ def ios_redundancy_self():
         "        Configuration register = 0x2102\n"
     )
 
+
 @pytest.fixture
 def ios_send_command(ios_device, ios_mock_path):
     def _mock(side_effects, existing_device=None, device=ios_device):

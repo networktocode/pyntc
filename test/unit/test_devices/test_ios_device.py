@@ -458,9 +458,3 @@ def test_redundancy_state_unsupported(ios_show):
     device = ios_show([CommandError("show redundancy", "unsupported")])
     actual = device.redundancy_state
     assert actual is None
-
-
-def test_redundancy_mode_unsupported_command(ios_show):
-    device = ios_show([CommandError("show redundancy", "unsupported")])
-    actual = device.redundancy_mode
-    assert actual == "n/a"
