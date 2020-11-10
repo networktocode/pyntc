@@ -371,17 +371,6 @@ class TestIOSDevice(unittest.TestCase):
     def test_install_os_error(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
         self.assertRaises(OSInstallError, self.device.install_os, BOOT_IMAGE)
 
-    @mock.patch.object(IOSDevice, "_image_booted", side_effect=[True, False])
-    @mock.patch.object(IOSDevice, "set_boot_options")
-    @mock.patch.object(IOSDevice, "reboot")
-    @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
-    def test_install_os_image_booted_true_false(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
-        state = self.device.install_os(BOOT_IMAGE)
-        mock_set_boot.assert_not_called()
-        mock_reboot.assert_not_called()
-        mock_wait.assert_not_called()
-        self.assertEqual(state, False)
-
 
 if __name__ == "__main__":
     unittest.main()
