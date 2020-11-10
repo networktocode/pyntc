@@ -398,7 +398,7 @@ class IOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        The oprating redundancy mode of the device.
+        The operating redundancy mode of the device.
 
         Returns:
             str: The redundancy mode the device is operating in.
