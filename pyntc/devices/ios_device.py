@@ -25,6 +25,14 @@ from pyntc.errors import (
 
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
+RE_SHOW_REDUNDANCY = re.compile(
+    r"^Redundant\s+System\s+Information\s*:\s*\n^-.+-\s*\n(?P<info>.+?)\n"
+    r"^Current\s+Processor\s+Information\s*:\s*\n^-.+-\s*\n(?P<self>.+?$)\n"
+    r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\d+\).+)",
+    re.DOTALL | re.MULTILINE,
+)
+RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 
 
 @fix_docs
@@ -32,6 +40,7 @@ class IOSDevice(BaseDevice):
     """Cisco IOS Device Implementation."""
 
     vendor = "cisco"
+    active_redundancy_states = {None, "active"}
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
@@ -295,6 +304,23 @@ class IOSDevice(BaseDevice):
 
         return False
 
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        if self.redundancy_state in self.active_redundancy_states:
+            return True
+        return False
+
     def open(self):
         if self._connected:
             try:
@@ -314,6 +340,34 @@ class IOSDevice(BaseDevice):
                 verbose=False,
             )
             self._connected = True
+
+    @property
+    def peer_redundancy_state(self):
+        """
+        Determine the current redundancy state of the peer processor.
+
+        Returns:
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return None
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        processor_redundancy_info = re_show_redundancy.group("other")
+        if processor_redundancy_info is not None:
+            re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+            processor_redundancy_state = re_redundancy_state.group(1).lower()
+        else:
+            processor_redundancy_state = "disabled"
+        return processor_redundancy_state
 
     def reboot(self, timer=0, confirm=False):
         if confirm:
@@ -340,6 +394,56 @@ class IOSDevice(BaseDevice):
             signal.alarm(0)
         else:
             print("Need to confirm reboot with confirm=True")
+
+    @property
+    def redundancy_mode(self):
+        """
+        The operating redundancy mode of the device.
+
+        Returns:
+            str: The redundancy mode the device is operating in.
+                If the command is not supported, then "n/a" is returned.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_mode
+            'stateful switchover'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return "n/a"
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        redundancy_info = re_show_redundancy.group("info")
+        re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
+        redundancy_mode = re_redundancy_mode.group(1).lower()
+        return redundancy_mode
+
+    @property
+    def redundancy_state(self):
+        """
+        Determine the current redundancy state of the processor.
+
+        Returns:
+            str: The redundancy state of the current processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'active'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return None
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        processor_redundancy_info = re_show_redundancy.group("self")
+        re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+        processor_redundancy_state = re_redundancy_state.group(1).lower()
+        return processor_redundancy_state
 
     def rollback(self, rollback_to):
         try:
