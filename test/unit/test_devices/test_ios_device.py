@@ -7,8 +7,8 @@ import pytest
 from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
-from pyntc.devices import ios_device
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, OSInstallError
+from pyntc.devices import ios_device as ios_module
+
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
@@ -40,7 +40,7 @@ class TestIOSDevice(unittest.TestCase):
         command = "asdf poknw"
 
         try:
-            with self.assertRaisesRegex(CommandError, command):
+            with self.assertRaisesRegex(ios_module.CommandError, command):
                 self.device.config(command)
         finally:
             self.device.native.reset_mock()
@@ -60,7 +60,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.native.send_command_timing.side_effect = results
 
-        with self.assertRaisesRegex(CommandListError, commands[1]):
+        with self.assertRaisesRegex(ios_module.CommandListError, commands[1]):
             self.device.config_list(commands)
 
     def test_show(self):
@@ -76,7 +76,7 @@ class TestIOSDevice(unittest.TestCase):
     def test_bad_show(self):
         command = "show microsoft"
         self.device.native.send_command_timing.return_value = "Error: Microsoft"
-        with self.assertRaises(CommandError):
+        with self.assertRaises(ios_module.CommandError):
             self.device.show(command)
 
     def test_show_list(self):
@@ -97,7 +97,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.device.native.send_command_timing.side_effect = results
 
-        with self.assertRaisesRegex(CommandListError, "show badcommand"):
+        with self.assertRaisesRegex(ios_module.CommandListError, "show badcommand"):
             self.device.show_list(commands)
 
     def test_save(self):
@@ -177,7 +177,7 @@ class TestIOSDevice(unittest.TestCase):
         mock_ft_instance.transfer_file.side_effect = Exception
         mock_ft_instance.check_file_exists.return_value = False
 
-        with self.assertRaises(ios_device.FileTransferError):
+        with self.assertRaises(ios_module.FileTransferError):
             self.device.file_copy("source_file")
 
     def test_reboot(self):
@@ -212,7 +212,7 @@ class TestIOSDevice(unittest.TestCase):
             "Boot Mode = DEVICE\n"
             "iPXE Timeout = 0"
         )
-        results = [CommandError("show bootvar", "fail"), show_boot_out]
+        results = [ios_module.CommandError("show bootvar", "fail"), show_boot_out]
         self.device.native.send_command_timing.side_effect = results
         boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
@@ -221,8 +221,8 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
     def test_boot_options_show_run(self, mock_boot):
         results = [
-            CommandError("show bootvar", "fail"),
-            CommandError("show bootvar", "fail"),
+            ios_module.CommandError("show bootvar", "fail"),
+            ios_module.CommandError("show bootvar", "fail"),
             f"boot system flash bootflash:/{BOOT_IMAGE}",
             "Directory of bootflash:/",
         ]
@@ -240,7 +240,7 @@ class TestIOSDevice(unittest.TestCase):
             mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "config_list", side_effect=[CommandError("boot system", "fail"), None])
+    @mock.patch.object(IOSDevice, "config_list", side_effect=[ios_module.CommandError("boot system", "fail"), None])
     def test_set_boot_options_with_spaces(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": BOOT_IMAGE}
@@ -249,14 +249,14 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
     def test_set_boot_options_no_file(self, mock_fs):
-        with self.assertRaises(NTCFileNotFoundError):
+        with self.assertRaises(ios_module.NTCFileNotFoundError):
             self.device.set_boot_options("bad_image.bin")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
     @mock.patch.object(IOSDevice, "boot_options", return_value={"sys": "bad_image.bin"})
     @mock.patch.object(IOSDevice, "config_list", return_value=None)
     def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
-        with self.assertRaises(CommandError):
+        with self.assertRaises(ios_module.CommandError):
             self.device.set_boot_options(BOOT_IMAGE)
             mock_bo.assert_called_once()
 
@@ -370,7 +370,7 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
     def test_install_os_error(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
-        self.assertRaises(OSInstallError, self.device.install_os, BOOT_IMAGE)
+        self.assertRaises(ios_module.OSInstallError, self.device.install_os, BOOT_IMAGE)
 
 
 if __name__ == "__main__":
@@ -469,7 +469,7 @@ def test_peer_redundancy_state(filename, expected, ios_show):
 
 
 def test_peer_redundancy_state_unsupported(ios_show):
-    device = ios_show([CommandError("show redundancy", "unsupported")])
+    device = ios_show([ios_module.CommandError("show redundancy", "unsupported")])
     actual = device.peer_redundancy_state
     assert actual is None
 
@@ -477,7 +477,7 @@ def test_peer_redundancy_state_unsupported(ios_show):
 def test_re_show_redundancy(ios_show, ios_redundancy_info, ios_redundancy_self, ios_redundancy_other):
     device = ios_show(["show_redundancy.txt"])
     show_redundancy = device.show("show redundancy")
-    re_show_redundancy = ios_device.RE_SHOW_REDUNDANCY.match(show_redundancy)
+    re_show_redundancy = ios_module.RE_SHOW_REDUNDANCY.match(show_redundancy)
     assert re_show_redundancy.groupdict() == {
         "info": ios_redundancy_info,
         "self": ios_redundancy_self,
@@ -488,7 +488,7 @@ def test_re_show_redundancy(ios_show, ios_redundancy_info, ios_redundancy_self, 
 def test_re_show_redundancy_no_peer(ios_show, ios_redundancy_info, ios_redundancy_self):
     device = ios_show(["show_redundancy_no_peer.txt"])
     show_redundancy = device.show("show redundancy")
-    re_show_redundancy = ios_device.RE_SHOW_REDUNDANCY.match(show_redundancy)
+    re_show_redundancy = ios_module.RE_SHOW_REDUNDANCY.match(show_redundancy)
     assert re_show_redundancy.groupdict() == {
         "info": ios_redundancy_info,
         "self": ios_redundancy_self,
@@ -497,7 +497,7 @@ def test_re_show_redundancy_no_peer(ios_show, ios_redundancy_info, ios_redundanc
 
 
 def test_re_redundancy_operation_mode(ios_redundancy_info):
-    re_operational_mode = ios_device.RE_REDUNDANCY_OPERATION_MODE.search(ios_redundancy_info)
+    re_operational_mode = ios_module.RE_REDUNDANCY_OPERATION_MODE.search(ios_redundancy_info)
     assert re_operational_mode.group(1) == "Stateful Switchover"
 
 
@@ -510,7 +510,7 @@ def test_re_redundancy_operation_mode(ios_redundancy_info):
     ids=("active", "standby_hot"),
 )
 def test_re_redundancy_state(output, expected):
-    re_redundancy_state = ios_device.RE_REDUNDANCY_STATE.search(output)
+    re_redundancy_state = ios_module.RE_REDUNDANCY_STATE.search(output)
     actual = re_redundancy_state.group(1)
     assert actual == expected
 
@@ -522,7 +522,7 @@ def test_redundancy_mode(ios_show):
 
 
 def test_redundancy_mode_unsupported_command(ios_show):
-    device = ios_show([CommandError("show redundancy", "unsupported")])
+    device = ios_show([ios_module.CommandError("show redundancy", "unsupported")])
     actual = device.redundancy_mode
     assert actual == "n/a"
 
@@ -542,7 +542,7 @@ def test_redundancy_state(filename, expected, ios_show):
 
 
 def test_redundancy_state_unsupported(ios_show):
-    device = ios_show([CommandError("show redundancy", "unsupported")])
+    device = ios_show([ios_module.CommandError("show redundancy", "unsupported")])
     actual = device.redundancy_state
     assert actual is None
 
@@ -550,7 +550,7 @@ def test_redundancy_state_unsupported(ios_show):
 def test_send_command_error(ios_send_command_timing):
     command = "send_command_error"
     device = ios_send_command_timing([f"{command}.txt"])
-    with pytest.raises(CommandError):
+    with pytest.raises(ios_module.CommandError):
         device._send_command(command)
     device.native.send_command_timing.assert_called()
 
