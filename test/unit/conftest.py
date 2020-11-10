@@ -28,11 +28,13 @@ def aireos_boot_path(aireos_device_path):
 
 
 @pytest.fixture
-def aireos_device(aireos_redundancy_state):
-    with mock.patch("pyntc.devices.aireos_device.ConnectHandler") as ch:
-        device = AIREOSDevice("host", "user", "password")
-        device.native = ch
-        yield device
+def aireos_device():
+    with mock.patch.object(AIREOSDevice, "is_active") as mock_is_active:
+        mock_is_active.return_value = True
+        with mock.patch("pyntc.devices.aireos_device.ConnectHandler") as ch:
+            device = AIREOSDevice("host", "user", "password")
+            device.native = ch
+            yield device
 
 
 @pytest.fixture
@@ -109,18 +111,6 @@ def aireos_mock_path(mock_path):
 @pytest.fixture
 def aireos_redundancy_mode_path(aireos_device_path):
     return f"{aireos_device_path}.redundancy_mode"
-
-
-@pytest.fixture
-def aireos_redundancy_state(aireos_redundancy_state_path):
-    with mock.patch(aireos_redundancy_state_path, new_callable=mock.PropertyMock) as rs:
-        rs.return_value = True
-        yield rs
-
-
-@pytest.fixture
-def aireos_redundancy_state_path(aireos_device_path):
-    return f"{aireos_device_path}.redundancy_state"
 
 
 @pytest.fixture
