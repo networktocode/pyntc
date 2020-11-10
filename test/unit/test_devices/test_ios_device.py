@@ -406,7 +406,7 @@ def test_is_active(mock_connect_handler, mock_redundancy_state, redundancy_state
     device = IOSDevice("host", "username", "password")
     mock_redundancy_state.return_value = redundancy_state
     actual = device.is_active()
-    assert actual == expected
+    assert actual is expected
 
 
 @mock.patch("pyntc.devices.ios_device.ConnectHandler")
@@ -451,7 +451,8 @@ def test_open_standby(mock_connected, mock_connect_handler, ios_device):
     ios_device.open()
     assert ios_device._connected is False
     ios_device.native.find_prompt.assert_not_called()
-    mock_connected.assert_has_calls((mock.call(), mock.call(), mock.call()))
+    mock_connected.assert_has_calls((mock.call(),) * 3)
+
 
 @pytest.mark.parametrize(
     "filename,expected",
@@ -471,21 +472,6 @@ def test_peer_redundancy_state_unsupported(ios_show):
     device = ios_show([CommandError("show redundancy", "unsupported")])
     actual = device.peer_redundancy_state
     assert actual is None
-
-
-def test_send_command_timing(ios_send_command_timing):
-    command = "send_command_timing"
-    device = ios_send_command_timing([f"{command}.txt"])
-    device._send_command(command)
-    device.native.send_command_timing.assert_called()
-    device.native.send_command_timing.assert_called_with(command)
-
-
-def test_send_command_expect(ios_send_command):
-    command = "send_command_expect"
-    device = ios_send_command([f"{command}.txt"])
-    device._send_command(command, expect_string="Continue?")
-    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
 
 
 def test_re_show_redundancy(ios_show, ios_redundancy_info, ios_redundancy_self, ios_redundancy_other):
