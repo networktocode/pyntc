@@ -364,27 +364,24 @@ def test_is_active(mock_redundancy_state, redundancy_state, expected, ios_device
     assert actual == expected
 
 
-def test_send_command_timing(ios_send_command_timing):
-    command = "send_command_timing"
-    device = ios_send_command_timing([f"{command}.txt"])
-    device._send_command(command)
-    device.native.send_command_timing.assert_called()
-    device.native.send_command_timing.assert_called_with(command)
+@pytest.mark.parametrize(
+    "filename,expected",
+    (
+        ("show_redundancy", "standby hot"),
+        ("show_redundancy_no_peer", "disabled"),
+    ),
+    ids=("standby_hot", "disabled"),
+)
+def test_peer_redundancy_state(filename, expected, ios_show):
+    device = ios_show([f"{filename}.txt"])
+    actual = device.peer_redundancy_state
+    assert actual == expected
 
 
-def test_send_command_expect(ios_send_command):
-    command = "send_command_expect"
-    device = ios_send_command([f"{command}.txt"])
-    device._send_command(command, expect_string="Continue?")
-    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
-
-
-def test_send_command_error(ios_send_command_timing):
-    command = "send_command_error"
-    device = ios_send_command_timing([f"{command}.txt"])
-    with pytest.raises(CommandError):
-        device._send_command(command)
-    device.native.send_command_timing.assert_called()
+def test_peer_redundancy_state_unsupported(ios_show):
+    device = ios_show([CommandError("show redundancy", "unsupported")])
+    actual = device.peer_redundancy_state
+    assert actual is None
 
 
 def test_re_show_redundancy(ios_show, ios_redundancy_info, ios_redundancy_self, ios_redundancy_other):
@@ -458,3 +455,26 @@ def test_redundancy_state_unsupported(ios_show):
     device = ios_show([CommandError("show redundancy", "unsupported")])
     actual = device.redundancy_state
     assert actual is None
+
+
+def test_send_command_error(ios_send_command_timing):
+    command = "send_command_error"
+    device = ios_send_command_timing([f"{command}.txt"])
+    with pytest.raises(CommandError):
+        device._send_command(command)
+    device.native.send_command_timing.assert_called()
+
+
+def test_send_command_expect(ios_send_command):
+    command = "send_command_expect"
+    device = ios_send_command([f"{command}.txt"])
+    device._send_command(command, expect_string="Continue?")
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
+
+
+def test_send_command_timing(ios_send_command_timing):
+    command = "send_command_timing"
+    device = ios_send_command_timing([f"{command}.txt"])
+    device._send_command(command)
+    device.native.send_command_timing.assert_called()
+    device.native.send_command_timing.assert_called_with(command)

@@ -341,6 +341,34 @@ class IOSDevice(BaseDevice):
             )
             self._connected = True
 
+    @property
+    def peer_redundancy_state(self):
+        """
+        Determine the current redundancy state of the peer processor.
+
+        Returns:
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return None
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        processor_redundancy_info = re_show_redundancy.group("other")
+        if processor_redundancy_info is not None:
+            re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+            processor_redundancy_state = re_redundancy_state.group(1).lower()
+        else:
+            processor_redundancy_state = "disabled"
+        return processor_redundancy_state
+
     def reboot(self, timer=0, confirm=False):
         if confirm:
 
@@ -404,7 +432,7 @@ class IOSDevice(BaseDevice):
         Example:
             >>> device = IOSDevice(**connection_args)
             >>> device.redundancy_state
-            active
+            'active'
             >>>
         """
         try:
