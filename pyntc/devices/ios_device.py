@@ -201,7 +201,7 @@ class IOSDevice(BaseDevice):
         self.save(filename=checkpoint_file)
 
     def close(self):
-        if self._connected:
+        if self.connected:
             self.native.disconnect()
             self._connected = False
 
@@ -220,6 +220,16 @@ class IOSDevice(BaseDevice):
             except CommandError as e:
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
+
+    @property
+    def connected(self):
+        """
+        The connection status of the device.
+
+        Returns:
+            bool: True if the device is connected, else False.
+        """
+        return self._connected
 
     def enable(self):
         """Ensure device is in enable mode.
@@ -323,13 +333,13 @@ class IOSDevice(BaseDevice):
         return False
 
     def open(self):
-        if self._connected:
+        if self.connected:
             try:
                 self.native.find_prompt()
             except:  # noqa E722
                 self._connected = False
 
-        if not self._connected:
+        if not self.connected:
             self.native = ConnectHandler(
                 device_type="cisco_ios",
                 ip=self.host,
@@ -341,6 +351,9 @@ class IOSDevice(BaseDevice):
                 verbose=False,
             )
             self._connected = True
+
+        if not self.is_active():
+            self.close()
 
     @property
     def peer_redundancy_state(self):
