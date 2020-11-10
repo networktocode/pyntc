@@ -8,8 +8,7 @@ from .device_mocks.ios import send_command, send_command_expect
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices import IOSDevice
 from pyntc.devices import ios_device
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
-
+from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, OSInstallError
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
@@ -342,6 +341,36 @@ class TestIOSDevice(unittest.TestCase):
         self.device.native.enable.assert_not_called()
         self.device.native.check_config_mode.assert_called()
         self.device.native.exit_config_mode.assert_called()
+
+    @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
+    @mock.patch.object(IOSDevice, "set_boot_options")
+    @mock.patch.object(IOSDevice, "reboot")
+    @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    def test_install_os(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
+        state = self.device.install_os(BOOT_IMAGE)
+        mock_set_boot.assert_called()
+        mock_reboot.assert_called()
+        mock_wait.assert_called()
+        self.assertEqual(state, True)
+
+    @mock.patch.object(IOSDevice, "_image_booted", side_effect=[True])
+    @mock.patch.object(IOSDevice, "set_boot_options")
+    @mock.patch.object(IOSDevice, "reboot")
+    @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    def test_install_os_already_installed(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
+        state = self.device.install_os(BOOT_IMAGE)
+        mock_image_booted.assert_called_once()
+        mock_set_boot.assert_not_called()
+        mock_reboot.assert_not_called()
+        mock_wait.assert_not_called()
+        self.assertEqual(state, False)
+
+    @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, False])
+    @mock.patch.object(IOSDevice, "set_boot_options")
+    @mock.patch.object(IOSDevice, "reboot")
+    @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    def test_install_os_error(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
+        self.assertRaises(OSInstallError, self.device.install_os, BOOT_IMAGE)
 
 
 if __name__ == "__main__":

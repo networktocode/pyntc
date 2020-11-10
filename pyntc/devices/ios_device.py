@@ -156,6 +156,7 @@ class IOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.open()
+                self.show("show version")
                 return
             except:  # noqa E722
                 pass
