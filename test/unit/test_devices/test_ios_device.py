@@ -378,9 +378,17 @@ if __name__ == "__main__":
 
 
 @pytest.mark.parametrize("expected", ((True,), (False,)))
-def test_connected(expected, ios_device):
+def test_connected_getter(expected, ios_device):
     ios_device._connected = expected
     assert ios_device.connected is expected
+
+
+@pytest.mark.parametrize("expected", ((True,), (False,)))
+def test_connected_setter(expected, ios_device):
+    ios_device._connected = not expected
+    assert ios_device._connected is not expected
+    ios_device.connected = expected
+    assert ios_device._connected is expected
 
 
 @mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
