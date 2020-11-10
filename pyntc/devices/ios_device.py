@@ -332,9 +332,7 @@ class IOSDevice(BaseDevice):
             True
             >>>
         """
-        if self.redundancy_state in self.active_redundancy_states:
-            return True
-        return False
+        return self.redundancy_state in self.active_redundancy_states
 
     def open(self):
         if self.connected:
