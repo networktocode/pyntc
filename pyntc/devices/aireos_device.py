@@ -30,6 +30,8 @@ RE_AP_BOOT_OPTIONS = re.compile(
     r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
     re.M,
 )
+RE_PEER_REDUNDANCY_STATE = re.compile(r"^\s*Peer\s+State\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_STATE = re.compile(r"^\s*Local\s+State\s*=\s*(.+?)\s*$", re.M)
 RE_WLANS = re.compile(
     r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$", re.M
 )
@@ -62,6 +64,7 @@ class AIREOSDevice(BaseDevice):
     """Cisco AIREOS Device Implementation."""
 
     vendor = "cisco"
+    active_redundancy_states = {None, "active"}
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
@@ -388,7 +391,7 @@ class AIREOSDevice(BaseDevice):
 
     def close(self):
         """Close the SSH connection to the device."""
-        if self._connected:
+        if self.connected:
             self.native.disconnect()
             self._connected = False
 
@@ -744,6 +747,21 @@ class AIREOSDevice(BaseDevice):
 
         return False
 
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        return self.redundancy_state in self.active_redundancy_states
+
     def open(self):
         """
         Open a connection to the controller.
@@ -754,7 +772,7 @@ class AIREOSDevice(BaseDevice):
             try:
                 self.native.find_prompt()
             except:  # noqa E722
-                self.connected = False
+                self._connected = False
 
         if not self.connected:
             self.native = ConnectHandler(
@@ -767,19 +785,20 @@ class AIREOSDevice(BaseDevice):
                 secret=self.secret,
                 verbose=False,
             )
-            self.connected = True
+            self._connected = True
 
         # This prevents open sessions from connecting to STANDBY WLC
-        if not self.redundancy_state:
+        if not self.is_active():
             self.close()
 
     @property
     def peer_redundancy_state(self):
         """
-        Determine the state of the peer device.
+        Determine the redundancy state of the peer processor.
 
         Returns:
-            str: The Peer State from the local device's perspective.
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -787,9 +806,15 @@ class AIREOSDevice(BaseDevice):
             'standby hot'
             >>>
         """
-        ha = self.show("show redundancy summary")
-        ha_peer_state = re.search(r"^\s*Peer\s+State\s*=\s*(.+?)\s*$", ha, re.M)
-        return ha_peer_state.group(1).lower()
+        try:
+            show_redundancy = self.show("show redundancy summary")
+        except CommandError:
+            return None
+        re_peer_redundancy_state = RE_PEER_REDUNDANCY_STATE.search(show_redundancy)
+        peer_redundancy_state = re_peer_redundancy_state.group(1).lower()
+        if peer_redundancy_state == "n/a":
+            peer_redundancy_state = "disabled"
+        return peer_redundancy_state
 
     def reboot(self, timer=0, confirm=False, controller="self", save_config=True):
         """
@@ -865,23 +890,27 @@ class AIREOSDevice(BaseDevice):
     @property
     def redundancy_state(self):
         """
-        Determine if device is currently the active device.
+        Determine the redundancy state of the current processor.
 
         Returns:
-            bool: True if the device is active, False if the device is standby.
+            str: The redundancy state of the current processor.
+            None: When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.redundancy_state
-            True
+            'active'
             >>>
         """
-        ha = self.show("show redundancy summary")
-        ha_state = re.search(r"^\s*Local\s+State\s*=\s*(.+?)\s*$", ha, re.M)
-        if ha_state.group(1).lower() == "active":
-            return True
-        else:
-            return False
+        try:
+            show_redundancy = self.show("show redundancy summary")
+        except CommandError:
+            return None
+        re_redundancy_state = RE_REDUNDANCY_STATE.search(show_redundancy)
+        redundancy_state = re_redundancy_state.group(1).lower()
+        if redundancy_state == "n/a":
+            redundancy_state = "disabled"
+        return redundancy_state
 
     def rollback(self):
         raise NotImplementedError
