@@ -41,11 +41,23 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
+    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
+        self.port = port
         self.timeout = timeout
-        self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
+        eapi_args = {
+            "transport": transport,
+            "host": host,
+            "username": username,
+            "password": password,
+        }
+        optional_args = ("port", "timeout")
+        for arg in optional_args:
+            value = getattr(self, arg)
+            if value is not None:
+                eapi_args[arg] = value
+        self.connection = eos_connect(**eapi_args)
         self.native = EOSNative(self.connection)
         # _connected indicates Netmiko ssh connection
         self._connected = False
