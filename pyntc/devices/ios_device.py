@@ -11,16 +11,16 @@ from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
 from pyntc.utils import convert_dict_by_key, get_structured_data
-from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
     NTCError,
-    NTCFileNotFoundError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    FileTransferError,
     RebootTimeoutError,
+    NTCFileNotFoundError,
+    FileSystemNotFoundError,
 )
 
 

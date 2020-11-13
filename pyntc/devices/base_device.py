@@ -371,10 +371,6 @@ class BaseDevice(object):
         return self.facts
 
 
-class FileTransferError(NTCError):
-    pass
-
-
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
         super().__init__("Reboot timer not supported on %s." % device_type)

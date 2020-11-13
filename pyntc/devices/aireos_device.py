@@ -8,7 +8,6 @@ import signal
 from netmiko import ConnectHandler
 
 from .base_device import BaseDevice, fix_docs
-from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
     NTCError,
     CommandError,
@@ -16,6 +15,7 @@ from pyntc.errors import (
     WLANEnableError,
     CommandListError,
     WLANDisableError,
+    FileTransferError,
     RebootTimeoutError,
     NTCFileNotFoundError,
 )

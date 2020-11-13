@@ -9,9 +9,8 @@ import bigsuds
 import requests
 from f5.bigip import ManagementRoot
 
-from pyntc.errors import NotEnoughFreeSpaceError, OSInstallError, NTCFileNotFoundError
+from pyntc.errors import OSInstallError, FileTransferError, NTCFileNotFoundError, NotEnoughFreeSpaceError
 from .base_device import BaseDevice
-from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 class F5Device(BaseDevice):

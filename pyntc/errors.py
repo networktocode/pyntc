@@ -57,6 +57,17 @@ class FileSystemNotFoundError(NTCError):
         super().__init__(message)
 
 
+class FileTransferError(NTCError):
+    default_message = (
+        "An error occurred during transfer. "
+        "Please make sure the local file exists and "
+        "that appropriate permissions are set on the remote device."
+    )
+
+    def __init__(self, message=None):
+        super().__init__(message or self.default_message)
+
+
 class RebootTimeoutError(NTCError):
     def __init__(self, hostname, wait_time):
         message = "Unable to reconnect to {0} after {1} seconds".format(hostname, wait_time)

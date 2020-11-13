@@ -13,15 +13,15 @@ from netmiko import FileTransfer
 
 from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
-from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
     NTCError,
-    NTCFileNotFoundError,
-    RebootTimeoutError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    FileTransferError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
+    FileSystemNotFoundError,
 )
 
 

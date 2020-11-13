@@ -14,15 +14,15 @@ from pyntc.utils import convert_dict_by_key, convert_list_by_key
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
     NTCError,
-    NTCFileNotFoundError,
-    RebootTimeoutError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    FileTransferError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
+    FileSystemNotFoundError,
 )
-from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}

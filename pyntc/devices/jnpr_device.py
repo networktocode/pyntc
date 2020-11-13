@@ -15,8 +15,7 @@ from jnpr.junos.exception import ConfigLoadError
 from .tables.jnpr.loopback import LoopbackTable
 from .base_device import BaseDevice, fix_docs
 
-from pyntc.errors import CommandError, CommandListError, RebootTimeoutError
-from .system_features.file_copy.base_file_copy import FileTransferError
+from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 
 @fix_docs
