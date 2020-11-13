@@ -133,13 +133,16 @@ class AIREOSDevice(BaseDevice):
 
         return False
 
-    def _send_command(self, command, expect_string=None):
+    def _send_command(self, command, expect_string=None, **kwargs):
         """
         Send single command to device.
 
         Args:
             command (str): The command to send to the device.
             expect_string (str): The expected prompt after running the command.
+
+        Kwargs:
+            Any argument supported by Netmiko's ``send_command_timing`` method.
 
         Returns:
             str: The response from the device after issuing the ``command``.
@@ -157,9 +160,9 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         if expect_string is None:
-            response = self.native.send_command_timing(command)
+            response = self.native.send_command_timing(command, **kwargs)
         else:
-            response = self.native.send_command(command, expect_string=expect_string)
+            response = self.native.send_command(command, expect_string=expect_string, **kwargs)
 
         if "Incorrect usage" in response or "Error:" in response:
             raise CommandError(command, response)
@@ -676,12 +679,15 @@ class AIREOSDevice(BaseDevice):
                     f"transfer download filename {filename}",
                 ]
             )
-            response = self.native.send_command_timing("transfer download start")
-            if "Are you sure you want to start? (y/N)" in response:
-                response = self.native.send_command(
-                    "y", expect_string="File transfer is successful.", delay_factor=delay_factor
-                )
+        except CommandListError as error:
+            raise FileTransferError(error.message)
 
+        try:
+            response = self.show("transfer download start")
+            if "Are you sure you want to start? (y/N)" in response:
+                response = self.show("y", expect_string="File transfer is successful.", delay_factor=delay_factor)
+        except CommandError as error:
+            raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
             raise FileTransferError
 
@@ -974,13 +980,16 @@ class AIREOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect_string=None):
+    def show(self, command, expect_string=None, **kwargs):
         """
         Send an operational command to the device.
 
         Args:
             command (str): The command to send to the device.
             expect_string (str): The expected prompt after running the command.
+
+        Kwargs:
+            Any argument supported by Netmiko's ``send_command_timing`` method.
 
         Returns:
             str: The data returned from the device
@@ -998,7 +1007,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         self.enable()
-        return self._send_command(command, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string, **kwargs)
 
     def show_list(self, commands):
         """

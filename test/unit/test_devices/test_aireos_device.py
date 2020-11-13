@@ -67,11 +67,26 @@ def test_send_command_timing(aireos_send_command_timing):
     device.native.send_command_timing.assert_called_with(command)
 
 
+def test_send_command_timing_kwargs(aireos_send_command_timing):
+    command = "send_command_timing"
+    device = aireos_send_command_timing([f"{command}.txt"])
+    device._send_command(command, delay_factor=3)
+    device.native.send_command_timing.assert_called()
+    device.native.send_command_timing.assert_called_with(command, delay_factor=3)
+
+
 def test_send_command_expect(aireos_send_command):
     command = "send_command_expect"
     device = aireos_send_command([f"{command}.txt"])
     device._send_command(command, expect_string="Continue?")
     device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
+
+
+def test_send_command_expect_kwargs(aireos_send_command):
+    command = "send_command_expect"
+    device = aireos_send_command([f"{command}.txt"])
+    device._send_command(command, expect_string="Continue?", delay_factor=3)
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?", delay_factor=3)
 
 
 def test_send_command_error(aireos_send_command_timing):
@@ -478,77 +493,122 @@ def test_enabled_wlans(mock_wlans, aireos_device, aireos_expected_wlans):
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy(
-    mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing, aireos_send_command
-):
+def test_file_copy(mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_send_command_timing([""] * 7 + ["transfer_download_start.txt"])
-    aireos_send_command(["transfer_download_start_yes.txt"], device)
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
-        mock_boot_optionsot.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
+    device = aireos_show_list([""] * 7)
+    aireos_show(["transfer_download_start.txt", "transfer_download_start_yes.txt"], device)
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
+        mock_boot_options.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
         file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot_optionsot.assert_called_once()
+        mock_boot_options.assert_called_once()
     mock_convert_filename_to_version.assert_called_once()
-    device.native.send_command_timing.assert_has_calls(
+    device.show_list.assert_has_calls(
         [
-            mock.call("transfer download datatype code"),
-            mock.call("transfer download mode sftp"),
-            mock.call("transfer download username user"),
-            mock.call("transfer download password pass"),
-            mock.call("transfer download serverip 10.1.1.1"),
-            mock.call("transfer download path images/"),
-            mock.call("transfer download filename AIR-CT5520-K9-8-10-105-0.aes"),
-            mock.call("transfer download start"),
+            mock.call(
+                [
+                    "transfer download datatype code",
+                    "transfer download mode sftp",
+                    "transfer download username user",
+                    "transfer download password pass",
+                    "transfer download serverip 10.1.1.1",
+                    "transfer download path images/",
+                    "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
+                ]
+            )
         ]
     )
-    device.native.send_command.assert_has_calls(
-        [mock.call("y", expect_string="File transfer is successful.", delay_factor=3)]
+    device.show.assert_has_calls(
+        [
+            mock.call("transfer download start"),
+            mock.call("y", expect_string="File transfer is successful.", delay_factor=3),
+        ]
     )
     assert file_copied is True
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_config(mock_convert_filename_to_version, aireos_send_command_timing, aireos_send_command):
+def test_file_copy_config(mock_convert_filename_to_version, aireos_show, aireos_show_list):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_send_command_timing([""] * 8)
-    aireos_send_command(["transfer_download_start_yes.txt"], device)
+    device = aireos_show_list([""] * 7)
+    aireos_show(["transfer_download_start_yes.txt"], device)
     device.file_copy("user", "pass", "10.1.1.1", "configs/host/latest.cfg", protocol="ftp", filetype="config")
     mock_convert_filename_to_version.assert_not_called()
-    device.native.send_command_timing.assert_has_calls(
+    device.show_list.assert_has_calls(
         [
-            mock.call("transfer download datatype config"),
-            mock.call("transfer download mode ftp"),
-            mock.call("transfer download username user"),
-            mock.call("transfer download password pass"),
-            mock.call("transfer download serverip 10.1.1.1"),
-            mock.call("transfer download path configs/host/"),
-            mock.call("transfer download filename latest.cfg"),
-            mock.call("transfer download start"),
-        ]
+            mock.call(
+                [
+                    "transfer download datatype config",
+                    "transfer download mode ftp",
+                    "transfer download username user",
+                    "transfer download password pass",
+                    "transfer download serverip 10.1.1.1",
+                    "transfer download path configs/host/",
+                    "transfer download filename latest.cfg",
+                ],
+            ),
+        ],
     )
-    device.native.send_command.assert_not_called()
+    device.show.assert_called_once()
+    device.show.assert_has_calls([mock.call("transfer download start")])
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_no_copy(mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing):
+def test_file_copy_no_copy(mock_convert_filename_to_version, aireos_device_path, aireos_show):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_send_command_timing([""])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
-        mock_boot_optionsot.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
+    device = aireos_show([])
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
+        mock_boot_options.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
         file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot_optionsot.assert_called()
-    device.native.send_command_timing.assert_not_called()
+        mock_boot_options.assert_called()
+    device.show.assert_not_called()
     assert file_copied is False
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_error(mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing):
+def test_file_copy_error_setup(
+    mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing, aireos_show
+):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_send_command_timing(["send_command_error.txt"])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_optionsot:
-        mock_boot_optionsot.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
-        with pytest.raises(aireos_module.FileTransferError):
+    device = aireos_send_command_timing(["", "", "send_command_error.txt"])
+    aireos_show([], device)
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
+        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+            device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+        assert transfer_error.value.message == (
+            "\nCommand transfer download username user failed with message: This is only a test\n"
+            "Incorrect usage.  Use the '?' or <TAB> key to list commands.\n\nCommand List: \n"
+            "\ttransfer download datatype code\n\ttransfer download mode sftp\n\ttransfer download username user\n"
+        )
+        device.show.assert_not_called()
+
+
+@mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
+def test_file_copy_error_command_error(
+    mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list
+):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
+    device = aireos_show([aireos_module.CommandError("transfer download start", "Auth failure")])
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
+        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
             device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+        assert transfer_error.value.message == (
+            f"{aireos_module.FileTransferError.default_message}\n\n"
+            "Command transfer download start was not successful: Auth failure"
+        )
+        device.show.assert_called_once()
+
+
+@mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
+def test_file_copy_error_other(mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
+    device = aireos_show([Exception])
+    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
+        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+            device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+        assert transfer_error.value.message == aireos_module.FileTransferError.default_message
 
 
 @mock.patch.object(AIREOSDevice, "enable_wlans")
@@ -1004,11 +1064,28 @@ def test_show(mock_enable, aireos_send_command_timing):
 
 
 @mock.patch.object(AIREOSDevice, "enable")
+def test_show_kwargs(mock_enable, aireos_send_command_timing):
+    device = aireos_send_command_timing(["send_command_timing.txt"])
+    data = device.show("send command timing", delay_factor=3)
+    assert data.strip() == "This is only a test"
+    mock_enable.assert_called()
+    device.native.send_command_timing.assert_called_with("send command timing", delay_factor=3)
+
+
+@mock.patch.object(AIREOSDevice, "enable")
 def test_show_expect(mock_enable, aireos_send_command):
     device = aireos_send_command(["send_command_expect.txt"])
     data = device.show("send command expect", expect_string="Continue?")
     assert data.strip() == "This is only a test\nContinue?"
     device.native.send_command.assert_called()
+
+
+@mock.patch.object(AIREOSDevice, "enable")
+def test_show_expect_kwargs(mock_enable, aireos_send_command):
+    device = aireos_send_command(["send_command_expect.txt"])
+    data = device.show("send command expect", expect_string="Continue?", delay_factor=3)
+    assert data.strip() == "This is only a test\nContinue?"
+    device.native.send_command.assert_called_with("send command expect", expect_string="Continue?", delay_factor=3)
 
 
 @mock.patch.object(AIREOSDevice, "enable")

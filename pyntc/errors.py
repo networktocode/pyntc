@@ -28,6 +28,7 @@ class ConfFileNotFoundError(NTCError):
 
 class CommandError(NTCError):
     def __init__(self, command, message):
+        self.command = command
         self.cli_error_msg = message
         message = "Command %s was not successful: %s" % (command, message)
         super().__init__(message)

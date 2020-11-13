@@ -7,11 +7,11 @@ class BaseFileCopy(BaseFeature):
 
 
 class FileTransferError(NTCError):
+    default_message = (
+        "An error occurred during transfer. "
+        "Please make sure the local file exists and "
+        "that appropriate permissions are set on the remote device."
+    )
+
     def __init__(self, message=None):
-        if message is None:
-            message = (
-                "An error occurred during transfer. "
-                "Please make sure the local file exists and "
-                "that appropriate permissions are set on the remote device."
-            )
-        super().__init__(message)
+        super().__init__(message or self.default_message)
