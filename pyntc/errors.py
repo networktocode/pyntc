@@ -86,6 +86,15 @@ class OSInstallError(NTCError):
         super().__init__(message)
 
 
+class PeerFailedToFormError(NTCError):
+    def __init__(self, hostname, desired_state, current_state):
+        message = (
+            f'{hostname} was unable to form a redundancy state of "{desired_state}" with peer.\n'
+            f'The current state is "{current_state}".'
+        )
+        super().__init__(message)
+
+
 class NTCFileNotFoundError(NTCError):
     def __init__(self, hostname, file, dir):
         message = "{0} was not found in {1} on {2}".format(file, dir, hostname)

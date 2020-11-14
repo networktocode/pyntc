@@ -153,6 +153,17 @@ def test_ntc_file_not_found_error():
     assert err.value.message == error_message
 
 
+def test_peer_failed_to_form_error():
+    error_class = ntc_errors.PeerFailedToFormError
+    error = error_class("host1", "standby hot", "disabled")
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == (
+        'host1 was unable to form a redundancy state of "standby hot" with peer.\n' 'The current state is "disabled".'
+    )
+
+
 def test_wlan_enable_error():
     error_message = "Unable to enable WLAN IDs on host1\nExpected: [1, 2, 3]\nFound:    [1, 2]\n"
     error_class = ntc_errors.WLANEnableError
