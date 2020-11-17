@@ -4,9 +4,15 @@ import os
 import re
 import time
 
-from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError, RebootTimeoutError, OSInstallError
+from pyntc.errors import (
+    CommandError,
+    OSInstallError,
+    CommandListError,
+    FileTransferError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
+)
 
 from pynxos.device import Device as NXOSNative
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError

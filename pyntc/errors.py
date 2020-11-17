@@ -28,6 +28,7 @@ class ConfFileNotFoundError(NTCError):
 
 class CommandError(NTCError):
     def __init__(self, command, message):
+        self.command = command
         self.cli_error_msg = message
         message = "Command %s was not successful: %s" % (command, message)
         super().__init__(message)
@@ -54,6 +55,17 @@ class FileSystemNotFoundError(NTCError):
     def __init__(self, hostname, command):
         message = 'Unable to parse "{0}" command to identify the default file system on {1}.'.format(command, hostname)
         super().__init__(message)
+
+
+class FileTransferError(NTCError):
+    default_message = (
+        "An error occurred during transfer. "
+        "Please make sure the local file exists and "
+        "that appropriate permissions are set on the remote device."
+    )
+
+    def __init__(self, message=None):
+        super().__init__(message or self.default_message)
 
 
 class RebootTimeoutError(NTCError):

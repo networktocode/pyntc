@@ -84,6 +84,25 @@ def test_feature_not_found_error():
     assert err.value.message == error_message
 
 
+def test_file_transfer_error_default_message():
+    error_class = ntc_errors.FileTransferError
+    error = error_class()
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == error_class.default_message
+
+
+def test_file_transfer_error_custom_message():
+    error_class = ntc_errors.FileTransferError
+    custom_message = "This is a custom message"
+    error = error_class(message=custom_message)
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == custom_message
+
+
 def test_file_system_not_found_error():
     error_message = 'Unable to parse "dir" command to identify the default file system on host1.'
     error_class = ntc_errors.FileSystemNotFoundError

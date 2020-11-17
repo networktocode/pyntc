@@ -155,7 +155,7 @@ def aireos_show_list(aireos_device, aireos_mock_path):
             device = existing_device
         with mock.patch.object(AIREOSDevice, "show_list") as mock_show_list:
             mock_show_list.side_effect = get_side_effects(aireos_mock_path, side_effects)
-        device.show = mock_show_list
+        device.show_list = mock_show_list
         return device
 
     return _mock
