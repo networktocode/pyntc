@@ -21,6 +21,7 @@ from pyntc.errors import (
     RebootTimeoutError,
     NTCFileNotFoundError,
     FileSystemNotFoundError,
+    SocketClosedError,
 )
 
 
@@ -285,6 +286,10 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
+            except OSError as error:
+                # compare hashes
+                if not fc.compare_md5():
+                    raise SocketClosedError(message=error)
             except:  # noqa E722
                 raise FileTransferError
             finally:

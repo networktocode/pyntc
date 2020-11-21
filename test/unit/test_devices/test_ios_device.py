@@ -180,6 +180,34 @@ class TestIOSDevice(unittest.TestCase):
         with self.assertRaises(ios_module.FileTransferError):
             self.device.file_copy("source_file")
 
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
+    def test_file_copy_socket_closed_good_md5(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.transfer_file.side_effect = OSError
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_ft_instance.compare_md5.side_effect = [True, True]
+
+        self.device.file_copy("path/to/source_file")
+
+        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
+        mock_ft_instance.enable_scp.assert_any_call()
+        mock_ft_instance.establish_scp_conn.assert_any_call()
+        mock_ft_instance.transfer_file.assert_any_call()
+
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
+    def test_file_copy_fail_socket_closed_bad_md5(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.transfer_file.side_effect = OSError
+        mock_ft_instance.check_file_exists.return_value = False
+        mock_ft_instance.compare_md5.return_value = False
+
+        with self.assertRaises(ios_module.SocketClosedError):
+            self.device.file_copy("source_file")
+
     def test_reboot(self):
         self.device.reboot(confirm=True)
         self.device.native.send_command_timing.assert_any_call("reload")
