@@ -39,7 +39,7 @@ class JunosDevice(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
         if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()
+            m = hashlib.md5()  # nosec
             with open(filepath, "rb") as f:
                 buf = f.read(blocksize)
                 while buf:
@@ -97,7 +97,7 @@ class JunosDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)

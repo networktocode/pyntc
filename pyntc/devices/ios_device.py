@@ -33,7 +33,7 @@ class IOSDevice(BaseDevice):
 
     vendor = "cisco"
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, **kwargs):  # nosec
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
@@ -151,7 +151,7 @@ class IOSDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
