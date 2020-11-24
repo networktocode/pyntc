@@ -18,6 +18,7 @@ from pyntc.errors import (
     FileTransferError,
     RebootTimeoutError,
     NTCFileNotFoundError,
+    PeerFailedToFormError,
 )
 
 
@@ -279,6 +280,36 @@ class AIREOSDevice(BaseDevice):
 
         # TODO: Get proper hostname parameter
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
+
+    def _wait_for_peer_to_form(self, redundancy_state, timeout=300):
+        """
+        Wait for device redundancy state to form properly.
+
+        Args:
+            redundancy_state (str): The desired redundancy state between the system and its peer.
+            timeout (int): The max time to wait for peer to form before considering it unable to form.
+
+        Returns:
+            None: Nothing is returned when redundancy state reaches ``redundancy_state``.
+
+        Raises:
+            PeerFailedToFormError: When the ``timeout`` is reached before ``redundancy_state`` is reached.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args):
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>> device.reboot()
+            >>> device._wait_for_peer_to_form("standby hot")
+            >>>
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            current_state = self.peer_redundancy_state
+            if current_state == redundancy_state:
+                return
+
+        raise PeerFailedToFormError(hostname=self.host, desired_state=redundancy_state, current_state=current_state)
 
     @property
     def ap_boot_options(self):
@@ -746,8 +777,10 @@ class AIREOSDevice(BaseDevice):
                 self.enable_wlans(disable_wlans)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
-            if not self.peer_redundancy_state == peer_redundancy:
-                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=image_name)
+            try:
+                self._wait_for_peer_to_form(peer_redundancy)
+            except PeerFailedToFormError:
+                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=f"{image_name}-{peer_redundancy}")
 
             return True
 
