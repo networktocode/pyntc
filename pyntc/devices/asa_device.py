@@ -31,7 +31,7 @@ class ASADevice(BaseDevice):
 
     vendor = "cisco"
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):  # nosec
+    def __init__(self, host, username, password, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
         self.native = None
