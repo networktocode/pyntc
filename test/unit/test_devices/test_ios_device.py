@@ -195,6 +195,7 @@ class TestIOSDevice(unittest.TestCase):
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
+        mock_ft_instance.compare_md5.assert_has_calls([mock.call(), mock.call()])
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_fail_socket_closed_bad_md5(self, mock_ft):
@@ -207,6 +208,8 @@ class TestIOSDevice(unittest.TestCase):
 
         with self.assertRaises(ios_module.SocketClosedError):
             self.device.file_copy("source_file")
+
+        mock_ft_instance.compare_md5.assert_called_once()
 
     def test_reboot(self):
         self.device.reboot(confirm=True)
