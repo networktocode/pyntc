@@ -153,6 +153,25 @@ def test_ntc_file_not_found_error():
     assert err.value.message == error_message
 
 
+def test_socket_closed_error_default_message():
+    error_class = ntc_errors.SocketClosedError
+    error = error_class()
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == error_class.default_message
+
+
+def test_socket_closed_error_custom_message():
+    error_class = ntc_errors.SocketClosedError
+    custom_message = "This is a custom message"
+    error = error_class(message=custom_message)
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == custom_message
+
+
 def test_wlan_enable_error():
     error_message = "Unable to enable WLAN IDs on host1\nExpected: [1, 2, 3]\nFound:    [1, 2]\n"
     error_class = ntc_errors.WLANEnableError
