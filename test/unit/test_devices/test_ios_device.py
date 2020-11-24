@@ -99,6 +99,12 @@ class TestIOSDevice(unittest.TestCase):
         with self.assertRaisesRegex(CommandListError, "show badcommand"):
             self.device.show_list(commands)
 
+    def test_show_dir(self):
+        command = "dir"
+
+        result = self.device.show(command)
+        self.assertIn("c2600-ik9o3s3-mz.122-15.T9.bin", result)
+
     def test_save(self):
         result = self.device.save()
         self.assertTrue(result)
