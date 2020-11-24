@@ -286,8 +286,8 @@ class AIREOSDevice(BaseDevice):
         Wait for device redundancy state to form properly.
 
         Args:
-            redundancy_state: The desired redundancy state between the system and its peer.
-            timeout: The max time to wait for peer to form before considering it unable to form.
+            redundancy_state (str): The desired redundancy state between the system and its peer.
+            timeout (int): The max time to wait for peer to form before considering it unable to form.
 
         Returns:
             None: Nothing is returned when redundancy state reaches ``redundancy_state``.
