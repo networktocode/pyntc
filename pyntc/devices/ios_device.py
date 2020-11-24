@@ -77,13 +77,21 @@ class IOSDevice(BaseDevice):
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir")
-        try:
-            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-        except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+        # Set variables to control while loop
+        counter = 0
 
-        return file_system
+        # Attempt to gather file system
+        while counter < 5:
+            counter += 1
+            raw_data = self.show("dir")
+            try:
+                file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
+                return file_system
+            except AttributeError:
+                # Allow to continue through the loop
+                continue
+
+        raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
