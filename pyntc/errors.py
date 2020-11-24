@@ -93,7 +93,7 @@ class FeatureNotFoundError(NTCError):
         Args:
             feature (str): The PyNTC feature name.
             device_type (str): The PyNTC device_type name.
-        
+
         TODO: Remove this Exception when VLAN feature is removed.
         """
         message = "%s feature not found for %s device type." % (feature, device_type)
@@ -189,7 +189,7 @@ class NTCFileNotFoundError(NTCError):
             hostname (str): The hostname of the device that did not have the ``file``.
             file (str): The name of the file that could not be found.
             dir (str): The directory on the network device where the file was searched for.
-        
+
         TODO: Rename ``dir`` arg as that is a reserved name in python.
         """
         message = "{0} was not found in {1} on {2}".format(file, dir, hostname)
