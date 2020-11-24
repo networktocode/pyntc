@@ -156,6 +156,20 @@ def test_wait_for_device_to_reboot_error(mock_open, aireos_device):
         aireos_device._wait_for_device_reboot(1)
 
 
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_wait_for_peer_to_form(mock_peer_redundancy_state, aireos_device):
+    mock_peer_redundancy_state.side_effect = ["n/a", "disabled", "standby hot"]
+    aireos_device._wait_for_peer_to_form("standby hot")
+    mock_peer_redundancy_state.assert_has_calls([mock.call()] * 3)
+
+
+@mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_wait_for_peer_to_form_error(mock_peer_redundancy_state, aireos_device):
+    mock_peer_redundancy_state.return_value = "disabled"
+    with pytest.raises(aireos_module.PeerFailedToFormError):
+        aireos_device._wait_for_peer_to_form("standby hot", timeout=1)
+
+
 @pytest.mark.parametrize(
     "output_filename,expected_filename",
     (
@@ -616,10 +630,12 @@ def test_file_copy_error_other(mock_convert_filename_to_version, aireos_device_p
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os(
     mock_peer_redundancy_state,
-    mock_wait,
+    mock_wait_peer,
+    mock_wait_reboot,
     mock_reboot,
     mock_set_boot_options,
     mock_disable_wlans,
@@ -635,6 +651,8 @@ def test_install_os(
     mock_peer_redundancy_state.assert_called()
     mock_disable_wlans.assert_not_called()
     mock_enable_wlans.assert_not_called()
+    mock_wait_peer.assert_called()
+    mock_wait_reboot.assert_called()
 
 
 def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
@@ -646,9 +664,16 @@ def test_install_os_no_install(aireos_image_booted, aireos_boot_image):
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_error(
-    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+    mock_peer_redundancy_state,
+    mock_wait_peer,
+    mock_wait_reboot,
+    mock_reboot,
+    mock_set_boot_options,
+    aireos_image_booted,
+    aireos_boot_image,
 ):
     device = aireos_image_booted([False, False])
     with pytest.raises(aireos_module.OSInstallError) as boot_error:
@@ -660,24 +685,39 @@ def test_install_os_error(
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_error_peer(
-    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+    mock_peer_redundancy_state,
+    mock_wait_peer,
+    mock_wait_reboot,
+    mock_reboot,
+    mock_set_boot_options,
+    aireos_image_booted,
+    aireos_boot_image,
 ):
     mock_peer_redundancy_state.side_effect = ["standby hot", "unknown"]
+    mock_wait_peer.side_effect = [aireos_module.PeerFailedToFormError("host", "standby hot", "unknown")]
     device = aireos_image_booted([False, True])
     with pytest.raises(aireos_module.OSInstallError) as boot_error:
         device.install_os(aireos_boot_image)
-    assert boot_error.value.message == f"{device.host}-standby was unable to boot into {aireos_boot_image}"
+    assert boot_error.value.message == f"{device.host}-standby was unable to boot into {aireos_boot_image}-standby hot"
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
 
 
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_pass_controller(
-    mock_peer_redundancy_state, mock_wait, mock_reboot, mock_set_boot_options, aireos_image_booted, aireos_boot_image
+    mock_peer_redundancy_state,
+    mock_wait_peer,
+    mock_wait_reboot,
+    mock_reboot,
+    mock_set_boot_options,
+    aireos_image_booted,
+    aireos_boot_image,
 ):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image, controller="self", save_config=False) is True
@@ -689,10 +729,12 @@ def test_install_os_pass_controller(
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_disable_all_wlans(
     mock_peer_redundancy_state,
-    mock_wait,
+    mock_wait_peer,
+    mock_wait_reboot,
     mock_reboot,
     mock_set_boot_options,
     mock_disable_wlans,
@@ -715,10 +757,12 @@ def test_install_os_disable_all_wlans(
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_disable_select_wlans(
     mock_peer_redundancy_state,
-    mock_wait,
+    mock_wait_peer,
+    mock_wait_reboot,
     mock_reboot,
     mock_set_boot_options,
     mock_disable_wlans,
@@ -741,10 +785,12 @@ def test_install_os_disable_select_wlans(
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_disable_wlans_error_disabling(
     mock_peer_redundancy_state,
-    mock_wait,
+    mock_wait_peer,
+    mock_wait_reboot,
     mock_reboot,
     mock_set_boot_options,
     mock_disable_wlans,
@@ -769,10 +815,12 @@ def test_install_os_disable_wlans_error_disabling(
 @mock.patch.object(AIREOSDevice, "set_boot_options")
 @mock.patch.object(AIREOSDevice, "reboot")
 @mock.patch.object(AIREOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(AIREOSDevice, "_wait_for_peer_to_form")
 @mock.patch.object(AIREOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_install_os_disable_wlans_error_enabling(
     mock_peer_redundancy_state,
-    mock_wait,
+    mock_wait_peer,
+    mock_wait_reboot,
     mock_reboot,
     mock_set_boot_options,
     mock_disable_wlans,
