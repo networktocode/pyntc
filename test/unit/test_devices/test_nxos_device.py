@@ -4,10 +4,9 @@ import mock
 from pynxos.errors import CLIError
 
 from .device_mocks.nxos import show, show_list
-from pyntc.devices.system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.devices.nxos_device import NXOSDevice
 from pyntc.devices.base_device import RollbackError, RebootTimerError
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
+from pyntc.errors import CommandError, CommandListError, FileTransferError, NTCFileNotFoundError
 
 
 BOOT_IMAGE = "n9000-dk9.9.2.1.bin"

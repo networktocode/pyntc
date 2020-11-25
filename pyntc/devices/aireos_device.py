@@ -8,7 +8,6 @@ import signal
 from netmiko import ConnectHandler
 
 from .base_device import BaseDevice, fix_docs
-from .system_features.file_copy.base_file_copy import FileTransferError
 from pyntc.errors import (
     NTCError,
     CommandError,
@@ -16,8 +15,11 @@ from pyntc.errors import (
     WLANEnableError,
     CommandListError,
     WLANDisableError,
+    FileTransferError,
     RebootTimeoutError,
+    DeviceNotActiveError,
     NTCFileNotFoundError,
+    PeerFailedToFormError,
 )
 
 
@@ -30,6 +32,8 @@ RE_AP_BOOT_OPTIONS = re.compile(
     r"^(?P<name>.+?)\s+(?P<primary>(?:\d+\.){3}\d+)\s+(?P<backup>(?:\d+\.){3}\d+)\s+(?P<status>\S+).+$",
     re.M,
 )
+RE_PEER_REDUNDANCY_STATE = re.compile(r"^\s*Peer\s+State\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_STATE = re.compile(r"^\s*Local\s+State\s*=\s*(.+?)\s*$", re.M)
 RE_WLANS = re.compile(
     r"^(?P<wlan_id>\d+)\s+(?P<profile>\S+)\s*/\s+(?P<ssid>\S+)\s+(?P<status>\S+)\s+(?P<interface>.+?)\s*\S+\s*$", re.M
 )
@@ -62,8 +66,20 @@ class AIREOSDevice(BaseDevice):
     """Cisco AIREOS Device Implementation."""
 
     vendor = "cisco"
+    active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+        """
+        PyNTC Device implementation for Cisco WLC.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            secret (str): The password to escalate privilege on the device.
+            port (int): The port to use to establish the connection.
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+        """
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
         self.secret = secret
@@ -71,7 +87,7 @@ class AIREOSDevice(BaseDevice):
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
-        self.open()
+        self.open(confirm_active=confirm_active)
 
     def _ap_images_match_expected(self, image_option, image, ap_boot_options=None):
         """
@@ -130,14 +146,16 @@ class AIREOSDevice(BaseDevice):
 
         return False
 
-    def _send_command(self, command, expect=False, expect_string=""):
+    def _send_command(self, command, expect_string=None, **kwargs):
         """
         Send single command to device.
 
         Args:
             command (str): The command to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
+
+        Kwargs:
+            Any argument supported by Netmiko's ``send_command_timing`` method.
 
         Returns:
             str: The response from the device after issuing the ``command``.
@@ -154,13 +172,10 @@ class AIREOSDevice(BaseDevice):
             ...
             >>>
         """
-        if expect:
-            if expect_string:
-                response = self.native.send_command_expect(command, expect_string=expect_string)
-            else:
-                response = self.native.send_command_expect(command)
+        if expect_string is None:
+            response = self.native.send_command_timing(command, **kwargs)
         else:
-            response = self.native.send_command_timing(command)
+            response = self.native.send_command(command, expect_string=expect_string, **kwargs)
 
         if "Incorrect usage" in response or "Error:" in response:
             raise CommandError(command, response)
@@ -278,6 +293,36 @@ class AIREOSDevice(BaseDevice):
         # TODO: Get proper hostname parameter
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
+    def _wait_for_peer_to_form(self, redundancy_state, timeout=300):
+        """
+        Wait for device redundancy state to form properly.
+
+        Args:
+            redundancy_state (str): The desired redundancy state between the system and its peer.
+            timeout (int): The max time to wait for peer to form before considering it unable to form.
+
+        Returns:
+            None: Nothing is returned when redundancy state reaches ``redundancy_state``.
+
+        Raises:
+            PeerFailedToFormError: When the ``timeout`` is reached before ``redundancy_state`` is reached.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args):
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>> device.reboot()
+            >>> device._wait_for_peer_to_form("standby hot")
+            >>>
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            current_state = self.peer_redundancy_state
+            if current_state == redundancy_state:
+                return
+
+        raise PeerFailedToFormError(hostname=self.host, desired_state=redundancy_state, current_state=current_state)
+
     @property
     def ap_boot_options(self):
         """
@@ -392,7 +437,7 @@ class AIREOSDevice(BaseDevice):
 
     def close(self):
         """Close the SSH connection to the device."""
-        if self._connected:
+        if self.connected:
             self.native.disconnect()
             self._connected = False
 
@@ -442,6 +487,41 @@ class AIREOSDevice(BaseDevice):
                 self.native.exit_config_mode()
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
+
+    def confirm_is_active(self):
+        """
+        Confirm that the device is either standalone or the active device in a high availability cluster.
+
+        Returns:
+            bool: True when the device is considered active.
+
+        Rasies:
+            DeviceNotActiveError: When the device is not considered the active device.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'standby hot'
+            >>> device.confirm_is_active()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.redundancy_state
+            'active'
+            >>> device.confirm_is_active()
+            True
+            >>>
+        """
+        if not self.is_active():
+            redundancy_state = self.redundancy_state
+            peer_redundancy_state = self.peer_redundancy_state
+            self.close()
+            raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
+
+        return True
 
     @property
     def connected(self):
@@ -677,12 +757,15 @@ class AIREOSDevice(BaseDevice):
                     f"transfer download filename {filename}",
                 ]
             )
-            response = self.native.send_command_timing("transfer download start")
-            if "Are you sure you want to start? (y/N)" in response:
-                response = self.native.send_command(
-                    "y", expect_string="File transfer is successful.", delay_factor=delay_factor
-                )
+        except CommandListError as error:
+            raise FileTransferError(error.message)
 
+        try:
+            response = self.show("transfer download start")
+            if "Are you sure you want to start? (y/N)" in response:
+                response = self.show("y", expect_string="File transfer is successful.", delay_factor=delay_factor)
+        except CommandError as error:
+            raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
             raise FileTransferError
 
@@ -741,24 +824,62 @@ class AIREOSDevice(BaseDevice):
                 self.enable_wlans(disable_wlans)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
-            if not self.peer_redundancy_state == peer_redundancy:
-                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=image_name)
+            try:
+                self._wait_for_peer_to_form(peer_redundancy)
+            except PeerFailedToFormError:
+                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=f"{image_name}-{peer_redundancy}")
 
             return True
 
         return False
 
-    def open(self):
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        return self.redundancy_state in self.active_redundancy_states
+
+    def open(self, confirm_active=True):
         """
         Open a connection to the controller.
 
-        This method will close the connection if it is determined that it is the standby controller.
+        This method will close the connection if ``confirm_active`` is True and the device is not active.
+        Devices that do not have high availibility are considred active.
+
+        Args:
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+
+        Raises:
+            DeviceIsNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.open()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.open(confirm_active=False)
+            >>> device.connected
+            True
+            >>>
         """
         if self.connected:
             try:
                 self.native.find_prompt()
             except:  # noqa E722
-                self.connected = False
+                self._connected = False
 
         if not self.connected:
             self.native = ConnectHandler(
@@ -771,19 +892,20 @@ class AIREOSDevice(BaseDevice):
                 secret=self.secret,
                 verbose=False,
             )
-            self.connected = True
+            self._connected = True
 
         # This prevents open sessions from connecting to STANDBY WLC
-        if not self.redundancy_state:
-            self.close()
+        if confirm_active:
+            self.confirm_is_active()
 
     @property
     def peer_redundancy_state(self):
         """
-        Determine the state of the peer device.
+        Determine the redundancy state of the peer processor.
 
         Returns:
-            str: The Peer State from the local device's perspective.
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -791,9 +913,15 @@ class AIREOSDevice(BaseDevice):
             'standby hot'
             >>>
         """
-        ha = self.show("show redundancy summary")
-        ha_peer_state = re.search(r"^\s*Peer\s+State\s*=\s*(.+?)\s*$", ha, re.M)
-        return ha_peer_state.group(1).lower()
+        try:
+            show_redundancy = self.show("show redundancy summary")
+        except CommandError:
+            return None
+        re_peer_redundancy_state = RE_PEER_REDUNDANCY_STATE.search(show_redundancy)
+        peer_redundancy_state = re_peer_redundancy_state.group(1).lower()
+        if peer_redundancy_state == "n/a":
+            peer_redundancy_state = "disabled"
+        return peer_redundancy_state
 
     def reboot(self, timer=0, confirm=False, controller="self", save_config=True):
         """
@@ -869,23 +997,27 @@ class AIREOSDevice(BaseDevice):
     @property
     def redundancy_state(self):
         """
-        Determine if device is currently the active device.
+        Determine the redundancy state of the current processor.
 
         Returns:
-            bool: True if the device is active, False if the device is standby.
+            str: The redundancy state of the current processor.
+            None: When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.redundancy_state
-            True
+            'active'
             >>>
         """
-        ha = self.show("show redundancy summary")
-        ha_state = re.search(r"^\s*Local\s+State\s*=\s*(.+?)\s*$", ha, re.M)
-        if ha_state.group(1).lower() == "active":
-            return True
-        else:
-            return False
+        try:
+            show_redundancy = self.show("show redundancy summary")
+        except CommandError:
+            return None
+        re_redundancy_state = RE_REDUNDANCY_STATE.search(show_redundancy)
+        redundancy_state = re_redundancy_state.group(1).lower()
+        if redundancy_state == "n/a":
+            redundancy_state = "disabled"
+        return redundancy_state
 
     def rollback(self):
         raise NotImplementedError
@@ -949,14 +1081,16 @@ class AIREOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect=False, expect_string=""):
+    def show(self, command, expect_string=None, **kwargs):
         """
         Send an operational command to the device.
 
         Args:
             command (str): The command to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
+
+        Kwargs:
+            Any argument supported by Netmiko's ``send_command_timing`` method.
 
         Returns:
             str: The data returned from the device
@@ -974,7 +1108,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         self.enable()
-        return self._send_command(command, expect=expect, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string, **kwargs)
 
     def show_list(self, commands):
         """
@@ -982,7 +1116,6 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             commands (list): The list of commands to send to the device.
-            expect (bool): Whether to send a different expect string than normal prompt.
             expect_string (str): The expected prompt after running the command.
 
         Returns:

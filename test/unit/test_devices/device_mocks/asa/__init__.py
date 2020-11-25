@@ -1,5 +1,4 @@
 import os
-import re
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -22,15 +21,5 @@ def send_command(command, **kwargs):
 
     with open(path, "r") as f:
         response = f.read()
-
-    return response
-
-
-def send_command_expect(command, expect_string=None, **kwargs):
-    response = send_command(command)
-
-    if expect_string:
-        if not re.search(expect_string, response):
-            raise IOError("Search pattern never detected.")
 
     return response

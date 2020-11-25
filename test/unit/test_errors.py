@@ -74,6 +74,16 @@ def test_command_list_error():
     assert err.value.message == error_message
 
 
+def test_device_not_active_error():
+    expected = "ntc_host is not the active device.\n\n" "device state: standby hot\n" "peer state:   active\n"
+    error_class = ntc_errors.DeviceNotActiveError
+    error = error_class("ntc_host", "standby hot", "active")
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == expected
+
+
 def test_feature_not_found_error():
     error_message = "vlans feature not found for ios device type."
     error_class = ntc_errors.FeatureNotFoundError
@@ -82,6 +92,25 @@ def test_feature_not_found_error():
         raise error
 
     assert err.value.message == error_message
+
+
+def test_file_transfer_error_default_message():
+    error_class = ntc_errors.FileTransferError
+    error = error_class()
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == error_class.default_message
+
+
+def test_file_transfer_error_custom_message():
+    error_class = ntc_errors.FileTransferError
+    custom_message = "This is a custom message"
+    error = error_class(message=custom_message)
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == custom_message
 
 
 def test_file_system_not_found_error():
@@ -132,6 +161,36 @@ def test_ntc_file_not_found_error():
         raise error
 
     assert err.value.message == error_message
+
+
+def test_peer_failed_to_form_error():
+    error_class = ntc_errors.PeerFailedToFormError
+    error = error_class("host1", "standby hot", "disabled")
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == (
+        'host1 was unable to form a redundancy state of "standby hot" with peer.\n' 'The current state is "disabled".'
+    )
+
+
+def test_socket_closed_error_default_message():
+    error_class = ntc_errors.SocketClosedError
+    error = error_class()
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == error_class.default_message
+
+
+def test_socket_closed_error_custom_message():
+    error_class = ntc_errors.SocketClosedError
+    custom_message = "This is a custom message"
+    error = error_class(message=custom_message)
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == custom_message
 
 
 def test_wlan_enable_error():

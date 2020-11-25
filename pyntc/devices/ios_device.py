@@ -11,20 +11,31 @@ from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
 from pyntc.utils import convert_dict_by_key, get_structured_data
-from .system_features.file_copy.base_file_copy import FileTransferError
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
     NTCError,
-    NTCFileNotFoundError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    FileTransferError,
     RebootTimeoutError,
+    DeviceNotActiveError,
+    NTCFileNotFoundError,
+    FileSystemNotFoundError,
+    SocketClosedError,
 )
 
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
+RE_SHOW_REDUNDANCY = re.compile(
+    r"^Redundant\s+System\s+Information\s*:\s*\n^-.+-\s*\n(?P<info>.+?)\n"
+    r"^Current\s+Processor\s+Information\s*:\s*\n^-.+-\s*\n(?P<self>.+?$)\n"
+    r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\d+\).+)",
+    re.DOTALL | re.MULTILINE,
+)
+RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
+SHOW_DIR_RETRY_COUNT = 5
 
 
 @fix_docs
@@ -32,8 +43,20 @@ class IOSDevice(BaseDevice):
     """Cisco IOS Device Implementation."""
 
     vendor = "cisco"
+    active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+        """
+        PyNTC Device implementation for Cisco IOS.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            secret (str): The password to escalate privilege on the device.
+            port (int): The port to use to establish the connection.
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+        """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
@@ -42,7 +65,7 @@ class IOSDevice(BaseDevice):
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
-        self.open()
+        self.open(confirm_active=confirm_active)
 
     def _enable(self):
         warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
@@ -68,13 +91,21 @@ class IOSDevice(BaseDevice):
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir")
-        try:
-            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-        except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+        # Set variables to control while loop
+        counter = 0
 
-        return file_system
+        # Attempt to gather file system
+        while counter < SHOW_DIR_RETRY_COUNT:
+            counter += 1
+            raw_data = self.show("dir")
+            try:
+                file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
+                return file_system
+            except AttributeError:
+                # Allow to continue through the loop
+                continue
+
+        raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -101,14 +132,11 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect=False, expect_string=""):
-        if expect:
-            if expect_string:
-                response = self.native.send_command_expect(command, expect_string=expect_string)
-            else:
-                response = self.native.send_command_expect(command)
-        else:
+    def _send_command(self, command, expect_string=None):
+        if expect_string is None:
             response = self.native.send_command_timing(command)
+        else:
+            response = self.native.send_command(command, expect_string=expect_string)
 
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
@@ -150,6 +178,7 @@ class IOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.open()
+                self.show("show version")
                 return
             except:  # noqa E722
                 pass
@@ -194,7 +223,7 @@ class IOSDevice(BaseDevice):
         self.save(filename=checkpoint_file)
 
     def close(self):
-        if self._connected:
+        if self.connected:
             self.native.disconnect()
             self._connected = False
 
@@ -213,6 +242,55 @@ class IOSDevice(BaseDevice):
             except CommandError as e:
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
+
+    def confirm_is_active(self):
+        """
+        Confirm that the device is either standalone or the active device in a high availability cluster.
+
+        Returns:
+            bool: True when the device is considered active.
+
+        Rasies:
+            DeviceNotActiveError: When the device is not considered the active device.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'standby hot'
+            >>> device.confirm_is_active()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.redundancy_state
+            'active'
+            >>> device.confirm_is_active()
+            True
+            >>>
+        """
+        if not self.is_active():
+            redundancy_state = self.redundancy_state
+            peer_redundancy_state = self.peer_redundancy_state
+            self.close()
+            raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
+
+        return True
+
+    @property
+    def connected(self):
+        """
+        The connection status of the device.
+
+        Returns:
+            bool: True if the device is connected, else False.
+        """
+        return self._connected
+
+    @connected.setter
+    def connected(self, value):
+        self._connected = value
 
     def enable(self):
         """Ensure device is in enable mode.
@@ -264,6 +342,10 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
+            except OSError as error:
+                # compare hashes
+                if not fc.compare_md5():
+                    raise SocketClosedError(message=error)
             except:  # noqa E722
                 raise FileTransferError
             finally:
@@ -298,14 +380,55 @@ class IOSDevice(BaseDevice):
 
         return False
 
-    def open(self):
-        if self._connected:
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        return self.redundancy_state in self.active_redundancy_states
+
+    def open(self, confirm_active=True):
+        """
+        Open a connection to the network device.
+
+        This method will close the connection if ``confirm_active`` is True and the device is not active.
+        Devices that do not have high availibility are considred active.
+
+        Args:
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+
+        Raises:
+            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.open()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.open(confirm_active=False)
+            >>> device.connected
+            True
+            >>>
+        """
+        if self.connected:
             try:
                 self.native.find_prompt()
             except:  # noqa E722
                 self._connected = False
 
-        if not self._connected:
+        if not self.connected:
             self.native = ConnectHandler(
                 device_type="cisco_ios",
                 ip=self.host,
@@ -317,6 +440,37 @@ class IOSDevice(BaseDevice):
                 verbose=False,
             )
             self._connected = True
+
+        if confirm_active:
+            self.confirm_is_active()
+
+    @property
+    def peer_redundancy_state(self):
+        """
+        Determine the current redundancy state of the peer processor.
+
+        Returns:
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.peer_redundancy_state
+            'standby hot'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return None
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        processor_redundancy_info = re_show_redundancy.group("other")
+        if processor_redundancy_info is not None:
+            re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+            processor_redundancy_state = re_redundancy_state.group(1).lower()
+        else:
+            processor_redundancy_state = "disabled"
+        return processor_redundancy_state
 
     def reboot(self, timer=0, confirm=False):
         if confirm:
@@ -344,6 +498,56 @@ class IOSDevice(BaseDevice):
         else:
             print("Need to confirm reboot with confirm=True")
 
+    @property
+    def redundancy_mode(self):
+        """
+        The operating redundancy mode of the device.
+
+        Returns:
+            str: The redundancy mode the device is operating in.
+                If the command is not supported, then "n/a" is returned.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_mode
+            'stateful switchover'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return "n/a"
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        redundancy_info = re_show_redundancy.group("info")
+        re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
+        redundancy_mode = re_redundancy_mode.group(1).lower()
+        return redundancy_mode
+
+    @property
+    def redundancy_state(self):
+        """
+        Determine the current redundancy state of the processor.
+
+        Returns:
+            str: The redundancy state of the current processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'active'
+            >>>
+        """
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            return None
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        processor_redundancy_info = re_show_redundancy.group("self")
+        re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+        processor_redundancy_state = re_redundancy_state.group(1).lower()
+        return processor_redundancy_state
+
     def rollback(self, rollback_to):
         try:
             self.show("configure replace flash:%s force" % rollback_to)
@@ -352,7 +556,7 @@ class IOSDevice(BaseDevice):
 
     @property
     def running_config(self):
-        return self.show("show running-config", expect=True)
+        return self.show("show running-config")
 
     def save(self, filename="startup-config"):
         command = "copy running-config %s" % filename
@@ -391,9 +595,9 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect=False, expect_string=""):
+    def show(self, command, expect_string=None):
         self.enable()
-        return self._send_command(command, expect=expect, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
         self.enable()

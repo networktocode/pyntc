@@ -14,15 +14,15 @@ from pyntc.utils import convert_dict_by_key, convert_list_by_key
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
     NTCError,
-    NTCFileNotFoundError,
-    RebootTimeoutError,
+    CommandError,
     OSInstallError,
+    CommandListError,
+    FileTransferError,
+    RebootTimeoutError,
+    NTCFileNotFoundError,
+    FileSystemNotFoundError,
 )
-from .system_features.file_copy.base_file_copy import FileTransferError
 
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
@@ -41,11 +41,23 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    def __init__(self, host, username, password, transport="http", timeout=60, **kwargs):
+    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
+        self.port = port
         self.timeout = timeout
-        self.connection = eos_connect(transport, host=host, username=username, password=password, timeout=timeout)
+        eapi_args = {
+            "transport": transport,
+            "host": host,
+            "username": username,
+            "password": password,
+        }
+        optional_args = ("port", "timeout")
+        for arg in optional_args:
+            value = getattr(self, arg)
+            if value is not None:
+                eapi_args[arg] = value
+        self.connection = eos_connect(**eapi_args)
         self.native = EOSNative(self.connection)
         # _connected indicates Netmiko ssh connection
         self._connected = False

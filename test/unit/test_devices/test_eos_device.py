@@ -318,3 +318,39 @@ class TestEOSDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@mock.patch("pyntc.devices.eos_device.eos_connect")
+def test_init_no_transport(mock_eos_connect):
+    EOSDevice("host", "username", "password")
+    mock_eos_connect.assert_called_with(host="host", username="username", password="password", transport="http")
+
+
+@mock.patch("pyntc.devices.eos_device.eos_connect")
+def test_init_https_transport(mock_eos_connect):
+    EOSDevice("host", "username", "password", transport="https")
+    mock_eos_connect.assert_called_with(host="host", username="username", password="password", transport="https")
+
+
+@mock.patch("pyntc.devices.eos_device.eos_connect")
+def test_init_pass_port(mock_eos_connect):
+    EOSDevice("host", "username", "password", port=8080)
+    mock_eos_connect.assert_called_with(
+        host="host", username="username", password="password", transport="http", port=8080
+    )
+
+
+@mock.patch("pyntc.devices.eos_device.eos_connect")
+def test_init_pass_timeout(mock_eos_connect):
+    EOSDevice("host", "username", "password", timeout=30)
+    mock_eos_connect.assert_called_with(
+        host="host", username="username", password="password", transport="http", timeout=30
+    )
+
+
+@mock.patch("pyntc.devices.eos_device.eos_connect")
+def test_init_pass_port_and_timeout(mock_eos_connect):
+    EOSDevice("host", "username", "password", port=8080, timeout=30)
+    mock_eos_connect.assert_called_with(
+        host="host", username="username", password="password", transport="http", port=8080, timeout=30
+    )
