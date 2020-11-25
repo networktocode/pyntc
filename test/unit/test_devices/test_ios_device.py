@@ -578,6 +578,40 @@ def test_redundancy_state_unsupported(ios_show):
     assert actual is None
 
 
+def test_get_file_system(ios_show):
+    filename = "dir"
+    expected = "flash:"
+    device = ios_show([f"{filename}.txt"])
+    actual = device._get_file_system()
+    assert actual == expected
+
+
+def test_get_file_system_first_error_then_pass(ios_show):
+    filename = "dir"
+    expected = "flash:"
+    device = ios_show(["", f"{filename}.txt"])
+    actual = device._get_file_system()
+    assert actual == expected
+
+    device.show.assert_has_calls([mock.call("dir")] * 2)
+
+
+@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
+def test_get_file_system_raise_error(mock_facts, ios_show):
+    # Set the command to run 5 times
+    device = ios_show([""] * 5)
+
+    # Set a return value for the Facts mock
+    mock_facts.return_value = {"hostname": "pyntc-rtr"}
+
+    # Test with the raises
+    with pytest.raises(ios_module.FileSystemNotFoundError):
+        device._get_file_system()
+
+    # Assert of the calls
+    device.show.assert_has_calls([mock.call("dir")] * 5)
+
+
 def test_send_command_error(ios_send_command_timing):
     command = "send_command_error"
     device = ios_send_command_timing([f"{command}.txt"])
