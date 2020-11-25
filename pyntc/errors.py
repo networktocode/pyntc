@@ -196,6 +196,21 @@ class NTCFileNotFoundError(NTCError):
         super().__init__(message)
 
 
+class SocketClosedError(NTCError):
+    default_message = (
+        "The device closed the connection during operation. Please make sure that you have remote access to the device."
+    )
+
+    def __init__(self, message=None):
+        """
+        Error for network device closing the socket connection during operation.
+
+        Args:
+            message (str): A custom error message to use instead of the default.
+        """
+        super().__init__(message or self.default_message)
+
+
 class WLANEnableError(NTCError):
     def __init__(self, hostname, desired_wlans, actual_wlans):
         """
