@@ -395,7 +395,11 @@ def test_connected_setter(expected, ios_device):
 @mock.patch("pyntc.devices.ios_device.ConnectHandler")
 @pytest.mark.parametrize(
     "redundancy_state,expected",
-    (("active", True), ("standby hot", False), (None, True),),
+    (
+        ("active", True),
+        ("standby hot", False),
+        (None, True),
+    ),
     ids=("active", "standby_hot", "unsupported"),
 )
 def test_is_active(mock_connect_handler, mock_redundancy_state, redundancy_state, expected):
@@ -452,7 +456,10 @@ def test_open_standby(mock_connected, mock_connect_handler, ios_device):
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (("show_redundancy", "standby hot"), ("show_redundancy_no_peer", "disabled"),),
+    (
+        ("show_redundancy", "standby hot"),
+        ("show_redundancy_no_peer", "disabled"),
+    ),
     ids=("standby_hot", "disabled"),
 )
 def test_peer_redundancy_state(filename, expected, ios_show):
@@ -522,7 +529,10 @@ def test_redundancy_mode_unsupported_command(ios_show):
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (("show_redundancy", "active"), ("show_redundancy_standby", "standby hot"),),
+    (
+        ("show_redundancy", "active"),
+        ("show_redundancy_standby", "standby hot"),
+    ),
     ids=("active", "standby_hot"),
 )
 def test_redundancy_state(filename, expected, ios_show):
