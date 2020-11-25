@@ -33,6 +33,7 @@ RE_SHOW_REDUNDANCY = re.compile(
 )
 RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
+SHOW_DIR_RETRY_COUNT = 5
 
 
 @fix_docs
@@ -81,7 +82,7 @@ class IOSDevice(BaseDevice):
         counter = 0
 
         # Attempt to gather file system
-        while counter < 5:
+        while counter < SHOW_DIR_RETRY_COUNT:
             counter += 1
             raw_data = self.show("dir")
             try:
