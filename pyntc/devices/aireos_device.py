@@ -17,6 +17,7 @@ from pyntc.errors import (
     WLANDisableError,
     FileTransferError,
     RebootTimeoutError,
+    DeviceNotActiveError,
     NTCFileNotFoundError,
     PeerFailedToFormError,
 )
@@ -67,7 +68,18 @@ class AIREOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+        """
+        PyNTC Device implementation for Cisco WLC.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            secret (str): The password to escalate privilege on the device.
+            port (int): The port to use to establish the connection.
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+        """
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
         self.secret = secret
@@ -75,7 +87,7 @@ class AIREOSDevice(BaseDevice):
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
-        self.open()
+        self.open(confirm_active=confirm_active)
 
     def _ap_images_match_expected(self, image_option, image, ap_boot_options=None):
         """
@@ -476,6 +488,41 @@ class AIREOSDevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    def confirm_is_active(self):
+        """
+        Confirm that the device is either standalone or the active device in a high availability cluster.
+
+        Returns:
+            bool: True when the device is considered active.
+
+        Rasies:
+            DeviceNotActiveError: When the device is not considered the active device.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'standby hot'
+            >>> device.confirm_is_active()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.redundancy_state
+            'active'
+            >>> device.confirm_is_active()
+            True
+            >>>
+        """
+        if not self.is_active():
+            redundancy_state = self.redundancy_state
+            peer_redundancy_state = self.peer_redundancy_state
+            self.close()
+            raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
+
+        return True
+
     @property
     def connected(self):
         """
@@ -801,11 +848,32 @@ class AIREOSDevice(BaseDevice):
         """
         return self.redundancy_state in self.active_redundancy_states
 
-    def open(self):
+    def open(self, confirm_active=True):
         """
         Open a connection to the controller.
 
-        This method will close the connection if it is determined that it is the standby controller.
+        This method will close the connection if ``confirm_active`` is True and the device is not active.
+        Devices that do not have high availibility are considred active.
+
+        Args:
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+
+        Raises:
+            DeviceIsNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> device.open()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.open(confirm_active=False)
+            >>> device.connected
+            True
+            >>>
         """
         if self.connected:
             try:
@@ -827,8 +895,8 @@ class AIREOSDevice(BaseDevice):
             self._connected = True
 
         # This prevents open sessions from connecting to STANDBY WLC
-        if not self.is_active():
-            self.close()
+        if confirm_active:
+            self.confirm_is_active()
 
     @property
     def peer_redundancy_state(self):

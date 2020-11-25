@@ -85,6 +85,22 @@ class CommandListError(NTCError):
         super().__init__(message)
 
 
+class DeviceNotActiveError(NTCError):
+    def __init__(self, hostname, redundancy_state, peer_redundancy_state):
+        """
+        Error for when the device is part of an HA cluster, and the device is not the active device.
+
+        Args:
+            hostname (str): The hostname of the device being validated.
+        """
+        message = (
+            f"{hostname} is not the active device.\n\n"
+            f"device state: {redundancy_state}\n"
+            f"peer state:   {peer_redundancy_state}\n"
+        )
+        super().__init__(message)
+
+
 class FeatureNotFoundError(NTCError):
     def __init__(self, feature, device_type):
         """

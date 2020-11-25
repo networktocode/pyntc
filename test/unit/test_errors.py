@@ -74,6 +74,16 @@ def test_command_list_error():
     assert err.value.message == error_message
 
 
+def test_device_not_active_error():
+    expected = "ntc_host is not the active device.\n\n" "device state: standby hot\n" "peer state:   active\n"
+    error_class = ntc_errors.DeviceNotActiveError
+    error = error_class("ntc_host", "standby hot", "active")
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == expected
+
+
 def test_feature_not_found_error():
     error_message = "vlans feature not found for ios device type."
     error_class = ntc_errors.FeatureNotFoundError
