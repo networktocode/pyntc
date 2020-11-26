@@ -30,7 +30,16 @@ class BaseDevice(object):
         self.username = username
         self.password = password
         self.device_type = device_type
-        self._facts = None
+        self._uptime = None
+        self._vendor = None
+        self._os_version = None
+        self._interfaces = None
+        self._hostname = None
+        self._fqdn = None
+        self._uptime_string = None
+        self._serial_number = None
+        self._model = None
+        self._vlans = None
 
     def _image_booted(self, image_name, **vendor_specifics):
         """Determines if a particular image is serving as the active OS.
@@ -108,50 +117,101 @@ class BaseDevice(object):
 
     @property
     @abc.abstractmethod
-    def facts(self):
-        """Return a dictionary of facts about the device.
+    def uptime(self):
+        """Uptime integer property, part of device facts.
 
-        The dictionary must include the following keys.
-        All keys are strings, the value type is given in parenthesis:
-            uptime (int)
-            vendor (str)
-            os_version (str)
-            interfaces (list of strings)
-            hostname (str)
-            fqdn (str)
-            uptime_string (str)
-            serial_number (str)
-            model (str)
-            vlans (list of strings)
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
 
-        The dictionary can also include a vendor-specific dictionary, with the
-        device type as a key in the outer dictionary.
+    @property
+    @abc.abstractmethod
+    def vendor(self):
+        """Vendor string property, part of device facts.
 
-        Example:
-            {
-                "uptime": 1819711,
-                "vendor": "cisco",
-                "os_version": "7.0(3)I2(1)",
-                "interfaces": [
-                    "mgmt0",
-                    "Ethernet1/1",
-                    "Ethernet1/2",
-                    "Ethernet1/3",
-                    "Ethernet1/4",
-                    "Ethernet1/5",
-                    "Ethernet1/6",
-                ],
-                "hostname": "n9k1",
-                "fqdn": "N/A",
-                "uptime_string": "21:01:28:31",
-                "serial_number": "SAL1819S6LU",
-                "model": "Nexus9000 C9396PX Chassis",
-                "vlans": [
-                    "1",
-                    "2",
-                    "3",
-                ]
-            }
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def os_version(self):
+        """Operating System string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def interfaces(self):
+        """Interfaces list of strings property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def hostname(self):
+        """Host name string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def fqdn(self):
+        """fqdn name string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def uptime_string(self):
+        """Uptime string string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def serial_number(self):
+        """Serial number string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def model(self):
+        """Model string property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def vlans(self):
+        """Vlans lost of strings property, part of device facts.
+
+        Raises:
+            NotImplementedError: returns not implemented if not included in facts.
         """
         raise NotImplementedError
 
@@ -360,15 +420,23 @@ class BaseDevice(object):
     def refresh_facts(self):
         """Refresh cached facts."""
         # Persist values that were not added by facts getter
-        if isinstance(self._facts, dict):
-            facts_backup = self._facts.copy()
-            self._facts = None
-            facts_backup.update(self.facts)
-            self._facts = facts_backup.copy()
+        if isinstance(self._uptime, int):
+            uptime_backup = self._uptime
+            self._uptime = None
+            uptime_backup = self.uptime
+            self._uptime = uptime_backup
         else:
-            self._facts = None
+            self._uptime = None
 
-        return self.facts
+        if isinstance(self._vendor, str):
+            vendor_backup = self._vendor
+            self._vendor = None
+            vendor_backup = self.vendor
+            self._uptime = vendor_backup
+        else:
+            self._vendor = None
+
+        return self.uptime, self.vendor
 
 
 class RebootTimerError(NTCError):
