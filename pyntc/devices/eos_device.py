@@ -39,8 +39,6 @@ INTERFACES_KM = {
 class EOSDevice(BaseDevice):
     """Arista EOS Device Implementation."""
 
-    vendor = "arista"
-
     def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
@@ -146,6 +144,12 @@ class EOSDevice(BaseDevice):
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
 
+    def _get_uptime(self):
+        sh_version_output = self.show("show version")
+        uptime = int(time.time() - sh_version_output["bootupTimestamp"])
+
+        return uptime
+
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
@@ -187,25 +191,47 @@ class EOSDevice(BaseDevice):
             self.native_ssh.exit_config_mode()
 
     @property
-    def facts(self):
-        if self._facts is None:
-            sh_version_output = self.show("show version")
-            self._facts = convert_dict_by_key(sh_version_output, BASIC_FACTS_KM)
-            self._facts["vendor"] = self.vendor
+    def vendor(self):
+        if self._vendor is None:
+            self._vendor = "arista"
 
-            uptime = int(time.time() - sh_version_output["bootupTimestamp"])
-            self._facts["uptime"] = uptime
-            self._facts["uptime_string"] = self._uptime_to_string(uptime)
+        return self._vendor
 
+    @property
+    def uptime(self):
+        if self._uptime is None:
+            self._uptime = self._get_uptime()
+
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        if self._uptime_string is None:
+            self._uptime_string = self._uptime_to_string(self._get_uptime())
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
-            self._facts.update(
-                convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname", "fqdn"])
-            )
+            self._hostname = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname"])
+        
+        return self._hostname
 
-            self._facts["interfaces"] = self._get_interface_list()
-            self._facts["vlans"] = self._get_vlan_list()
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = self._get_interface_list()
+        
+        return self._interfaces
 
-        return self._facts
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            self._vlans = self._get_vlan_list()
+
+        return self._vlans
 
     def file_copy(self, src, dest=None, file_system=None):
         """[summary]

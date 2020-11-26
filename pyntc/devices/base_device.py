@@ -420,24 +420,37 @@ class BaseDevice(object):
     def refresh_facts(self):
         """Refresh cached facts."""
         # Persist values that were not added by facts getter
-        if isinstance(self._uptime, int):
-            uptime_backup = self._uptime
-            self._uptime = None
-            uptime_backup = self.uptime
-            self._uptime = uptime_backup
-        else:
-            self._uptime = None
+        if self.uptime:
+            self._uptime = self.uptime
 
-        if isinstance(self._vendor, str):
-            vendor_backup = self._vendor
-            self._vendor = None
-            vendor_backup = self.vendor
-            self._uptime = vendor_backup
-        else:
-            self._vendor = None
+        if self.vendor:
+            self._vendor = self.vendor
+           
+        if self.os_version:
+            self._os_version = self.os_version
 
-        return self.uptime, self.vendor
+        if self.interfaces:
+            self._interfaces = self.interfaces
 
+        if self.hostname:
+            self._hostname = self.hostname
+
+        if self.fqdn:
+            self._fqdn = self.fqdn
+
+        if self.uptime_string:
+            self._uptime_string = self.uptime_string
+
+        if self.serial_number:
+            self._serial_number = self.serial_number
+
+        if self.model:
+            self._model = self.model
+
+        if self.vlans:
+            self._vlans = self.vlans
+        
+        return self.uptime, self.vendor, self.os_version, self.interfaces, self.hostname, self.fqdn, self.uptime_string, self.serial_number, self.model, self.vlans
 
 class RebootTimerError(NTCError):
     def __init__(self, device_type):
