@@ -270,42 +270,64 @@ class TestEOSDevice(unittest.TestCase):
         self.device.checkpoint("good_checkpoint")
         self.device.native.enable.assert_called_with(["copy running-config good_checkpoint"], encoding="json")
 
+    @mock.patch.object(EOSDevice, "_get_uptime", autospec=True)
+    def test_uptime(self, mock_get_uptime):
+        mock_get_uptime.return_value = 123
+        uptime = self.device.uptime
+        self.assertIsInstance(uptime, int)
+
+    @mock.patch.object(EOSDevice, "_get_uptime", autospec=True)
+    def test_uptime_string(self, mock_get_uptime):
+        mock_get_uptime.return_value = 123
+        uptime_string = self.device.uptime_string
+        self.assertIsInstance(uptime_string, str)
+
+    def test_vendor(self):
+        vendor = self.device.vendor
+        self.assertEqual(vendor, "arista")
+
+    def test_os_version(self):
+        os_version = self.device.os_version
+        self.assertEqual(os_version, "4.14.7M-2384414.4147M")
+
+    def test_interfaces(self):
+        interfaces = self.device.interfaces
+        expected = [
+            "Ethernet1",
+            "Ethernet2",
+            "Ethernet3",
+            "Ethernet4",
+            "Ethernet5",
+            "Ethernet6",
+            "Ethernet7",
+            "Ethernet8",
+            "Management1",
+        ]
+        self.assertEqual(interfaces, expected)
+
+    def test_hostname(self):
+        hostname = self.device.hostname
+        self.assertEqual(hostname, "eos-spine1")
+
+    def test_fqdn(self):
+        fqdn = self.device.fqdn
+        self.assertEqual(fqdn, "eos-spine1.ntc.com")
+
+    def test_serial_number(self):
+        serial_number = self.device.serial_number
+        self.assertEqual(serial_number, "")
+
+    def test_model(self):
+        model = self.device.model
+        self.assertEqual(model, "vEOS")
+
     @mock.patch.object(EOSVlans, "get_list", autospec=True)
-    def test_facts(self, mock_vlan_list):
+    def test_vlans(self, mock_vlan_list):
         mock_vlan_list.return_value = ["1", "2", "10"]
-        facts = self.device.facts
-        self.assertIsInstance(facts["uptime"], int)
-        self.assertIsInstance(facts["uptime_string"], str)
+        expected = ["1", "2", "10"]
+        vlans = self.device.vlans
 
-        del facts["uptime"]
-        del facts["uptime_string"]
-
-        expected = {
-            "vendor": "arista",
-            "os_version": "4.14.7M-2384414.4147M",
-            "interfaces": [
-                "Ethernet1",
-                "Ethernet2",
-                "Ethernet3",
-                "Ethernet4",
-                "Ethernet5",
-                "Ethernet6",
-                "Ethernet7",
-                "Ethernet8",
-                "Management1",
-            ],
-            "hostname": "eos-spine1",
-            "fqdn": "eos-spine1.ntc.com",
-            "serial_number": "",
-            "model": "vEOS",
-            "vlans": ["1", "2", "10"],
-        }
-        self.assertEqual(facts, expected)
-
-        self.device.native.enable.reset_mock()
-        facts = self.device.facts
-        self.assertEqual(facts, expected)
-        self.device.native.enable.assert_not_called()
+        self.assertEqual(vlans, expected)
 
     def test_running_config(self):
         expected = self.device.show("show running-config", raw_text=True)

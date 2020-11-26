@@ -80,7 +80,7 @@ class EOSDevice(BaseDevice):
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+            raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
         return file_system
 
@@ -142,7 +142,7 @@ class EOSDevice(BaseDevice):
             except:  # noqa E722
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _get_uptime(self):
         sh_version_output = self.show("show version")
@@ -215,7 +215,7 @@ class EOSDevice(BaseDevice):
     def hostname(self):
         if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
-            self._hostname = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname"])
+            self._hostname = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname"])["hostname"]
         
         return self._hostname
 
@@ -232,6 +232,38 @@ class EOSDevice(BaseDevice):
             self._vlans = self._get_vlan_list()
 
         return self._vlans
+
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            sh_hostname_output = self.show("show hostname")
+            self._fqdn = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["fqdn"])["fqdn"]
+        
+        return self._fqdn
+
+    @property
+    def model(self):
+        if self._model is None:
+            sh_version_output = self.show("show version")
+            self._model = sh_version_output["modelName"]
+
+        return self._model
+
+    @property
+    def os_version(self):
+        if self._os_version is None:
+            sh_version_output = self.show("show version")
+            self._os_version = sh_version_output["internalVersion"]
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        if self._serial_number is None:
+            sh_version_output = self.show("show version")
+            self._serial_number = sh_version_output["serialNumber"]
+
+        return self._serial_number
 
     def file_copy(self, src, dest=None, file_system=None):
         """[summary]
@@ -286,7 +318,7 @@ class EOSDevice(BaseDevice):
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             return True
 
@@ -343,7 +375,7 @@ class EOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         self.show("install source {0}{1}".format(file_system, image_name))
         if self.boot_options["sys"] != image_name:
