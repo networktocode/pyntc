@@ -16,8 +16,6 @@ from .base_device import BaseDevice
 class F5Device(BaseDevice):
     """F5 LTM Device Implementation."""
 
-    vendor = "f5"
-
     def __init__(self, host, username, password, **kwargs):
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
@@ -40,7 +38,7 @@ class F5Device(BaseDevice):
         elif free_space >= min_space:
             return
         elif free_space < min_space:
-            raise NotEnoughFreeSpaceError(hostname=self.facts.get("host"), min_space=min_space)
+            raise NotEnoughFreeSpaceError(hostname=self.host, min_space=min_space)
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct
@@ -353,7 +351,7 @@ class F5Device(BaseDevice):
             except:  # noqa E722
                 pass
 
-        raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)
+        raise OSInstallError(hostname=self.hostname, desired_boot=volume)
 
     def backup_running_config(self, filename):
         raise NotImplementedError
@@ -377,22 +375,75 @@ class F5Device(BaseDevice):
         raise NotImplementedError
 
     @property
-    def facts(self):
-        if self._facts is None:
-            self._facts = {
-                "uptime": self._get_uptime(),
-                "vendor": self.vendor,
-                "model": self._get_model(),
-                "hostname": self._get_hostname(),
-                "fqdn": self._get_hostname(),
-                "os_version": self._get_version(),
-                "serial_number": self._get_serial_number(),
-                "interfaces": self._get_interfaces_list(),
-                "vlans": self._get_vlans(),
-                "uptime_string": self._uptime_to_string(self._get_uptime()),
-            }
+    def vendor(self):
+        if self._vendor is None:
+            self._vendor = "f5"
 
-        return self._facts
+        return self._vendor
+
+    @property
+    def uptime(self):
+        if self._uptime is None:
+            self._uptime = self._get_uptime()
+
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        if self._uptime_string is None:
+            self._uptime_string = self._uptime_to_string(self._get_uptime())
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
+            self._hostname = self._get_hostname()
+        
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = self._get_interfaces_list()
+        
+        return self._interfaces
+
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            self._vlans = self._get_vlans()
+
+        return self._vlans
+
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            self._fqdn = self._get_hostname()
+        
+        return self._fqdn
+
+    @property
+    def model(self):
+        if self._model is None:
+            sh_version_output = self.show("show version")
+            self._model = sh_version_output["modelName"]
+
+        return self._model
+
+    @property
+    def os_version(self):
+        if self._os_version is None:
+            self._os_version = self._get_version()
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        if self._serial_number is None:
+            self._serial_number = self._get_serial_number()
+
+        return self._serial_number
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
