@@ -426,8 +426,7 @@ class F5Device(BaseDevice):
     @property
     def model(self):
         if self._model is None:
-            sh_version_output = self.show("show version")
-            self._model = sh_version_output["modelName"]
+            self._model = self._get_model()
 
         return self._model
 

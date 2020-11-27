@@ -271,3 +271,64 @@ class TestF5Device:
 
     def test_count_teardown(self):
         assert self.count_teardown == 0
+
+    @mock.patch.object(F5Device, "_get_uptime", autospec=True)
+    def test_uptime(self, mock_get_uptime):
+        mock_get_uptime.return_value = 123
+        uptime = self.device.uptime
+        assert uptime == 123
+
+    @mock.patch.object(F5Device, "_get_uptime", autospec=True)
+    def test_uptime_string(self, mock_get_uptime):
+        mock_get_uptime.return_value = 123
+        uptime_string = self.device.uptime_string
+        assert uptime_string == "00:00:02:03"
+
+    def test_vendor(self):
+        vendor = self.device.vendor
+        assert vendor == "f5"
+
+    @mock.patch.object(F5Device, "_get_version", autospec=True)
+    def test_os_version(self, mock_get_version):
+        mock_get_version.return_value = "16.0.1"
+        os_version = self.device.os_version
+        assert os_version == "16.0.1"
+
+    @mock.patch.object(F5Device, "_get_interfaces_list", autospec=True)
+    def test_interfaces(self, mock_get_intf_list):
+        expected = ["Ethernet1", "Ethernet2", "Ethernet3", "Management1"]
+        mock_get_intf_list.return_value = expected
+        interfaces = self.device.interfaces
+        assert interfaces == expected
+
+    @mock.patch.object(F5Device, "_get_hostname", autospec=True)
+    def test_hostname(self, mock_get_hostname):
+        mock_get_hostname.return_value = "f5-spine3"
+        hostname = self.device.hostname
+        assert hostname == "f5-spine3"
+
+    @mock.patch.object(F5Device, "_get_hostname", autospec=True)
+    def test_fqdn(self, mock_get_hostname):
+        mock_get_hostname.return_value = "f5-spine3.ntc.com"
+        fqdn = self.device.fqdn
+        assert fqdn =="f5-spine3.ntc.com"
+
+    @mock.patch.object(F5Device, "_get_serial_number", autospec=True)
+    def test_serial_number(self, mock_get_serial):
+        mock_get_serial.return_value = ""
+        serial_number = self.device.serial_number
+        assert serial_number == ""
+
+    @mock.patch.object(F5Device, "_get_model", autospec=True)
+    def test_model(self, mock_get_model):
+        mock_get_model.return_value = "vF5"
+        model = self.device.model
+        assert model == "vF5"
+
+    @mock.patch.object(F5Device, "_get_vlans", autospec=True)
+    def test_vlans(self, mock_vlan_list):
+        mock_vlan_list.return_value = ["1", "2", "10"]
+        expected = ["1", "2", "10"]
+        vlans = self.device.vlans
+
+        assert vlans == expected

@@ -266,7 +266,7 @@ class TestEOSDevice(unittest.TestCase):
         with self.assertRaises(RollbackError):
             self.device.rollback("bad_checkpoint")
 
-    def test_checkpiont(self):
+    def test_checkpoint(self):
         self.device.checkpoint("good_checkpoint")
         self.device.native.enable.assert_called_with(["copy running-config good_checkpoint"], encoding="json")
 
