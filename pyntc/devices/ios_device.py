@@ -39,7 +39,6 @@ RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*
 class IOSDevice(BaseDevice):
     """Cisco IOS Device Implementation."""
 
-    vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
@@ -81,7 +80,7 @@ class IOSDevice(BaseDevice):
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+            raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
         return file_system
 
@@ -99,7 +98,7 @@ class IOSDevice(BaseDevice):
         return ip_int_br_data
 
     def _is_catalyst(self):
-        return self.facts["model"].startswith("WS-")
+        return self.model.startswith("WS-")
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
@@ -161,7 +160,7 @@ class IOSDevice(BaseDevice):
             except:  # noqa E722
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
@@ -249,27 +248,93 @@ class IOSDevice(BaseDevice):
             self.native.exit_config_mode()
 
     @property
-    def facts(self):
-        if self._facts is None:
-            version_data = self._raw_version_data()
-            self._facts = convert_dict_by_key(version_data, BASIC_FACTS_KM)
-            self._facts["vendor"] = self.vendor
+    def vendor(self):
+        if self._vendor is None:
+            self._vendor = "cisco"
 
-            uptime_full_string = version_data["uptime"]
-            self._facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
-            self._facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
-            self._facts["fqdn"] = "N/A"
-            self._facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
+        return self._vendor
 
-            if self._facts["model"].startswith("WS"):
-                self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
+    @property
+    def uptime(self):
+        version_data = self._raw_version_data()
+        uptime_full_string = version_data["uptime"]
+        if self._uptime is Non
+            self._uptime = self._uptime_to_seconds(uptime_full_string)
+
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        version_data = self._raw_version_data()
+        uptime_full_string = version_data["uptime"]
+        if self._uptime_string is None:
+            self._uptime_string = self._uptime_to_string(uptime_full_string)
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
+            self._hostname = self.host
+        
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
+        
+        return self._interfaces
+
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            if self.model.startswith("WS"):
+                self._vlans = list(str(x["vlan_id"]) for x in self._show_vlan())
             else:
-                self._facts["vlans"] = []
+                self._vlans = []
 
-            # ios-specific facts
-            self._facts[self.device_type] = {"config_register": version_data["config_register"]}
+        return self._vlans
 
-        return self._facts
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            self._fqdn = "N/A"
+        
+        return self._fqdn
+
+    @property
+    def model(self):
+        version_data = self._raw_version_data()
+        if self._model is None:
+            self._model = version_data["model"] 
+
+        return self._model
+
+    @property
+    def os_version(self):
+        version_data = self._raw_version_data()
+        if self._os_version is None:
+            self._os_version = version_data["os_version"] 
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        version_data = self._raw_version_data()
+        if self._serial_number is None:
+            self._serial_number = version_data["serial_number"]
+
+        return self._serial_number
+
+    @property
+    def cisco_ios_ssh(self):
+        # ios-specific facts
+        version_data = self._raw_version_data()
+        if self._cisco_ios_ssh is None:
+            self._cisco_ios_ssh = version_data["config_register"]
+
+        return self._cisco_ios_ssh
 
     def file_copy(self, src, dest=None, file_system=None):
         self.enable()
