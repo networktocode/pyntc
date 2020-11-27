@@ -284,28 +284,70 @@ class TestIOSDevice(unittest.TestCase):
         self.device.checkpoint("good_checkpoint")
         self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
 
-    def test_facts(self):
-        expected = {
-            "uptime": 413940,
-            "vendor": "cisco",
-            "uptime_string": "04:18:59:00",
-            "interfaces": ["FastEthernet0/0", "FastEthernet0/1"],
-            "hostname": "rtr2811",
-            "fqdn": "N/A",
-            "os_version": "15.1(3)T4",
-            "serial_number": "",
-            "model": "2811",
-            "vlans": [],
-            "cisco_ios_ssh": {"config_register": "0x2102"},
-        }
-        facts = self.device.facts
-        self.assertEqual(facts, expected)
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_uptime(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        uptime = self.device.uptime
+        assert uptime == 413940
 
-        self.device.native.send_command_timing.reset_mock()
-        facts = self.device.facts
-        self.assertEqual(facts, expected)
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_uptime_string(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        uptime_string = self.device.uptime_string
+        assert uptime_string == "04:18:59:00"
 
-        self.device.native.send_command_timing.assert_not_called()
+    def test_vendor(self):
+        vendor = self.device.vendor
+        assert vendor == "cisco"
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_os_version(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        os_version = self.device.os_version
+        assert os_version == "15.1(3)T4"
+
+    @mock.patch.object(IOSDevice, "_interfaces_detailed_list", autospec=True)
+    def test_interfaces(self, mock_get_intf_list):
+        expected = [{"intf": "FastEthernet0/0"}, {"intf": "FastEthernet0/1"}]
+        mock_get_intf_list.return_value = expected
+        interfaces = self.device.interfaces
+        assert interfaces == ["FastEthernet0/0", "FastEthernet0/1"]
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_hostname(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        hostname = self.device.hostname
+        assert hostname == "rtr2811"
+
+    def test_fqdn(self):
+        fqdn = self.device.fqdn
+        assert fqdn == "N/A"
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_serial_number(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        serial_number = self.device.serial_number
+        assert serial_number == ""
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_model(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        model = self.device.model
+        assert model == "2811"
+
+    @mock.patch.object(IOSDevice, "_show_vlan", autospec=True)
+    def test_vlans(self, mock_vlan_list):
+        mock_vlan_list.return_value = []
+        expected = []
+        vlans = self.device.vlans
+
+        assert vlans == expected
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_cisco_ios_ssh(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        cisco_ios_ssh = self.device.cisco_ios_ssh
+        assert cisco_ios_ssh == {"config_register": "0x2102"}
 
     def test_running_config(self):
         expected = self.device.show("show running-config")

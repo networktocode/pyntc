@@ -95,6 +95,7 @@ class IOSDevice(BaseDevice):
         ip_int_br_out = self.show("show ip int br")
         ip_int_br_data = get_structured_data("cisco_ios_show_ip_int_brief.template", ip_int_br_out)
 
+        print(ip_int_br_data)
         return ip_int_br_data
 
     def _is_catalyst(self):
@@ -258,7 +259,7 @@ class IOSDevice(BaseDevice):
     def uptime(self):
         version_data = self._raw_version_data()
         uptime_full_string = version_data["uptime"]
-        if self._uptime is Non
+        if self._uptime is None:
             self._uptime = self._uptime_to_seconds(uptime_full_string)
 
         return self._uptime
@@ -274,14 +275,16 @@ class IOSDevice(BaseDevice):
 
     @property
     def hostname(self):
+        version_data = self._raw_version_data()
         if self._hostname is None:
-            self._hostname = self.host
+            self._hostname = version_data['hostname'] 
         
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
+            print(self._interfaces_detailed_list())
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
         
         return self._interfaces
@@ -307,7 +310,7 @@ class IOSDevice(BaseDevice):
     def model(self):
         version_data = self._raw_version_data()
         if self._model is None:
-            self._model = version_data["model"] 
+            self._model = version_data["hardware"] 
 
         return self._model
 
@@ -315,7 +318,7 @@ class IOSDevice(BaseDevice):
     def os_version(self):
         version_data = self._raw_version_data()
         if self._os_version is None:
-            self._os_version = version_data["os_version"] 
+            self._os_version = version_data["version"] 
 
         return self._os_version
 
@@ -323,7 +326,7 @@ class IOSDevice(BaseDevice):
     def serial_number(self):
         version_data = self._raw_version_data()
         if self._serial_number is None:
-            self._serial_number = version_data["serial_number"]
+            self._serial_number = version_data["serial"]
 
         return self._serial_number
 
@@ -331,8 +334,7 @@ class IOSDevice(BaseDevice):
     def cisco_ios_ssh(self):
         # ios-specific facts
         version_data = self._raw_version_data()
-        if self._cisco_ios_ssh is None:
-            self._cisco_ios_ssh = version_data["config_register"]
+        self._cisco_ios_ssh = {"config_register": version_data["config_register"]}
 
         return self._cisco_ios_ssh
 
@@ -378,7 +380,7 @@ class IOSDevice(BaseDevice):
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             return True
 
@@ -555,7 +557,7 @@ class IOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
