@@ -95,7 +95,6 @@ class IOSDevice(BaseDevice):
         ip_int_br_out = self.show("show ip int br")
         ip_int_br_data = get_structured_data("cisco_ios_show_ip_int_brief.template", ip_int_br_out)
 
-        print(ip_int_br_data)
         return ip_int_br_data
 
     def _is_catalyst(self):
@@ -284,7 +283,6 @@ class IOSDevice(BaseDevice):
     @property
     def interfaces(self):
         if self._interfaces is None:
-            print(self._interfaces_detailed_list())
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
         
         return self._interfaces

@@ -22,8 +22,6 @@ from pyntc.errors import CommandError, CommandListError, FileTransferError, Rebo
 class JunosDevice(BaseDevice):
     """Juniper JunOS Device Implementation."""
 
-    vendor = "juniper"
-
     def __init__(self, host, username, password, *args, **kwargs):
         super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
 
@@ -99,7 +97,7 @@ class JunosDevice(BaseDevice):
             except:  # noqa E722
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
@@ -107,7 +105,7 @@ class JunosDevice(BaseDevice):
 
     @property
     def boot_options(self):
-        return self.facts["os_version"]
+        return self.os_version
 
     def checkpoint(self, filename):
         self.save(filename)
@@ -137,31 +135,78 @@ class JunosDevice(BaseDevice):
         return self.native.connected
 
     @property
-    def facts(self):
-        if self._facts is None:
-            native_facts = self.native.facts
-            try:
-                native_uptime_string = native_facts["RE0"]["up_time"]
-            except (AttributeError, TypeError):
-                native_uptime_string = None
+    def vendor(self):
+        if self._vendor is None:
+            self._vendor = "juniper"
 
-            self._facts = {
-                "hostname": native_facts.get("hostname"),
-                "fqdn": native_facts.get("fqdn"),
-                "model": native_facts.get("model"),
-                "uptime": None,
-                "uptime_string": None,
-                "serial_number": native_facts.get("serialnumber"),
-                "interfaces": self._get_interfaces(),
-                "vendor": self.vendor,
-                "version": native_facts.get("version"),
-            }
-            # TODO: Use a more reliable method for determining uptime (show system uptime)
+        return self._vendor
+
+    @property
+    def uptime(self):
+        try:
+            native_uptime_string = self.native.facts["RE0"]["up_time"]
+        except (AttributeError, TypeError):
+               native_uptime_string = None
+
+        if self._uptime is None:
             if native_uptime_string is not None:
-                self._facts["uptime"] = self._uptime_to_seconds(native_uptime_string)
-                self._facts["uptime_string"] = self._uptime_to_string(native_uptime_string)
+                self._uptime = self._uptime_to_seconds(native_uptime_string)
 
-        return self._facts
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        try:
+            native_uptime_string = self.native.facts["RE0"]["up_time"]
+        except (AttributeError, TypeError):
+               native_uptime_string = None
+
+        if self._uptime_string is None:
+            self._uptime_string = self._uptime_to_string(native_uptime_string)
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
+            self._hostname = self.native.facts.get("hostname") 
+        
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = self._get_interfaces()
+        
+        return self._interfaces
+
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            self._fqdn = self.native.facts.get("fqdn")
+        
+        return self._fqdn
+
+    @property
+    def model(self):
+        if self._model is None:
+            self._model = self.native.facts.get("model")
+
+        return self._model
+
+    @property
+    def os_version(self):
+        if self._os_version is None:
+            self._os_version = self.native.facts.get("version") 
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        if self._serial_number is None:
+            self._serial_number = self.native.facts.get("serialnumber")
+
+        return self._serial_number
 
     def file_copy(self, src, dest=None, **kwargs):
         if not self.file_copy_remote_exists(src, dest, **kwargs):
