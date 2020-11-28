@@ -189,6 +189,37 @@ class TestIOSDevice(unittest.TestCase):
         with self.assertRaises(ios_module.FileTransferError):
             self.device.file_copy("source_file")
 
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
+    def test_file_copy_socket_closed_good_md5(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.transfer_file.side_effect = OSError
+        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_ft_instance.compare_md5.side_effect = [True, True]
+
+        self.device.file_copy("path/to/source_file")
+
+        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
+        mock_ft_instance.enable_scp.assert_any_call()
+        mock_ft_instance.establish_scp_conn.assert_any_call()
+        mock_ft_instance.transfer_file.assert_any_call()
+        mock_ft_instance.compare_md5.assert_has_calls([mock.call(), mock.call()])
+
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
+    def test_file_copy_fail_socket_closed_bad_md5(self, mock_ft):
+        self.device.native.send_command_timing.side_effect = None
+        self.device.native.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft_instance = mock_ft.return_value
+        mock_ft_instance.transfer_file.side_effect = OSError
+        mock_ft_instance.check_file_exists.return_value = False
+        mock_ft_instance.compare_md5.return_value = False
+
+        with self.assertRaises(ios_module.SocketClosedError):
+            self.device.file_copy("source_file")
+
+        mock_ft_instance.compare_md5.assert_called_once()
+
     def test_reboot(self):
         self.device.reboot(confirm=True)
         self.device.native.send_command_timing.assert_any_call("reload")
@@ -428,6 +459,35 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@mock.patch.object(IOSDevice, "is_active")
+@mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
+def test_confirm_is_active(mock_redundancy_state, mock_is_active, ios_device):
+    mock_is_active.return_value = True
+    actual = ios_device.confirm_is_active()
+    assert actual is True
+    mock_redundancy_state.assert_not_called()
+
+
+@mock.patch.object(IOSDevice, "is_active")
+@mock.patch.object(IOSDevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "close")
+@mock.patch.object(IOSDevice, "open")
+@mock.patch("pyntc.devices.ios_device.ConnectHandler")
+def test_confirm_is_active_not_active(
+    mock_connect_handler, mock_open, mock_close, mock_redundancy_state, mock_peer_redundancy_state, mock_is_active
+):
+    mock_is_active.return_value = False
+    mock_redundancy_state.return_value = "standby hot"
+    device = IOSDevice("host", "user", "password")
+    with pytest.raises(ios_module.DeviceNotActiveError):
+        device.confirm_is_active()
+
+    mock_redundancy_state.assert_called_once()
+    mock_peer_redundancy_state.assert_called_once()
+    mock_close.assert_called_once()
+
+
 @pytest.mark.parametrize("expected", ((True,), (False,)))
 def test_connected_getter(expected, ios_device):
     ios_device._connected = expected
@@ -443,7 +503,6 @@ def test_connected_setter(expected, ios_device):
 
 
 @mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
-@mock.patch("pyntc.devices.ios_device.ConnectHandler")
 @pytest.mark.parametrize(
     "redundancy_state,expected",
     (
@@ -453,10 +512,9 @@ def test_connected_setter(expected, ios_device):
     ),
     ids=("active", "standby_hot", "unsupported"),
 )
-def test_is_active(mock_connect_handler, mock_redundancy_state, redundancy_state, expected):
-    device = IOSDevice("host", "username", "password")
+def test_is_active(mock_redundancy_state, ios_device, redundancy_state, expected):
     mock_redundancy_state.return_value = redundancy_state
-    actual = device.is_active()
+    actual = ios_device.is_active()
     assert actual is expected
 
 
@@ -496,13 +554,15 @@ def test_open_not_connected(mock_connected, mock_connect_handler, ios_device):
 
 @mock.patch("pyntc.devices.ios_device.ConnectHandler")
 @mock.patch.object(IOSDevice, "connected", new_callable=mock.PropertyMock)
-def test_open_standby(mock_connected, mock_connect_handler, ios_device):
+@mock.patch.object(IOSDevice, "confirm_is_active")
+def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_device):
     mock_connected.side_effect = [False, False, True]
-    ios_device.is_active.return_value = False
-    ios_device.open()
-    assert ios_device._connected is False
+    mock_confirm.side_effect = [ios_module.DeviceNotActiveError("host1", "standby", "active")]
+    with pytest.raises(ios_module.DeviceNotActiveError):
+        ios_device.open()
+
     ios_device.native.find_prompt.assert_not_called()
-    mock_connected.assert_has_calls((mock.call(),) * 3)
+    mock_connected.assert_has_calls((mock.call(),) * 2)
 
 
 @pytest.mark.parametrize(
@@ -596,6 +656,40 @@ def test_redundancy_state_unsupported(ios_show):
     device = ios_show([ios_module.CommandError("show redundancy", "unsupported")])
     actual = device.redundancy_state
     assert actual is None
+
+
+def test_get_file_system(ios_show):
+    filename = "dir"
+    expected = "flash:"
+    device = ios_show([f"{filename}.txt"])
+    actual = device._get_file_system()
+    assert actual == expected
+
+
+def test_get_file_system_first_error_then_pass(ios_show):
+    filename = "dir"
+    expected = "flash:"
+    device = ios_show(["", f"{filename}.txt"])
+    actual = device._get_file_system()
+    assert actual == expected
+
+    device.show.assert_has_calls([mock.call("dir")] * 2)
+
+
+@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
+def test_get_file_system_raise_error(mock_facts, ios_show):
+    # Set the command to run 5 times
+    device = ios_show([""] * 5)
+
+    # Set a return value for the Facts mock
+    mock_facts.return_value = {"hostname": "pyntc-rtr"}
+
+    # Test with the raises
+    with pytest.raises(ios_module.FileSystemNotFoundError):
+        device._get_file_system()
+
+    # Assert of the calls
+    device.show.assert_has_calls([mock.call("dir")] * 5)
 
 
 def test_send_command_error(ios_send_command_timing):

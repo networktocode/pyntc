@@ -29,8 +29,8 @@ def aireos_boot_path(aireos_device_path):
 
 @pytest.fixture
 def aireos_device():
-    with mock.patch.object(AIREOSDevice, "is_active") as mock_is_active:
-        mock_is_active.return_value = True
+    with mock.patch.object(AIREOSDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
         with mock.patch("pyntc.devices.aireos_device.ConnectHandler") as ch:
             device = AIREOSDevice("host", "user", "password")
             device.native = ch
@@ -205,8 +205,8 @@ def asa_send_command_timing(asa_device, asa_mock_path):
 
 @pytest.fixture
 def ios_device():
-    with mock.patch.object(IOSDevice, "is_active") as mock_is_active:
-        mock_is_active.return_value = True
+    with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
         with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
             device = IOSDevice("host", "user", "password")
             device.native = ch

@@ -19,8 +19,10 @@ from pyntc.errors import (
     CommandListError,
     FileTransferError,
     RebootTimeoutError,
+    DeviceNotActiveError,
     NTCFileNotFoundError,
     FileSystemNotFoundError,
+    SocketClosedError,
 )
 
 
@@ -33,6 +35,7 @@ RE_SHOW_REDUNDANCY = re.compile(
 )
 RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
+SHOW_DIR_RETRY_COUNT = 5
 
 
 @fix_docs
@@ -41,7 +44,18 @@ class IOSDevice(BaseDevice):
 
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+        """
+        PyNTC Device implementation for Cisco IOS.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            secret (str): The password to escalate privilege on the device.
+            port (int): The port to use to establish the connection.
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+        """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
@@ -50,7 +64,7 @@ class IOSDevice(BaseDevice):
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
-        self.open()
+        self.open(confirm_active=confirm_active)
 
     def _enable(self):
         warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
@@ -76,13 +90,21 @@ class IOSDevice(BaseDevice):
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir")
-        try:
-            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-        except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
+        # Set variables to control while loop
+        counter = 0
 
-        return file_system
+        # Attempt to gather file system
+        while counter < SHOW_DIR_RETRY_COUNT:
+            counter += 1
+            raw_data = self.show("dir")
+            try:
+                file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
+                return file_system
+            except AttributeError:
+                # Allow to continue through the loop
+                continue
+
+        raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -220,6 +242,41 @@ class IOSDevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    def confirm_is_active(self):
+        """
+        Confirm that the device is either standalone or the active device in a high availability cluster.
+
+        Returns:
+            bool: True when the device is considered active.
+
+        Rasies:
+            DeviceNotActiveError: When the device is not considered the active device.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.redundancy_state
+            'standby hot'
+            >>> device.confirm_is_active()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.redundancy_state
+            'active'
+            >>> device.confirm_is_active()
+            True
+            >>>
+        """
+        if not self.is_active():
+            redundancy_state = self.redundancy_state
+            peer_redundancy_state = self.peer_redundancy_state
+            self.close()
+            raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
+
+        return True
+
     @property
     def connected(self):
         """
@@ -350,6 +407,10 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
+            except OSError as error:
+                # compare hashes
+                if not fc.compare_md5():
+                    raise SocketClosedError(message=error)
             except:  # noqa E722
                 raise FileTransferError
             finally:
@@ -399,7 +460,33 @@ class IOSDevice(BaseDevice):
         """
         return self.redundancy_state in self.active_redundancy_states
 
-    def open(self):
+    def open(self, confirm_active=True):
+        """
+        Open a connection to the network device.
+
+        This method will close the connection if ``confirm_active`` is True and the device is not active.
+        Devices that do not have high availibility are considred active.
+
+        Args:
+            confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+
+        Raises:
+            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.open()
+            raised DeviceNotActiveError:
+            host1 is not the active device.
+
+            device state: standby hot
+            peer state:   active
+
+            >>> device.open(confirm_active=False)
+            >>> device.connected
+            True
+            >>>
+        """
         if self.connected:
             try:
                 self.native.find_prompt()
@@ -419,8 +506,8 @@ class IOSDevice(BaseDevice):
             )
             self._connected = True
 
-        if not self.is_active():
-            self.close()
+        if confirm_active:
+            self.confirm_is_active()
 
     @property
     def peer_redundancy_state(self):
