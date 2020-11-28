@@ -83,36 +83,36 @@ class NXOSDevice(BaseDevice):
     @property
     def uptime(self):
         if self._uptime is None:
-            self._uptime = self.native.facts.get("uptime") 
+            self._uptime = self.native.facts.get("uptime")
 
         return self._uptime
 
     @property
     def hostname(self):
         if self._hostname is None:
-            self._hostname = self.native.facts.get("hostname") 
-        
+            self._hostname = self.native.facts.get("hostname")
+
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
-            self._interfaces = self.native.facts.get("interfaces") 
-        
+            self._interfaces = self.native.facts.get("interfaces")
+
         return self._interfaces
 
     @property
     def vlans(self):
         if self._vlans is None:
-            self._vlans = self.native.facts.get("vlans") 
-        
+            self._vlans = self.native.facts.get("vlans")
+
         return self._vlans
 
     @property
     def fqdn(self):
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
-        
+
         return self._fqdn
 
     @property
@@ -125,7 +125,7 @@ class NXOSDevice(BaseDevice):
     @property
     def os_version(self):
         if self._os_version is None:
-            self._os_version = self.native.facts.get("os_version") 
+            self._os_version = self.native.facts.get("os_version")
 
         return self._os_version
 

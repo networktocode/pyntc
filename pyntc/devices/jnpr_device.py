@@ -146,7 +146,7 @@ class JunosDevice(BaseDevice):
         try:
             native_uptime_string = self.native.facts["RE0"]["up_time"]
         except (AttributeError, TypeError):
-               native_uptime_string = None
+            native_uptime_string = None
 
         if self._uptime is None:
             if native_uptime_string is not None:
@@ -159,7 +159,7 @@ class JunosDevice(BaseDevice):
         try:
             native_uptime_string = self.native.facts["RE0"]["up_time"]
         except (AttributeError, TypeError):
-               native_uptime_string = None
+            native_uptime_string = None
 
         if self._uptime_string is None:
             self._uptime_string = self._uptime_to_string(native_uptime_string)
@@ -169,22 +169,22 @@ class JunosDevice(BaseDevice):
     @property
     def hostname(self):
         if self._hostname is None:
-            self._hostname = self.native.facts.get("hostname") 
-        
+            self._hostname = self.native.facts.get("hostname")
+
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
             self._interfaces = self._get_interfaces()
-        
+
         return self._interfaces
 
     @property
     def fqdn(self):
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
-        
+
         return self._fqdn
 
     @property
@@ -197,7 +197,7 @@ class JunosDevice(BaseDevice):
     @property
     def os_version(self):
         if self._os_version is None:
-            self._os_version = self.native.facts.get("version") 
+            self._os_version = self.native.facts.get("version")
 
         return self._os_version
 

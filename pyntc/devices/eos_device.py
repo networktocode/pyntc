@@ -215,15 +215,17 @@ class EOSDevice(BaseDevice):
     def hostname(self):
         if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
-            self._hostname = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname"])["hostname"]
-        
+            self._hostname = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname"])[
+                "hostname"
+            ]
+
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
             self._interfaces = self._get_interface_list()
-        
+
         return self._interfaces
 
     @property
@@ -238,7 +240,7 @@ class EOSDevice(BaseDevice):
         if self._fqdn is None:
             sh_hostname_output = self.show("show hostname")
             self._fqdn = convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["fqdn"])["fqdn"]
-        
+
         return self._fqdn
 
     @property

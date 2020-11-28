@@ -311,7 +311,7 @@ class TestF5Device:
     def test_fqdn(self, mock_get_hostname):
         mock_get_hostname.return_value = "f5-spine3.ntc.com"
         fqdn = self.device.fqdn
-        assert fqdn =="f5-spine3.ntc.com"
+        assert fqdn == "f5-spine3.ntc.com"
 
     @mock.patch.object(F5Device, "_get_serial_number", autospec=True)
     def test_serial_number(self, mock_get_serial):

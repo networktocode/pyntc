@@ -399,14 +399,14 @@ class F5Device(BaseDevice):
     def hostname(self):
         if self._hostname is None:
             self._hostname = self._get_hostname()
-        
+
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
             self._interfaces = self._get_interfaces_list()
-        
+
         return self._interfaces
 
     @property
@@ -420,7 +420,7 @@ class F5Device(BaseDevice):
     def fqdn(self):
         if self._fqdn is None:
             self._fqdn = self._get_hostname()
-        
+
         return self._fqdn
 
     @property

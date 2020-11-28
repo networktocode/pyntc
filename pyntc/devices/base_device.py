@@ -425,7 +425,7 @@ class BaseDevice(object):
 
         if self.vendor:
             self._vendor = self.vendor
-           
+
         if self.os_version:
             self._os_version = self.os_version
 
@@ -449,8 +449,20 @@ class BaseDevice(object):
 
         if self.vlans:
             self._vlans = self.vlans
-        
-        return self.uptime, self.vendor, self.os_version, self.interfaces, self.hostname, self.fqdn, self.uptime_string, self.serial_number, self.model, self.vlans
+
+        return (
+            self.uptime,
+            self.vendor,
+            self.os_version,
+            self.interfaces,
+            self.hostname,
+            self.fqdn,
+            self.uptime_string,
+            self.serial_number,
+            self.model,
+            self.vlans,
+        )
+
 
 class RebootTimerError(NTCError):
     def __init__(self, device_type):

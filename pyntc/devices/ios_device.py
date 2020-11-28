@@ -10,7 +10,7 @@ import warnings
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.utils import convert_dict_by_key, get_structured_data
+from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
     NTCError,
@@ -276,15 +276,15 @@ class IOSDevice(BaseDevice):
     def hostname(self):
         version_data = self._raw_version_data()
         if self._hostname is None:
-            self._hostname = version_data['hostname'] 
-        
+            self._hostname = version_data["hostname"]
+
         return self._hostname
 
     @property
     def interfaces(self):
         if self._interfaces is None:
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
-        
+
         return self._interfaces
 
     @property
@@ -301,14 +301,14 @@ class IOSDevice(BaseDevice):
     def fqdn(self):
         if self._fqdn is None:
             self._fqdn = "N/A"
-        
+
         return self._fqdn
 
     @property
     def model(self):
         version_data = self._raw_version_data()
         if self._model is None:
-            self._model = version_data["hardware"] 
+            self._model = version_data["hardware"]
 
         return self._model
 
@@ -316,7 +316,7 @@ class IOSDevice(BaseDevice):
     def os_version(self):
         version_data = self._raw_version_data()
         if self._os_version is None:
-            self._os_version = version_data["version"] 
+            self._os_version = version_data["version"]
 
         return self._os_version
 

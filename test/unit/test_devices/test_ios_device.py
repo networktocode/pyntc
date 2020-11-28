@@ -12,6 +12,15 @@ from pyntc.devices import ios_device as ios_module
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
 BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
+DEVICE_FACTS = {
+    "version": "15.1(3)T4",
+    "hostname": "rtr2811",
+    "uptime": "2 weeks, 4 days, 18 hours, 59 minutes",
+    "running_image": "c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin",
+    "hardware": "2811",
+    "serial": "",
+    "config_register": "0x2102",
+}
 
 
 class TestIOSDevice(unittest.TestCase):
@@ -286,13 +295,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_uptime(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         uptime = self.device.uptime
         assert uptime == 413940
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_uptime_string(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         uptime_string = self.device.uptime_string
         assert uptime_string == "04:18:59:00"
 
@@ -302,7 +311,7 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_os_version(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         os_version = self.device.os_version
         assert os_version == "15.1(3)T4"
 
@@ -315,7 +324,7 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_hostname(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         hostname = self.device.hostname
         assert hostname == "rtr2811"
 
@@ -325,13 +334,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_serial_number(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         serial_number = self.device.serial_number
         assert serial_number == ""
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_model(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         model = self.device.model
         assert model == "2811"
 
@@ -345,7 +354,7 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_cisco_ios_ssh(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = {'version': '15.1(3)T4', 'hostname': 'rtr2811', 'uptime': '2 weeks, 4 days, 18 hours, 59 minutes', 'running_image': 'c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin', 'hardware': '2811', 'serial': '', 'config_register': '0x2102'}
+        mock_raw_version_data.return_value = DEVICE_FACTS
         cisco_ios_ssh = self.device.cisco_ios_ssh
         assert cisco_ios_ssh == {"config_register": "0x2102"}
 

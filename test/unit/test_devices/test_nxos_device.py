@@ -22,7 +22,7 @@ DEVICE_FACTS = {
     "hostname": "n9k1",
     "interfaces": ["mgmt0", "Ethernet1/1", "Ethernet1/2", "Ethernet1/3"],
     "fqdn": "N/A",
-}      
+}
 
 
 class TestNXOSDevice(unittest.TestCase):
