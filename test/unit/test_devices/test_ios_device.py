@@ -676,7 +676,7 @@ def test_get_file_system_first_error_then_pass(ios_show):
     device.show.assert_has_calls([mock.call("dir")] * 2)
 
 
-@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
 def test_get_file_system_raise_error(mock_facts, ios_show):
     # Set the command to run 5 times
     device = ios_show([""] * 5)

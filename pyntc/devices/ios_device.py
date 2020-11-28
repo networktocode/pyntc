@@ -104,7 +104,7 @@ class IOSDevice(BaseDevice):
                 # Allow to continue through the loop
                 continue
 
-        raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+        raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
