@@ -233,7 +233,6 @@ class TestJnprDevice(unittest.TestCase):
         self.device.checkpoint("saved_config")
         self.device.show.assert_called_with("show config")
 
-    # TODO(drx): check exception
     def test_uptime(self):
         uptime = self.device.uptime
         assert uptime == 455

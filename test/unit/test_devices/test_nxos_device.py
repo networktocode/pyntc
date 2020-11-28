@@ -12,16 +12,30 @@ from pyntc.errors import CommandError, CommandListError, FileTransferError, NTCF
 BOOT_IMAGE = "n9000-dk9.9.2.1.bin"
 KICKSTART_IMAGE = "n9000-kickstart.9.2.1.bin"
 FILE_SYSTEM = "bootflash:"
+DEVICE_FACTS = {
+    "uptime_string": "13:01:08:06",
+    "uptime": 1127286,
+    "vlans": ["1", "2", "3", "4", "5"],
+    "os_version": "7.0(3)I2(1)",
+    "serial_number": "SAL1819S6LU",
+    "model": "Nexus9000 C9396PX Chassis",
+    "hostname": "n9k1",
+    "interfaces": ["mgmt0", "Ethernet1/1", "Ethernet1/2", "Ethernet1/3"],
+    "fqdn": "N/A",
+}      
 
 
 class TestNXOSDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def setUp(self, mock_device):
+    @mock.patch("pynxos.device.Device.facts", new_callable=mock.PropertyMock)
+    def setUp(self, mock_device, mock_facts):
         self.device = NXOSDevice("host", "user", "pass")
         mock_device.show.side_effect = show
         mock_device.show_list.side_effect = show_list
+        mock_facts.return_value = DEVICE_FACTS
 
         self.device.native = mock_device
+        type(self.device.native).facts = mock_facts.return_value
 
     def test_config(self):
         command = "interface eth 1/1"
@@ -201,33 +215,37 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.checkpoint("good_checkpoint")
         self.device.native.checkpoint.assert_called_with("good_checkpoint")
 
-    @mock.patch("pynxos.device.Device.facts", new_callable=mock.PropertyMock)
-    def test_facts(self, mock_facts):
-        expected = {
-            "uptime_string": "13:01:08:06",
-            "uptime": 1127286,
-            "vlans": ["1", "2", "3", "4", "5"],
-            "os_version": "7.0(3)I2(1)",
-            "serial_number": "SAL1819S6LU",
-            "model": "Nexus9000 C9396PX Chassis",
-            "hostname": "n9k1",
-            "interfaces": ["mgmt0", "Ethernet1/1", "Ethernet1/2", "Ethernet1/3"],
-            "fqdn": "N/A",
-        }
+    def test_uptime(self):
+        uptime = self.device.uptime
+        assert uptime == 1127286
 
-        expected["vendor"] = "cisco"
+    def test_vendor(self):
+        vendor = self.device.vendor
+        assert vendor == "cisco"
 
-        mock_facts.return_value = expected
-        type(self.device.native).facts = mock_facts
+    def test_os_version(self):
+        os_version = self.device.os_version
+        assert os_version == "7.0(3)I2(1)"
 
-        facts = self.device.facts
-        mock_facts.assert_called_with()
-        self.assertEqual(facts, expected)
+    def test_interfaces(self):
+        interfaces = self.device.interfaces
+        assert interfaces == ["mgmt0", "Ethernet1/1", "Ethernet1/2", "Ethernet1/3"]
 
-        mock_facts.reset_mock()
-        facts = self.device.facts
-        self.assertEqual(facts, expected)
-        mock_facts.assert_not_called()
+    def test_hostname(self):
+        hostname = self.device.hostname
+        assert hostname == "n9k1"
+
+    def test_fqdn(self):
+        fqdn = self.device.fqdn
+        assert fqdn == "N/A"
+
+    def test_serial_number(self):
+        serial_number = self.device.serial_number
+        assert serial_number == "SAL1819S6LU"
+
+    def test_model(self):
+        model = self.device.model
+        assert model == "Nexus9000 C9396PX Chassis"
 
     @mock.patch("pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
     def test_running_config(self, mock_rc):
