@@ -132,11 +132,11 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect_string=None):
-        if expect_string is None:
-            response = self.native.send_command_timing(command)
-        else:
-            response = self.native.send_command(command, expect_string=expect_string)
+    def _send_command(self, command, expect_string=""):
+        command_args = {"command": command}
+        if expect_string is not None:
+            command_args["expect_string"] = expect_string
+        response = self.native.send_command(**command_args)
 
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
@@ -483,9 +483,9 @@ class IOSDevice(BaseDevice):
 
             try:
                 if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
+                    first_response = self.native.send_command_timing("reload in %d" % timer)
                 else:
-                    first_response = self.show("reload")
+                    first_response = self.native.send_command_timing("reload")
 
                 if "System configuration" in first_response:
                     self.native.send_command_timing("no")
