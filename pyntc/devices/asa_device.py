@@ -144,7 +144,7 @@ class ASADevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         # TODO: Get proper hostname parameter

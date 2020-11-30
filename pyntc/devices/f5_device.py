@@ -67,7 +67,7 @@ class F5Device(BaseDevice):
             None - if the file does not exist
         """
         if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()
+            m = hashlib.md5()  # nosec
             with open(filepath, "rb") as f:
                 buf = f.read(blocksize)
                 while buf:
@@ -284,7 +284,9 @@ class F5Device(BaseDevice):
                     end = size
                 content_range = "{}-{}/{}".format(start, end - 1, size)
                 headers["Content-Range"] = content_range
-                requests.post(_URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False)
+                requests.post(
+                    _URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False  # nosec
+                )
 
                 start += len(payload)
 
@@ -326,7 +328,7 @@ class F5Device(BaseDevice):
                 volume = self.api_handler.tm.sys.software.volumes.volume.load(name=volume_name)
                 if hasattr(volume, "active") and volume.active is True:
                     return True
-            except Exception:
+            except Exception:  # noqa E722 # nosec
                 pass
         return False
 
@@ -350,7 +352,7 @@ class F5Device(BaseDevice):
             try:
                 if self.image_installed(image_name=image_name, volume=volume):
                     return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=volume)

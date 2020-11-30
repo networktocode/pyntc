@@ -45,7 +45,7 @@ class NXOSDevice(BaseDevice):
                 self.refresh_facts()
                 if self.facts["uptime"] < 180:
                     return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
