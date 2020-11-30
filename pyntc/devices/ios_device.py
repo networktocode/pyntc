@@ -132,8 +132,8 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect_string=""):
-        command_args = {"command": command}
+        def _send_command(self, command, expect_string=""):
+        command_args = {"command_string": command}
         if expect_string is not None:
             command_args["expect_string"] = expect_string
         response = self.native.send_command(**command_args)
