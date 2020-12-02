@@ -681,7 +681,7 @@ class IOSDevice(BaseDevice):
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
             self.config_list(["no boot system", command])
-        except CommandError:
+        except CommandListError:
             file_system = file_system.replace(":", "")
             command = "boot system {0} {1}".format(file_system, image_name)
             self.config_list(["no boot system", command])
