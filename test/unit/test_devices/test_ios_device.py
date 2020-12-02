@@ -29,40 +29,6 @@ class TestIOSDevice(unittest.TestCase):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
-    def test_config(self):
-        command = "interface fastEthernet 0/1"
-        result = self.device.config(command)
-
-        self.assertIsNone(result)
-        self.device.native.send_command_timing.assert_called_with(command)
-
-    def test_bad_config(self):
-        command = "asdf poknw"
-
-        try:
-            with self.assertRaisesRegex(ios_module.CommandError, command):
-                self.device.config(command)
-        finally:
-            self.device.native.reset_mock()
-
-    def test_config_list(self):
-        commands = ["interface fastEthernet 0/1", "no shutdown"]
-        result = self.device.config_list(commands)
-
-        self.assertIsNone(result)
-
-        for cmd in commands:
-            self.device.native.send_command_timing.assert_any_call(cmd)
-
-    def test_bad_config_list(self):
-        commands = ["interface fastEthernet 0/1", "apons"]
-        results = ["ok", "Error: apons"]
-
-        self.device.native.send_command_timing.side_effect = results
-
-        with self.assertRaisesRegex(ios_module.CommandListError, commands[1]):
-            self.device.config_list(commands)
-
     def test_show(self):
         command = "show ip arp"
         result = self.device.show(command)
@@ -406,6 +372,186 @@ class TestIOSDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_check_command_output_for_errors(ios_device):
+    command_passes = ios_device._check_command_output_for_errors("valid command", "valid output")
+    assert command_passes is None
+
+
+@pytest.mark.parametrize("output", (r"% invalid output", "Error: invalid output"))
+def test_check_command_output_for_errors_error(output, ios_device):
+    with pytest.raises(ios_module.CommandError) as err:
+        ios_device._check_command_output_for_errors("invalid command", output)
+    assert err.value.command == "invalid command"
+    assert err.value.cli_error_msg == output
+
+
+def test_check_command_output_for_errors_multi_command_error(ios_device):
+    with pytest.raises(ios_module.CommandError) as err:
+        ios_device._check_command_output_for_errors(
+            ["valid command", "invalid command"], r"valid output\n% invalid output"
+        )
+    assert err.value.command == "valid command\ninvalid command"
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config(mock_check_for_errors, ios_config):
+    command = "no service pad"
+    device = ios_config(["no_service_pad.txt"])
+    result = device.config(command)
+
+    assert isinstance(result, str)
+    mock_check_for_errors.assert_called_once()
+    device.native.send_config_set.assert_called_with(config_commands=command)
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config_multiple_commands(mock_check_for_errors, ios_config):
+    commands = ["interface Gig0", "description x-connect"]
+    device = ios_config(["interface_Gig0_description.txt"])
+    result = device.config(commands)
+
+    assert isinstance(result, str)
+    mock_check_for_errors.assert_called_once()
+    device.native.send_config_set.assert_called_with(config_commands=commands)
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config_pass_netmiko_args(mock_check_for_errors, ios_config):
+    command = "no service pad"
+    device = ios_config(["no_service_pad.txt"])
+    netmiko_args = {"strip_prompt": True}
+    result = device.config(command, **netmiko_args)
+
+    assert isinstance(result, str)
+    device.native.send_config_set.assert_called_with(config_commands=command, strip_prompt=True)
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config_pass_invalid_netmiko_args(mock_check_for_errors, ios_config):
+    error_message = "send_config_set() got an unexpected keyword argument 'commands'"
+    device = ios_config([TypeError(error_message)])
+    netmiko_args = {"invalid_arg": True}
+    with pytest.raises(TypeError) as error:
+        device.config("command", **netmiko_args)
+
+    assert error.value.args[0] == (f"Netmiko Driver's {error_message}")
+    mock_check_for_errors.assert_not_called()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config_command_invalid(mock_check_for_errors, ios_config):
+    mock_check_for_errors.side_effect = [ios_module.CommandError("invalid command", r"% invalid output")]
+    command = "invalid command"
+    device = ios_config([r"% invalid output"])
+    with pytest.raises(ios_module.CommandError):
+        device.config(command)
+
+    device.native.send_config_set.assert_called_with(config_commands=command)
+    mock_check_for_errors.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+def test_config_multiple_commands_invalid(mock_check_for_errors, ios_config):
+    mock_check_for_errors.side_effect = [
+        ios_module.CommandError("invalid command\nvalid command", r"% invalid output\nvalid ouptut")
+    ]
+    commands = ["invalid command", "valid command"]
+    device = ios_config([r"% invalid output\nvalid ouptut"])
+    with pytest.raises(ios_module.CommandError):
+        device.config(commands)
+
+    device.native.send_config_set.assert_called_with(config_commands=commands)
+    mock_check_for_errors.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list(mock_enter_config, ios_config_list):
+    config_commands = ["interface gig0", "description x-connect"]
+    config_effects = [f"{cmd}\nhost(config-if)#" for cmd in config_commands]
+    device = ios_config_list(config_effects)
+    config_responses = device.config_list(config_commands)
+
+    assert config_responses == config_effects
+    mock_calls = [mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in config_commands]
+    device.config.assert_has_calls(mock_calls)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list_pass_netmiko_args(mock_enter_config, ios_config_list):
+    config_commands = ["a", "b"]
+    config_effects = [1, 2]
+    device = ios_config_list(config_effects)
+    device.config_list(config_commands, strip_prompt=True)
+
+    mock_calls = [
+        mock.call(cmd, enter_config_mode=False, exit_config_mode=False, strip_prompt=True) for cmd in config_commands
+    ]
+    device.config.assert_has_calls(mock_calls)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list_pass_invalid_netmiko_args(mock_enter_config, ios_config_list):
+    config_commands = ["a", "b"]
+    config_effects = [TypeError("Error from self.config")]
+    device = ios_config_list(config_effects)
+    with pytest.raises(TypeError):
+        device.config_list(config_commands, invalid_arg=True)
+
+    mock_calls = [mock.call("a", enter_config_mode=False, exit_config_mode=False, invalid_arg=True)]
+    device.config.assert_has_calls(mock_calls)
+    device.config.assert_called_once()
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list_disable_enter_config(mock_enter_config, ios_config_list):
+    config_commands = ["a", "b"]
+    config_effects = [1, 2]
+    device = ios_config_list(config_effects)
+    device.config_list(config_commands, enter_config_mode=False)
+
+    mock_calls = [mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in config_commands]
+    device.config.assert_has_calls(mock_calls)
+    mock_enter_config.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list_disable_exit_config(mock_enter_config, ios_config_list):
+    config_commands = ["a", "b"]
+    config_effects = [1, 2]
+    device = ios_config_list(config_effects)
+    device.config_list(config_commands, exit_config_mode=False)
+
+    mock_calls = [mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in config_commands]
+    device.config.assert_has_calls(mock_calls)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_not_called()
+
+
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_list_invalid_command(mock_enter_config, ios_config_list):
+    config_commands = ["invalid command", "valid command"]
+    config_effects = [ios_module.CommandError("invalid command", r"% invalid output")]
+    device = ios_config_list(config_effects)
+
+    with pytest.raises(ios_module.CommandListError) as err:
+        device.config_list(config_commands, exit_config_mode=False)
+
+    mock_calls = [mock.call("invalid command", enter_config_mode=False, exit_config_mode=False)]
+    device.config.assert_has_calls(mock_calls)
+    device.config.assert_called_once()
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_not_called()
+    assert err.value.commands == ["invalid command"]
+    assert err.value.command == "invalid command"
 
 
 @mock.patch.object(IOSDevice, "is_active")

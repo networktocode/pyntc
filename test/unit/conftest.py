@@ -204,6 +204,30 @@ def asa_send_command_timing(asa_device, asa_mock_path):
 
 
 @pytest.fixture
+def ios_config(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_config_set.side_effect = get_side_effects(ios_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def ios_config_list(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(IOSDevice, "config") as mock_config:
+            mock_config.side_effect = get_side_effects(ios_mock_path, side_effects)
+        device.config = mock_config
+        return device
+
+    return _mock
+
+
+@pytest.fixture
 def ios_device():
     with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
         mock_confirm.return_value = True

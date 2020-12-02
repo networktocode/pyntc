@@ -67,6 +67,33 @@ class IOSDevice(BaseDevice):
         self._connected = False
         self.open(confirm_active=confirm_active)
 
+    def _check_command_output_for_errors(self, command, command_response):
+        """
+        Check response from device to see if an error was reported.
+
+        Args:
+            command (str|list): The command(s) that were sent to the device.
+
+        Raises:
+            CommandError: When ``command_response`` reports an error in sending ``command``.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> command = "show version"
+            >>> command_response = "output from show version"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            >>> command = "invalid command"
+            >>> command_response = "% invalid command"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            CommandError: ...
+            >>>
+        """
+        if "% " in command_response or "Error:" in command_response:
+            if not isinstance(command, str):
+                command = "\n".join(command)
+
+            raise CommandError(command, command_response)
+
     def _enable(self):
         warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
         self.enable()
@@ -227,21 +254,93 @@ class IOSDevice(BaseDevice):
             self.native.disconnect()
             self._connected = False
 
-    def config(self, command):
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
+    def config(self, command, **netmiko_args):
+        """
+        Send config commands to device.
 
-    def config_list(self, commands):
-        self._enter_config()
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This will send all commands in ``command`` regardless of failures, and only raise an Error after sending all commands.
+
+        Args:
+            command (str|list): The command or commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+
+        Returns:
+            str: The config session input and ouput from sending ``command``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandError: When one of the commands reports an error on the device.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.config("no service pad")
+            'configure terminal\nEnter configuration commands, one per line.  End with CNTL/Z.\n'
+            'host(config)#no service pad\nhost(config)#end\nhost#'
+            >>> device.config(["interface Gig0/1", "description x-connect"])
+            'configure terminal\nEnter configuration commands, one per line.  End with CNTL/Z.\n'
+            'host(config)#interface Gig0/1\nhost(config-if)#description x-connect\nhost(config-if)#end\nhost#'
+            >>>
+        """
+        netmiko_args["config_commands"] = command
+        try:
+            command_response = self.native.send_config_set(**netmiko_args)
+        except TypeError as err:
+            raise TypeError(f"Netmiko Driver's {err.args[0]}")
+
+        self._check_command_output_for_errors(command, command_response)
+        return command_response
+
+    def config_list(self, commands, **netmiko_args):
+        """
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This will send each command in ``commands`` until either an Error is caught or all commands have been sent.
+
+        Args:
+            commands (list): The commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+
+        Returns:
+            list: Each command's input and ouput from sending the command in ``commands``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandListError: When one of the commands reports an error on the device.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.config_list(["interface Gig0/1", "description x-connect"])
+            ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
+            >>>
+        """
+        original_exit_config_setting = netmiko_args.get("exit_config_mode")
+        netmiko_args["exit_config_mode"] = False
+        # Ignore None or invalid args passed for enter_config_mode
+        if netmiko_args.get("enter_config_mode") is not False:
+            self._enter_config()
+            netmiko_args["enter_config_mode"] = False
+
         entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        self.native.exit_config_mode()
+        command_responses = []
+        try:
+            for command in commands:
+                entered_commands.append(command)
+                command_responses.append(self.config(command, **netmiko_args))
+        except CommandError as e:
+            raise CommandListError(entered_commands, command, e.cli_error_msg)
+        # Don't let exception prevent exiting config mode
+        finally:
+            # Ignore None or invalid args passed for exit_config_mode
+            if original_exit_config_setting is not False:
+                self.native.exit_config_mode()
+
+        return command_responses
 
     def confirm_is_active(self):
         """
