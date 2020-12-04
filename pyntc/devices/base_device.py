@@ -31,7 +31,6 @@ class BaseDevice(object):
         self.password = password
         self.device_type = device_type
         self._uptime = None
-        self._vendor = None
         self._os_version = None
         self._interfaces = None
         self._hostname = None
@@ -119,16 +118,6 @@ class BaseDevice(object):
     @abc.abstractmethod
     def uptime(self):
         """Uptime integer property, part of device facts.
-
-        Raises:
-            NotImplementedError: returns not implemented if not included in facts.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def vendor(self):
-        """Vendor string property, part of device facts.
 
         Raises:
             NotImplementedError: returns not implemented if not included in facts.
@@ -423,9 +412,6 @@ class BaseDevice(object):
         if self.uptime:
             self._uptime = self.uptime
 
-        if self.vendor:
-            self._vendor = self.vendor
-
         if self.os_version:
             self._os_version = self.os_version
 
@@ -452,7 +438,6 @@ class BaseDevice(object):
 
         return (
             self.uptime,
-            self.vendor,
             self.os_version,
             self.interfaces,
             self.hostname,

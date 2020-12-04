@@ -16,6 +16,8 @@ from .base_device import BaseDevice
 class F5Device(BaseDevice):
     """F5 LTM Device Implementation."""
 
+    vendor = "f5"
+
     def __init__(self, host, username, password, **kwargs):
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
@@ -373,13 +375,6 @@ class F5Device(BaseDevice):
 
     def config_list(self, commands):
         raise NotImplementedError
-
-    @property
-    def vendor(self):
-        if self._vendor is None:
-            self._vendor = "f5"
-
-        return self._vendor
 
     @property
     def uptime(self):

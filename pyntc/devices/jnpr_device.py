@@ -22,6 +22,8 @@ from pyntc.errors import CommandError, CommandListError, FileTransferError, Rebo
 class JunosDevice(BaseDevice):
     """Juniper JunOS Device Implementation."""
 
+    vendor = "juniper"
+
     def __init__(self, host, username, password, *args, **kwargs):
         super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
 
@@ -133,13 +135,6 @@ class JunosDevice(BaseDevice):
     @property
     def connected(self):
         return self.native.connected
-
-    @property
-    def vendor(self):
-        if self._vendor is None:
-            self._vendor = "juniper"
-
-        return self._vendor
 
     @property
     def uptime(self):

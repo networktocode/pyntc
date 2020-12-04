@@ -23,6 +23,8 @@ from pynxos.errors import CLIError
 class NXOSDevice(BaseDevice):
     """Cisco NXOS Device Implementation."""
 
+    vendor = "cisco"
+
     def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
@@ -72,13 +74,6 @@ class NXOSDevice(BaseDevice):
             self.native.config_list(commands)
         except CLIError as e:
             raise CommandListError(commands, e.command, str(e))
-
-    @property
-    def vendor(self):
-        if self._vendor is None:
-            self._vendor = "cisco"
-
-        return self._vendor
 
     @property
     def uptime(self):

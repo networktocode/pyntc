@@ -39,6 +39,8 @@ INTERFACES_KM = {
 class EOSDevice(BaseDevice):
     """Arista EOS Device Implementation."""
 
+    vendor = "arista"
+
     def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
@@ -189,13 +191,6 @@ class EOSDevice(BaseDevice):
         # Ensure device is not in config mode
         if self.native_ssh.check_config_mode():
             self.native_ssh.exit_config_mode()
-
-    @property
-    def vendor(self):
-        if self._vendor is None:
-            self._vendor = "arista"
-
-        return self._vendor
 
     @property
     def uptime(self):

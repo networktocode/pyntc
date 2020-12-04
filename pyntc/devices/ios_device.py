@@ -42,6 +42,7 @@ SHOW_DIR_RETRY_COUNT = 5
 class IOSDevice(BaseDevice):
     """Cisco IOS Device Implementation."""
 
+    vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
     def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
@@ -303,13 +304,6 @@ class IOSDevice(BaseDevice):
         # Ensure device is not in config mode
         if self.native.check_config_mode():
             self.native.exit_config_mode()
-
-    @property
-    def vendor(self):
-        if self._vendor is None:
-            self._vendor = "cisco"
-
-        return self._vendor
 
     @property
     def uptime(self):
