@@ -180,7 +180,7 @@ class IOSDevice(BaseDevice):
                 self.open()
                 self.show("show version")
                 return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)

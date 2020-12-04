@@ -141,7 +141,7 @@ class EOSDevice(BaseDevice):
             try:
                 self.show("show hostname")
                 return
-            except:  # noqa E722
+            except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
