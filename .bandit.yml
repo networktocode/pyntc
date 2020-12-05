@@ -1,2 +1,5 @@
 ---
-skips: ["B101","B106", "B107"]
+skips: ["B101", "B107"]
+# No need to check for security issues in test scripts
+exclude_dirs:
+  - "./test/"
