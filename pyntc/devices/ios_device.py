@@ -67,6 +67,33 @@ class IOSDevice(BaseDevice):
         self._connected = False
         self.open(confirm_active=confirm_active)
 
+    def _check_command_output_for_errors(self, command, command_response):
+        """
+        Check response from device to see if an error was reported.
+
+        Args:
+            command (str|list): The command(s) that were sent to the device.
+
+        Raises:
+            CommandError: When ``command_response`` reports an error in sending ``command``.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> command = "show version"
+            >>> command_response = "output from show version"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            >>> command = "invalid command"
+            >>> command_response = "% invalid command"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            CommandError: ...
+            >>>
+        """
+        if "% " in command_response or "Error:" in command_response:
+            if not isinstance(command, str):
+                command = "\n".join(command)
+
+            raise CommandError(command, command_response)
+
     def _enable(self):
         warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
         self.enable()
@@ -227,21 +254,109 @@ class IOSDevice(BaseDevice):
             self.native.disconnect()
             self._connected = False
 
-    def config(self, command):
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
+    def config(self, command, **netmiko_args):
+        """
+        Send config commands to device.
 
-    def config_list(self, commands):
-        self._enter_config()
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This will send each command in ``command`` until either an Error is caught or all commands have been sent.
+
+        Args:
+            command (str|list): The command or commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+
+        Returns:
+            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
+            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandError: When ``command`` is a str and its results report an error.
+            CommandListError: When ``command`` is a list and one of the commands reports an error.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.config("no service pad")
+            'configure terminal\nEnter configuration commands, one per line.  End with CNTL/Z.\n'
+            'host(config)#no service pad\nhost(config)#end\nhost#'
+            >>> device.config(["interface Gig0/1", "description x-connect"])
+            ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
+            >>>
+        """
+        # TODO: Remove this when deprecating config_list method
+        original_command_is_str = isinstance(command, str)
+
+        if original_command_is_str:  # TODO: switch to isinstance(command, str) when removing above
+            command = [command]
+
+        original_exit_config_setting = netmiko_args.get("exit_config_mode")
+        netmiko_args["exit_config_mode"] = False
+        # Ignore None or invalid args passed for enter_config_mode
+        if netmiko_args.get("enter_config_mode") is not False:
+            self._enter_config()
+            netmiko_args["enter_config_mode"] = False
+
         entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        self.native.exit_config_mode()
+        command_responses = []
+        try:
+            for cmd in command:
+                entered_commands.append(cmd)
+                command_response = self.native.send_config_set(cmd, **netmiko_args)
+                command_responses.append(command_response)
+                self._check_command_output_for_errors(cmd, command_response)
+        except TypeError as err:
+            raise TypeError(f"Netmiko Driver's {err.args[0]}")
+        # TODO: Remove this when deprecating config_list method
+        except CommandError as err:
+            if not original_command_is_str:
+                warnings.warn("This will raise CommandError in the future", FutureWarning)
+                raise CommandListError(entered_commands, cmd, err.cli_error_msg)
+            else:
+                raise err
+        # Don't let exception prevent exiting config mode
+        finally:
+            # Ignore None or invalid args passed for exit_config_mode
+            if original_exit_config_setting is not False:
+                self.native.exit_config_mode()
+
+        # TODO: Remove this when deprecating config_list method
+        if original_command_is_str:
+            warnings.warn("This will return a list in the future", FutureWarning)
+            return command_responses[0]
+
+        return command_responses
+
+    def config_list(self, commands, **netmiko_args):
+        """
+        DEPRECATED - Use the `config` method.
+
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+
+        Args:
+            commands (list): The commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+
+        Returns:
+            list: Each command's input and ouput from sending the command in ``commands``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandListError: When one of the commands reports an error on the device.
+
+        Example:
+            >>> device = IOSDevice(**connection_args)
+            >>> device.config_list(["interface Gig0/1", "description x-connect"])
+            ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
+            >>>
+        """
+        warnings.warn("config_list() is deprecated; use config.", DeprecationWarning)
+        return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
         """
@@ -640,11 +755,11 @@ class IOSDevice(BaseDevice):
 
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
-            self.config_list(["no boot system", command])
-        except CommandError:
+            self.config(["no boot system", command])
+        except CommandListError:  # TODO: Update to CommandError when deprecating config_list
             file_system = file_system.replace(":", "")
             command = "boot system {0} {1}".format(file_system, image_name)
-            self.config_list(["no boot system", command])
+            self.config(["no boot system", command])
 
         self.save()
         new_boot_options = self.boot_options["sys"]

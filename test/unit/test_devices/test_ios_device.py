@@ -38,40 +38,6 @@ class TestIOSDevice(unittest.TestCase):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
-    def test_config(self):
-        command = "interface fastEthernet 0/1"
-        result = self.device.config(command)
-
-        self.assertIsNone(result)
-        self.device.native.send_command_timing.assert_called_with(command)
-
-    def test_bad_config(self):
-        command = "asdf poknw"
-
-        try:
-            with self.assertRaisesRegex(ios_module.CommandError, command):
-                self.device.config(command)
-        finally:
-            self.device.native.reset_mock()
-
-    def test_config_list(self):
-        commands = ["interface fastEthernet 0/1", "no shutdown"]
-        result = self.device.config_list(commands)
-
-        self.assertIsNone(result)
-
-        for cmd in commands:
-            self.device.native.send_command_timing.assert_any_call(cmd)
-
-    def test_bad_config_list(self):
-        commands = ["interface fastEthernet 0/1", "apons"]
-        results = ["ok", "Error: apons"]
-
-        self.device.native.send_command_timing.side_effect = results
-
-        with self.assertRaisesRegex(ios_module.CommandListError, commands[1]):
-            self.device.config_list(commands)
-
     def test_show(self):
         command = "show ip arp"
         result = self.device.show(command)
@@ -271,35 +237,6 @@ class TestIOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command_timing.assert_called_with("show run | inc boot")
 
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "config_list", return_value=None)
-    def test_set_boot_options(self, mock_cl, mock_fs):
-        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
-            mock_boot.return_value = {"sys": BOOT_IMAGE}
-            self.device.set_boot_options(BOOT_IMAGE)
-            mock_cl.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
-
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "config_list", side_effect=[ios_module.CommandError("boot system", "fail"), None])
-    def test_set_boot_options_with_spaces(self, mock_cl, mock_fs):
-        with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
-            mock_boot.return_value = {"sys": BOOT_IMAGE}
-            self.device.set_boot_options(BOOT_IMAGE)
-            mock_cl.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
-
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    def test_set_boot_options_no_file(self, mock_fs):
-        with self.assertRaises(ios_module.NTCFileNotFoundError):
-            self.device.set_boot_options("bad_image.bin")
-
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    @mock.patch.object(IOSDevice, "boot_options", return_value={"sys": "bad_image.bin"})
-    @mock.patch.object(IOSDevice, "config_list", return_value=None)
-    def test_set_boot_options_bad_boot(self, mock_cl, mock_bo, mock_fs):
-        with self.assertRaises(ios_module.CommandError):
-            self.device.set_boot_options(BOOT_IMAGE)
-            mock_bo.assert_called_once()
-
     def test_backup_running_config(self):
         filename = "local_running_config"
         self.device.backup_running_config(filename)
@@ -457,6 +394,173 @@ class TestIOSDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_check_command_output_for_errors(ios_device):
+    command_passes = ios_device._check_command_output_for_errors("valid command", "valid output")
+    assert command_passes is None
+
+
+@pytest.mark.parametrize("output", (r"% invalid output", "Error: invalid output"))
+def test_check_command_output_for_errors_error(output, ios_device):
+    with pytest.raises(ios_module.CommandError) as err:
+        ios_device._check_command_output_for_errors("invalid command", output)
+    assert err.value.command == "invalid command"
+    assert err.value.cli_error_msg == output
+
+
+def test_check_command_output_for_errors_multi_command_error(ios_device):
+    with pytest.raises(ios_module.CommandError) as err:
+        ios_device._check_command_output_for_errors(
+            ["valid command", "invalid command"], r"valid output\n% invalid output"
+        )
+    assert err.value.command == "valid command\ninvalid command"
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_string(mock_enter_config, mock_check_for_errors, ios_config):
+    command = "no service pad"
+    device = ios_config(["no_service_pad.txt"])
+    result = device.config(command)
+
+    assert isinstance(result, str)  # TODO: Change to list when deprecating config_list
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_called_with(command, result)
+    mock_check_for_errors.assert_called_once()
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    device.native.send_config_set.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_list(mock_enter_config, mock_check_for_errors, ios_config):
+    command = ["interface Gig0", "description x-connect"]
+    device = ios_config([f"{cmd}.txt" for cmd in command])
+    result = device.config(command)
+
+    assert isinstance(result, list)
+    assert len(result) == 2
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_has_calls(mock.call(command[index], result[index]) for index in range(2))
+    device.native.send_config_set.assert_has_calls(
+        mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in command
+    )
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_netmiko_args(mock_enter_config, mock_check_for_errors, ios_config):
+    command = ["a"]
+    device = ios_config([1])
+    netmiko_args = {"strip_prompt": True}
+    device.config(command, **netmiko_args)
+
+    device.native.send_config_set.assert_called_with(
+        command[0], enter_config_mode=False, exit_config_mode=False, strip_prompt=True
+    )
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_invalid_netmiko_args(mock_enter_config, mock_check_for_errors, ios_config):
+    error_message = "send_config_set() got an unexpected keyword argument 'commands'"
+    device = ios_config([TypeError(error_message)])
+    netmiko_args = {"invalid_arg": True}
+    with pytest.raises(TypeError) as error:
+        device.config("command", **netmiko_args)
+
+    assert error.value.args[0] == (f"Netmiko Driver's {error_message}")
+    mock_check_for_errors.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_disable_enter_config(mock_enter_config, mock_check_for_errors, ios_config):
+    command = ["a"]
+    config_effects = [1]
+    device = ios_config(config_effects)
+    device.config(command, enter_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_disable_exit_config(mock_enter_config, mock_check_for_errors, ios_config):
+    command = ["a"]
+    config_effects = [1]
+    device = ios_config(config_effects)
+    device.config(command, exit_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_not_called()
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_invalid_string_command(mock_enter_config, mock_check_for_errors, ios_config):
+    command = "invalid command"
+    result = r"% invalid output"
+    mock_check_for_errors.side_effect = [ios_module.CommandError(command, result)]
+    device = ios_config(result)
+    with pytest.raises(ios_module.CommandError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    mock_check_for_errors.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.command == command
+    assert err.value.cli_error_msg == result
+
+
+@mock.patch.object(IOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(IOSDevice, "_enter_config")
+def test_config_pass_invalid_list_command(mock_enter_config, mock_check_for_errors, ios_config):
+    mock_check_for_errors.side_effect = [
+        "valid output",
+        ios_module.CommandError("invalid command", r"% invalid output"),
+    ]
+    command = ["valid command", "invalid command", "another valid command"]
+    result = ["valid output", r"% invalid output"]
+    device = ios_config(result)
+    with pytest.raises(ios_module.CommandListError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_has_calls(
+        (
+            mock.call(command[0], enter_config_mode=False, exit_config_mode=False),
+            mock.call(command[1], enter_config_mode=False, exit_config_mode=False),
+        )
+    )
+    assert (
+        mock.call(command[2], enter_config_mode=False, exit_config_mode=False)
+        not in device.native.send_config_set.call_args_list
+    )
+    mock_check_for_errors.assert_called_with(command[1], result[1])
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.commands == command[:2]
+    assert err.value.command == command[1]
+
+
+@mock.patch.object(IOSDevice, "config")
+def test_config_list(mock_config, ios_device):
+    config_commands = ["a", "b"]
+    ios_device.config_list(config_commands)
+    mock_config.assert_called_with(config_commands)
+
+
+@mock.patch.object(IOSDevice, "config")
+def test_config_list_pass_netmiko_args(mock_config, ios_device):
+    config_commands = ["a", "b"]
+    ios_device.config_list(config_commands, strip_prompt=True)
+    mock_config.assert_called_with(config_commands, strip_prompt=True)
 
 
 @mock.patch.object(IOSDevice, "is_active")
@@ -713,3 +817,84 @@ def test_send_command_timing(ios_send_command_timing):
     device._send_command(command)
     device.native.send_command_timing.assert_called()
     device.native.send_command_timing.assert_called_with(command)
+
+
+@mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt"])
+    mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+    device.set_boot_options(BOOT_IMAGE)
+    mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    mock_file_system.assert_called_once()
+    mock_config.assert_called_once()
+    mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_pass_file_system(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt"])
+    mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+    device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+    mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    mock_file_system.assert_not_called()
+    mock_config.assert_called_once()
+    mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config, ios_show):
+    device = ios_show(["dir_flash:.txt"])
+    mock_config.side_effect = [
+        ios_module.CommandListError(
+            ["no boot system", "invalid boot command"],
+            "invalid boot command",
+            r"% Invalid command",
+        ),
+        "valid boot command",
+    ]
+    mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+    device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+    mock_config.assert_has_calls(
+        [
+            mock.call(["no boot system", f"boot system flash:/{BOOT_IMAGE}"]),
+            mock.call(["no boot system", f"boot system flash {BOOT_IMAGE}"]),
+        ]
+    )
+    mock_save.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
+def test_set_boot_options_no_file(mock_facts, ios_show):
+    bad_image = "bad_image.bin"
+    host = "ios_host"
+    file_system = "flash:"
+    mock_facts.return_value = {"hostname": "ios_host"}
+    device = ios_show(["dir_flash:.txt"])
+    with pytest.raises(ios_module.NTCFileNotFoundError) as err:
+        device.set_boot_options(bad_image, file_system=file_system)
+
+    assert err.value.message == f"{bad_image} was not found in {file_system} on {host}"
+
+
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, ios_show):
+    bad_image = "bad_image.bin"
+    mock_boot_options.return_value = {"sys": bad_image}
+    device = ios_show(["dir_flash:.txt"])
+    with pytest.raises(ios_module.CommandError) as err:
+        device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+
+    assert err.value.command == f"boot system flash:/{BOOT_IMAGE}"
+    assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"

@@ -1,0 +1,2 @@
+interface Gig0
+host#(config-if)#
