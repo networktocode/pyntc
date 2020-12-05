@@ -10,7 +10,7 @@ from pyeapi.eapilib import CommandError as EOSCommandError
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.utils import convert_dict_by_key, convert_list_by_key
+from pyntc.utils import convert_list_by_key
 from .system_features.vlans.eos_vlans import EOSVlans
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
@@ -82,21 +82,9 @@ class EOSDevice(BaseDevice):
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
-            raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+            raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
         return file_system
-
-    def _get_interface_list(self):
-        iface_detailed_list = self._interfaces_status_list()
-        iface_list = sorted(list(x["interface"] for x in iface_detailed_list))
-
-        return iface_list
-
-    def _get_vlan_list(self):
-        vlans = EOSVlans(self)
-        vlan_list = vlans.get_list()
-
-        return vlan_list
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show boot", raw_text=True)
@@ -144,7 +132,7 @@ class EOSDevice(BaseDevice):
             except:  # noqa E722 # nosec
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
@@ -187,25 +175,75 @@ class EOSDevice(BaseDevice):
             self.native_ssh.exit_config_mode()
 
     @property
-    def facts(self):
-        if self._facts is None:
+    def uptime(self):
+        if self._uptime is None:
             sh_version_output = self.show("show version")
-            self._facts = convert_dict_by_key(sh_version_output, BASIC_FACTS_KM)
-            self._facts["vendor"] = self.vendor
+            self._uptime = int(time.time() - sh_version_output["bootupTimestamp"])
 
-            uptime = int(time.time() - sh_version_output["bootupTimestamp"])
-            self._facts["uptime"] = uptime
-            self._facts["uptime_string"] = self._uptime_to_string(uptime)
+        return self._uptime
 
+    @property
+    def uptime_string(self):
+        if self._uptime_string is None:
+            self._uptime_string = self._uptime_to_string(self.uptime)
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
-            self._facts.update(
-                convert_dict_by_key(sh_hostname_output, {}, fill_in=True, whitelist=["hostname", "fqdn"])
-            )
+            self._hostname = sh_hostname_output["hostname"]
 
-            self._facts["interfaces"] = self._get_interface_list()
-            self._facts["vlans"] = self._get_vlan_list()
+        return self._hostname
 
-        return self._facts
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            iface_detailed_list = self._interfaces_status_list()
+            self._interfaces = sorted(list(x["interface"] for x in iface_detailed_list))
+
+        return self._interfaces
+
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            vlans = EOSVlans(self)
+            self._vlans = vlans.get_list()
+
+        return self._vlans
+
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            sh_hostname_output = self.show("show hostname")
+            self._fqdn = sh_hostname_output["fqdn"]
+
+        return self._fqdn
+
+    @property
+    def model(self):
+        if self._model is None:
+            sh_version_output = self.show("show version")
+            self._model = sh_version_output["modelName"]
+
+        return self._model
+
+    @property
+    def os_version(self):
+        if self._os_version is None:
+            sh_version_output = self.show("show version")
+            self._os_version = sh_version_output["internalVersion"]
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        if self._serial_number is None:
+            sh_version_output = self.show("show version")
+            self._serial_number = sh_version_output["serialNumber"]
+
+        return self._serial_number
 
     def file_copy(self, src, dest=None, file_system=None):
         """[summary]
@@ -260,7 +298,7 @@ class EOSDevice(BaseDevice):
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             return True
 
@@ -317,7 +355,7 @@ class EOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         self.show("install source {0}{1}".format(file_system, image_name))
         if self.boot_options["sys"] != image_name:

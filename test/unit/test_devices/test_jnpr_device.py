@@ -10,6 +10,32 @@ from pyntc.errors import CommandError, CommandListError
 from jnpr.junos.exception import ConfigLoadError
 
 
+DEVICE_FACTS = {
+    "domain": "ntc.com",
+    "hostname": "vmx3",
+    "ifd_style": "CLASSIC",
+    "version_RE0": "15.1F4.15",
+    "2RE": False,
+    "serialnumber": "VMX9a",
+    "fqdn": "vmx3.ntc.com",
+    "virtual": True,
+    "switch_style": "BRIDGE_DOMAIN",
+    "version": "15.1F4.15",
+    "master": "RE0",
+    "HOME": "/var/home/ntc",
+    "model": "VMX",
+    "RE0": {
+        "status": "OK",
+        "last_reboot_reason": "0x200:normal shutdown ",
+        "model": "RE-VMX",
+        "up_time": "7 minutes, 35 seconds",
+        "mastership_state": "master",
+    },
+    "vc_capable": False,
+    "personality": "MX",
+}
+
+
 class TestJnprDevice(unittest.TestCase):
     def setUp(self):
         self.mock_sw = mock.patch("pyntc.devices.jnpr_device.JunosNativeSW", autospec=True)
@@ -23,6 +49,7 @@ class TestJnprDevice(unittest.TestCase):
         self.mock_device.start()
 
         self.device = JunosDevice("host", "user", "pass")
+        self.device.native.facts = DEVICE_FACTS
 
     def tearDown(self):
         self.mock_sw.stop()
@@ -206,50 +233,43 @@ class TestJnprDevice(unittest.TestCase):
         self.device.checkpoint("saved_config")
         self.device.show.assert_called_with("show config")
 
-    def test_facts(self):
-        self.device.native.facts = {
-            "domain": "ntc.com",
-            "hostname": "vmx3",
-            "ifd_style": "CLASSIC",
-            "version_RE0": "15.1F4.15",
-            "2RE": False,
-            "serialnumber": "VMX9a",
-            "fqdn": "vmx3.ntc.com",
-            "virtual": True,
-            "switch_style": "BRIDGE_DOMAIN",
-            "version": "15.1F4.15",
-            "master": "RE0",
-            "HOME": "/var/home/ntc",
-            "model": "VMX",
-            "RE0": {
-                "status": "OK",
-                "last_reboot_reason": "0x200:normal shutdown ",
-                "model": "RE-VMX",
-                "up_time": "7 minutes, 35 seconds",
-                "mastership_state": "master",
-            },
-            "vc_capable": False,
-            "personality": "MX",
-        }
+    def test_uptime(self):
+        uptime = self.device.uptime
+        assert uptime == 455
 
+    def test_uptime_string(self):
+        uptime_string = self.device.uptime_string
+        assert uptime_string == "00:00:07:35"
+
+    def test_vendor(self):
+        vendor = self.device.vendor
+        assert vendor == "juniper"
+
+    def test_os_version(self):
+        os_version = self.device.os_version
+        assert os_version == "15.1F4.15"
+
+    def test_interfaces(self):
         self.device._get_interfaces = mock.MagicMock()
         self.device._get_interfaces.return_value = ["lo0", "ge0"]
+        interfaces = self.device.interfaces
+        assert interfaces == ["lo0", "ge0"]
 
-        facts = self.device.facts
+    def test_hostname(self):
+        hostname = self.device.hostname
+        assert hostname == "vmx3"
 
-        expected = {
-            "uptime": 455,
-            "vendor": "juniper",
-            "version": "15.1F4.15",
-            "interfaces": ["lo0", "ge0"],
-            "hostname": "vmx3",
-            "fqdn": "vmx3.ntc.com",
-            "uptime_string": "00:00:07:35",
-            "serial_number": "VMX9a",
-            "model": "VMX",
-        }
+    def test_fqdn(self):
+        fqdn = self.device.fqdn
+        assert fqdn == "vmx3.ntc.com"
 
-        self.assertEqual(facts, expected)
+    def test_serial_number(self):
+        serial_number = self.device.serial_number
+        assert serial_number == "VMX9a"
+
+    def test_model(self):
+        model = self.device.model
+        assert model == "VMX"
 
     def test_running_config(self):
         self.device.show = mock.MagicMock()

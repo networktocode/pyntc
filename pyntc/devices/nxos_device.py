@@ -43,12 +43,12 @@ class NXOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.refresh_facts()
-                if self.facts["uptime"] < 180:
+                if self.uptime < 180:
                     return
             except:  # noqa E722 # nosec
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         self.native.backup_running_config(filename)
@@ -76,14 +76,60 @@ class NXOSDevice(BaseDevice):
             raise CommandListError(commands, e.command, str(e))
 
     @property
-    def facts(self):
-        if self._facts is None:
-            if hasattr(self.native, "_facts"):
-                del self.native._facts
+    def uptime(self):
+        if self._uptime is None:
+            self._uptime = self.native.facts.get("uptime")
 
-            self._facts = self.native.facts
-            self._facts["vendor"] = self.vendor
-        return self._facts
+        return self._uptime
+
+    @property
+    def hostname(self):
+        if self._hostname is None:
+            self._hostname = self.native.facts.get("hostname")
+
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = self.native.facts.get("interfaces")
+
+        return self._interfaces
+
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            self._vlans = self.native.facts.get("vlans")
+
+        return self._vlans
+
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            self._fqdn = self.native.facts.get("fqdn")
+
+        return self._fqdn
+
+    @property
+    def model(self):
+        if self._model is None:
+            self._model = self.native.facts.get("model")
+
+        return self._model
+
+    @property
+    def os_version(self):
+        if self._os_version is None:
+            self._os_version = self.native.facts.get("os_version")
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        if self._serial_number is None:
+            self._serial_number = self.native.facts.get("serial_number")
+
+        return self._serial_number
 
     def file_copy(self, src, dest=None, file_system="bootflash:"):
         if not self.file_copy_remote_exists(src, dest, file_system):
@@ -146,11 +192,11 @@ class NXOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
-                raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=kickstart, dir=file_system)
+                raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, dir=file_system)
 
             kickstart = file_system + kickstart
 

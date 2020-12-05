@@ -10,7 +10,7 @@ import warnings
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
-from pyntc.utils import convert_dict_by_key, get_structured_data
+from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
     NTCError,
@@ -105,7 +105,7 @@ class IOSDevice(BaseDevice):
                 # Allow to continue through the loop
                 continue
 
-        raise FileSystemNotFoundError(hostname=self.facts.get("hostname"), command="dir")
+        raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -121,7 +121,7 @@ class IOSDevice(BaseDevice):
         return ip_int_br_data
 
     def _is_catalyst(self):
-        return self.facts["model"].startswith("WS-")
+        return self.model.startswith("WS-")
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
@@ -183,7 +183,7 @@ class IOSDevice(BaseDevice):
             except:  # noqa E722 # nosec
                 pass
 
-        raise RebootTimeoutError(hostname=self.facts["hostname"], wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
@@ -306,27 +306,86 @@ class IOSDevice(BaseDevice):
             self.native.exit_config_mode()
 
     @property
-    def facts(self):
-        if self._facts is None:
+    def uptime(self):
+        if self._uptime is None:
             version_data = self._raw_version_data()
-            self._facts = convert_dict_by_key(version_data, BASIC_FACTS_KM)
-            self._facts["vendor"] = self.vendor
-
             uptime_full_string = version_data["uptime"]
-            self._facts["uptime"] = self._uptime_to_seconds(uptime_full_string)
-            self._facts["uptime_string"] = self._uptime_to_string(uptime_full_string)
-            self._facts["fqdn"] = "N/A"
-            self._facts["interfaces"] = list(x["intf"] for x in self._interfaces_detailed_list())
+            self._uptime = self._uptime_to_seconds(uptime_full_string)
 
-            if self._facts["model"].startswith("WS"):
-                self._facts["vlans"] = list(str(x["vlan_id"]) for x in self._show_vlan())
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        if self._uptime_string is None:
+            version_data = self._raw_version_data()
+            uptime_full_string = version_data["uptime"]
+            self._uptime_string = self._uptime_to_string(uptime_full_string)
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        version_data = self._raw_version_data()
+        if self._hostname is None:
+            self._hostname = version_data["hostname"]
+
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        if self._interfaces is None:
+            self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
+
+        return self._interfaces
+
+    @property
+    def vlans(self):
+        if self._vlans is None:
+            if self.model.startswith("WS"):
+                self._vlans = list(str(x["vlan_id"]) for x in self._show_vlan())
             else:
-                self._facts["vlans"] = []
+                self._vlans = []
 
-            # ios-specific facts
-            self._facts[self.device_type] = {"config_register": version_data["config_register"]}
+        return self._vlans
 
-        return self._facts
+    @property
+    def fqdn(self):
+        if self._fqdn is None:
+            self._fqdn = "N/A"
+
+        return self._fqdn
+
+    @property
+    def model(self):
+        version_data = self._raw_version_data()
+        if self._model is None:
+            self._model = version_data["hardware"]
+
+        return self._model
+
+    @property
+    def os_version(self):
+        version_data = self._raw_version_data()
+        if self._os_version is None:
+            self._os_version = version_data["version"]
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        version_data = self._raw_version_data()
+        if self._serial_number is None:
+            self._serial_number = version_data["serial"]
+
+        return self._serial_number
+
+    @property
+    def config_register(self):
+        # ios-specific facts
+        version_data = self._raw_version_data()
+        self._config_register = version_data["config_register"]
+
+        return self._config_register
 
     def file_copy(self, src, dest=None, file_system=None):
         self.enable()
@@ -374,7 +433,7 @@ class IOSDevice(BaseDevice):
             self.reboot(confirm=True)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             return True
 
@@ -577,7 +636,7 @@ class IOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.facts.get("hostname"), file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
