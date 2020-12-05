@@ -696,11 +696,11 @@ class IOSDevice(BaseDevice):
 
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
-            self.config_list(["no boot system", command])
-        except CommandListError:
+            self.config(["no boot system", command])
+        except CommandListError:  # TODO: Update to CommandError when deprecating config_list
             file_system = file_system.replace(":", "")
             command = "boot system {0} {1}".format(file_system, image_name)
-            self.config_list(["no boot system", command])
+            self.config(["no boot system", command])
 
         self.save()
         new_boot_options = self.boot_options["sys"]

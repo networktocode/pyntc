@@ -769,41 +769,41 @@ def test_send_command_timing(ios_send_command_timing):
 
 
 @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-@mock.patch.object(IOSDevice, "config_list")
+@mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options(mock_save, mock_boot_options, mock_config_list, mock_file_system, ios_show):
+def test_set_boot_options(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
     device = ios_show(["dir_flash:.txt"])
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE)
-    mock_config_list.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
     mock_file_system.assert_called_once()
-    mock_config_list.assert_called_once()
+    mock_config.assert_called_once()
     mock_save.assert_called_once()
     mock_boot_options.assert_called_once()
 
 
 @mock.patch.object(IOSDevice, "_get_file_system")
-@mock.patch.object(IOSDevice, "config_list")
+@mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options_pass_file_system(mock_save, mock_boot_options, mock_config_list, mock_file_system, ios_show):
+def test_set_boot_options_pass_file_system(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
     device = ios_show(["dir_flash:.txt"])
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
-    mock_config_list.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
     mock_file_system.assert_not_called()
-    mock_config_list.assert_called_once()
+    mock_config.assert_called_once()
     mock_save.assert_called_once()
     mock_boot_options.assert_called_once()
 
 
-@mock.patch.object(IOSDevice, "config_list")
+@mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config_list, ios_show):
+def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config, ios_show):
     device = ios_show(["dir_flash:.txt"])
-    mock_config_list.side_effect = [
+    mock_config.side_effect = [
         ios_module.CommandListError(
             ["no boot system", "invalid boot command"],
             "invalid boot command",
@@ -813,7 +813,7 @@ def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config_
     ]
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
-    mock_config_list.assert_has_calls(
+    mock_config.assert_has_calls(
         [
             mock.call(["no boot system", f"boot system flash:/{BOOT_IMAGE}"]),
             mock.call(["no boot system", f"boot system flash {BOOT_IMAGE}"]),
@@ -836,9 +836,9 @@ def test_set_boot_options_no_file(mock_facts, ios_show):
 
 
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
-@mock.patch.object(IOSDevice, "config_list")
+@mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options_bad_boot(mock_save, mock_config_list, mock_boot_options, ios_show):
+def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, ios_show):
     bad_image = "bad_image.bin"
     mock_boot_options.return_value = {"sys": bad_image}
     device = ios_show(["dir_flash:.txt"])
