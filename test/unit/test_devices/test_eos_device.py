@@ -1,6 +1,7 @@
 import unittest
 import mock
 import os
+import time
 
 from .device_mocks.eos import enable, config
 from .device_mocks.eos import send_command, send_command_expect
@@ -270,17 +271,19 @@ class TestEOSDevice(unittest.TestCase):
         self.device.checkpoint("good_checkpoint")
         self.device.native.enable.assert_called_with(["copy running-config good_checkpoint"], encoding="json")
 
-    @mock.patch.object(EOSDevice, "_get_uptime", autospec=True)
-    def test_uptime(self, mock_get_uptime):
-        mock_get_uptime.return_value = 123
+    def test_uptime(self):
+        sh_version_output = self.device.show("show version")
+        expected = int(time.time() - sh_version_output["bootupTimestamp"])
         uptime = self.device.uptime
         self.assertIsInstance(uptime, int)
+        self.assertEqual(uptime, expected)
 
-    @mock.patch.object(EOSDevice, "_get_uptime", autospec=True)
-    def test_uptime_string(self, mock_get_uptime):
-        mock_get_uptime.return_value = 123
+    @mock.patch.object(EOSDevice, "_uptime_to_string", autospec=True)
+    def test_uptime_string(self, mock_upt_str):
+        mock_upt_str.return_value = "02:00:03:38"
         uptime_string = self.device.uptime_string
         self.assertIsInstance(uptime_string, str)
+        self.assertEqual(uptime_string, "02:00:03:38")
 
     def test_vendor(self):
         vendor = self.device.vendor

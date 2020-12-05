@@ -410,43 +410,33 @@ class BaseDevice(object):
         """Refresh cached facts."""
         # Persist values that were not added by facts getter
         if self.uptime:
-            self._uptime = self.uptime
+            self._uptime = None
 
         if self.os_version:
-            self._os_version = self.os_version
+            self._os_version = None
 
         if self.interfaces:
-            self._interfaces = self.interfaces
+            self._interfaces = None
 
         if self.hostname:
-            self._hostname = self.hostname
+            self._hostname = None
 
         if self.fqdn:
-            self._fqdn = self.fqdn
+            self._fqdn = None
 
         if self.uptime_string:
-            self._uptime_string = self.uptime_string
+            self._uptime_string = None
 
         if self.serial_number:
-            self._serial_number = self.serial_number
+            self._serial_number = None
 
         if self.model:
-            self._model = self.model
+            self._model = None
 
         if self.vlans:
-            self._vlans = self.vlans
+            self._vlans = None
 
-        return (
-            self.uptime,
-            self.os_version,
-            self.interfaces,
-            self.hostname,
-            self.fqdn,
-            self.uptime_string,
-            self.serial_number,
-            self.model,
-            self.vlans,
-        )
+        return None
 
 
 class RebootTimerError(NTCError):

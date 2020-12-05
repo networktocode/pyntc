@@ -384,10 +384,10 @@ class TestIOSDevice(unittest.TestCase):
         assert vlans == expected
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
-    def test_cisco_ios_ssh(self, mock_raw_version_data):
+    def test_config_register(self, mock_raw_version_data):
         mock_raw_version_data.return_value = DEVICE_FACTS
-        cisco_ios_ssh = self.device.cisco_ios_ssh
-        assert cisco_ios_ssh == {"config_register": "0x2102"}
+        config_register = self.device.config_register
+        assert config_register == "0x2102"
 
     def test_running_config(self):
         expected = self.device.show("show running-config")

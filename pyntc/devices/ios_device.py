@@ -307,18 +307,18 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime(self):
-        version_data = self._raw_version_data()
-        uptime_full_string = version_data["uptime"]
         if self._uptime is None:
+            version_data = self._raw_version_data()
+            uptime_full_string = version_data["uptime"]
             self._uptime = self._uptime_to_seconds(uptime_full_string)
 
         return self._uptime
 
     @property
     def uptime_string(self):
-        version_data = self._raw_version_data()
-        uptime_full_string = version_data["uptime"]
         if self._uptime_string is None:
+            version_data = self._raw_version_data()
+            uptime_full_string = version_data["uptime"]
             self._uptime_string = self._uptime_to_string(uptime_full_string)
 
         return self._uptime_string
@@ -380,12 +380,12 @@ class IOSDevice(BaseDevice):
         return self._serial_number
 
     @property
-    def cisco_ios_ssh(self):
+    def config_register(self):
         # ios-specific facts
         version_data = self._raw_version_data()
-        self._cisco_ios_ssh = {"config_register": version_data["config_register"]}
+        self._config_register = version_data["config_register"]
 
-        return self._cisco_ios_ssh
+        return self._config_register
 
     def file_copy(self, src, dest=None, file_system=None):
         self.enable()
