@@ -260,12 +260,12 @@ class IOSDevice(BaseDevice):
 
         By default, entering and exiting config mode is handled automatically.
         To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
         This will send each command in ``command`` until either an Error is caught or all commands have been sent.
 
         Args:
             command (str|list): The command or commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
             str: When ``command`` is a str, the config session input and ouput from sending ``command``.
@@ -336,11 +336,11 @@ class IOSDevice(BaseDevice):
 
         By default, entering and exiting config mode is handled automatically.
         To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
 
         Args:
             commands (list): The commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
             list: Each command's input and ouput from sending the command in ``commands``.
