@@ -118,6 +118,30 @@ class AIREOSDevice(BaseDevice):
 
         return all([boot_option[image_option] == image for boot_option in ap_boot_options.values()])
 
+    def _check_command_output_for_errors(self, command, command_response):
+        """
+        Check response from device to see if an error was reported.
+
+        Args:
+            command (str): The command that was sent to the device.
+
+        Raises:
+            CommandError: When ``command_response`` reports an error in sending ``command``.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> command = "show version"
+            >>> command_response = "output from show version"
+            >>> device._check_command_output_for_errors(command, command_response)
+            >>> command = "invalid command"
+            >>> command_response = "Incorrect Usage: invalid command"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            CommandError: ...
+            >>>
+        """
+        if "Incorrect usage" in command_response or "Error:" in command_response:
+            raise CommandError(command, command_response)
+
     def _enter_config(self):
         """Enter into config mode."""
         self.enable()
@@ -747,7 +771,7 @@ class AIREOSDevice(BaseDevice):
             if version in self.boot_options.values():
                 return False
         try:
-            self.show_list(
+            self.show(
                 [
                     f"transfer download datatype {filetype}",
                     f"transfer download mode {protocol}",
@@ -762,9 +786,9 @@ class AIREOSDevice(BaseDevice):
             raise FileTransferError(error.message)
 
         try:
-            response = self.show("transfer download start")
+            response = self.native.send_command_timing("transfer download start")
             if "Are you sure you want to start? (y/N)" in response:
-                response = self.show("y", expect_string="File transfer is successful.", delay_factor=delay_factor)
+                response = self.native.send_command_timing("y", delay_factor=delay_factor)
         except CommandError as error:
             raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
@@ -1092,7 +1116,7 @@ class AIREOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command``.
 
         Returns:
-            str: When ``command`` is str, the data returned from the device. 
+            str: When ``command`` is str, the data returned from the device.
             list: When ``command`` is list, the data returned from the device for each command.
 
         Raises:

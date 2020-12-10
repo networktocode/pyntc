@@ -371,14 +371,6 @@ def test_check_command_output_for_errors_error(output, ios_device):
     assert err.value.cli_error_msg == output
 
 
-def test_check_command_output_for_errors_multi_command_error(ios_device):
-    with pytest.raises(ios_module.CommandError) as err:
-        ios_device._check_command_output_for_errors(
-            ["valid command", "invalid command"], r"valid output\n% invalid output"
-        )
-    assert err.value.command == "valid command\ninvalid command"
-
-
 @mock.patch.object(IOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(IOSDevice, "_enter_config")
 def test_config_pass_string(mock_enter_config, mock_check_for_errors, ios_config):

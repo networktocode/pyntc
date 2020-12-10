@@ -73,7 +73,7 @@ class IOSDevice(BaseDevice):
         Check response from device to see if an error was reported.
 
         Args:
-            command (str|list): The command(s) that were sent to the device.
+            command (str): The command that was sent to the device.
 
         Raises:
             CommandError: When ``command_response`` reports an error in sending ``command``.
@@ -82,7 +82,7 @@ class IOSDevice(BaseDevice):
             >>> device = IOSDevice(**connection_args)
             >>> command = "show version"
             >>> command_response = "output from show version"
-            >>> device._check_command_output_for_errors(command, command_resposne)
+            >>> device._check_command_output_for_errors(command, command_response)
             >>> command = "invalid command"
             >>> command_response = "% invalid command"
             >>> device._check_command_output_for_errors(command, command_resposne)
@@ -90,9 +90,6 @@ class IOSDevice(BaseDevice):
             >>>
         """
         if "% " in command_response or "Error:" in command_response:
-            if not isinstance(command, str):
-                command = "\n".join(command)
-
             raise CommandError(command, command_response)
 
     def _enable(self):
