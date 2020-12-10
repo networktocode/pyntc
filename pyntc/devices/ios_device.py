@@ -665,9 +665,9 @@ class IOSDevice(BaseDevice):
 
             try:
                 if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
+                    first_response = self.native.send_command_timing("reload in %d" % timer)
                 else:
-                    first_response = self.show("reload")
+                    first_response = self.native.send_command_timing("reload")
 
                 if "System configuration" in first_response:
                     self.native.send_command_timing("no")
