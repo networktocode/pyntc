@@ -727,7 +727,7 @@ class AIREOSDevice(BaseDevice):
         filepath,
         protocol="sftp",
         filetype="code",
-        delay_factor=3,
+        delay_factor=10,
     ):
         """
         Copy a file from server to Controller.
@@ -788,11 +788,14 @@ class AIREOSDevice(BaseDevice):
         try:
             response = self.native.send_command_timing("transfer download start")
             if "Are you sure you want to start? (y/N)" in response:
-                response = self.native.send_command_timing("y", delay_factor=delay_factor)
+                response = self.show("y", auto_find_prompt=False, delay_factor=delay_factor)
         except CommandError as error:
             raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
             raise FileTransferError
+
+        if "File transfer is successful" not in response:
+            raise FileTransferError(message=f"Did not find expected success message in response, found:\n{response}")
 
         return True
 
@@ -1144,7 +1147,6 @@ class AIREOSDevice(BaseDevice):
         if original_command_is_str:  # TODO: switch to isinstance(command, str) when removing above
             command = [command]
 
-        self.enable()
         entered_commands = []
         command_responses = []
         if expect_string is not None:

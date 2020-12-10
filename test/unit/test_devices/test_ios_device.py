@@ -420,7 +420,7 @@ def test_config_pass_netmiko_args(mock_enter_config, mock_check_for_errors, ios_
 @mock.patch.object(IOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(IOSDevice, "_enter_config")
 def test_config_pass_invalid_netmiko_args(mock_enter_config, mock_check_for_errors, ios_config):
-    error_message = "send_config_set() got an unexpected keyword argument 'commands'"
+    error_message = "send_config_set() got an unexpected keyword argument 'invalid_arg'"
     device = ios_config([TypeError(error_message)])
     netmiko_args = {"invalid_arg": True}
     with pytest.raises(TypeError) as error:
