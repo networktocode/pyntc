@@ -36,6 +36,7 @@ RE_SHOW_REDUNDANCY = re.compile(
 RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
+RUN_COMMANDS_WITHOUT_TIMING = ["dir"]
 
 
 @fix_docs
@@ -159,11 +160,18 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect_string=None):
-        if expect_string is None:
-            response = self.native.send_command_timing(command)
-        else:
-            response = self.native.send_command(command, expect_string=expect_string)
+    def _send_command(self, command, expect_string=None, **kwargs):
+        # Set command args and assign the command to command_string argument
+        command_args = {"command_string": command}
+
+        # Check for an expect_string being passed in
+        if expect_string is not None:
+            command_args["expect_string"] = expect_string
+
+        # Update command_args with additional arguments passed in, must be a valid Netmiko argument
+        command_args.update(kwargs)
+
+        response = self.native.send_command(**command_args)
 
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
