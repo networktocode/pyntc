@@ -166,11 +166,11 @@ class TestIOSDevice(unittest.TestCase):
 
     def test_reboot(self):
         self.device.reboot(confirm=True)
-        self.device.native.send_command.assert_any_call("reload")
+        self.device.native.send_command_timing.assert_any_call("reload")
 
     def test_reboot_with_timer(self):
         self.device.reboot(confirm=True, timer=5)
-        self.device.native.send_command.assert_any_call("reload in 5")
+        self.device.native.send_command_timing.assert_any_call("reload in 5")
 
     def test_reboot_no_confirm(self):
         self.device.reboot()
