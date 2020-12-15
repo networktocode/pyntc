@@ -1163,14 +1163,12 @@ class AIREOSDevice(BaseDevice):
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
-                warnings.warn("This will raise CommandError in the future", FutureWarning)
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
                 raise err
 
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
-            warnings.warn("This will return a list in the future", FutureWarning)
             return command_responses[0]
 
         return command_responses

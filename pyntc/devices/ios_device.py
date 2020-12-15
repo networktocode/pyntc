@@ -316,7 +316,6 @@ class IOSDevice(BaseDevice):
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
-                warnings.warn("This will raise CommandError in the future", FutureWarning)
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
                 raise err
@@ -328,7 +327,6 @@ class IOSDevice(BaseDevice):
 
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
-            warnings.warn("This will return a list in the future", FutureWarning)
             return command_responses[0]
 
         return command_responses
@@ -696,7 +694,7 @@ class IOSDevice(BaseDevice):
             show_redundancy = self.show("show redundancy")
         except CommandError:
             return "n/a"
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         redundancy_info = re_show_redundancy.group("info")
         re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
         redundancy_mode = re_redundancy_mode.group(1).lower()
@@ -721,7 +719,7 @@ class IOSDevice(BaseDevice):
             show_redundancy = self.show("show redundancy")
         except CommandError:
             return None
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         processor_redundancy_info = re_show_redundancy.group("self")
         re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
         processor_redundancy_state = re_redundancy_state.group(1).lower()

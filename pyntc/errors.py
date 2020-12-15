@@ -1,3 +1,6 @@
+import warnings
+
+
 class NTCError(Exception):
     def __init__(self, message):
         """
@@ -76,6 +79,7 @@ class CommandListError(NTCError):
             command (str): The command that reported an error on the device.
             message (str): The error emssage returned from the device.
         """
+        warnings.warn("This will raise CommandError in the future", FutureWarning)
         self.commands = commands
         self.command = command
         message = "\nCommand %s failed with message: %s" % (command, message)
