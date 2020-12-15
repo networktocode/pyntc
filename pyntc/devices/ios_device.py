@@ -568,15 +568,20 @@ class IOSDevice(BaseDevice):
                 os_version = self.os_version
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
                     # Run install command and reboot device
-                    command = f"request platform software package install switch all file {self._get_file_system}:{image_name} auto-copy"
+                    command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
                     self.show(command, delay_factor=delay_factor)
                     self.reboot(confirm=True)
 
                 else:
                     # Run install command (which reboots the device)
-                    command = f"install add file {self._get_file_system}:{image_name} activate commit prompt-level none"
+                    command = (
+                        f"install add file {self._get_file_system()}{image_name} activate commit prompt-level none"
+                    )
                     # Set a higher delay factor and send it in
-                    self.show(command, delay_factor=delay_factor)
+                    try:
+                        self.show(command, delay_factor=delay_factor)
+                    except IOError:
+                        pass
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot(confirm=True)

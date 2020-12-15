@@ -361,13 +361,12 @@ class TestIOSDevice(unittest.TestCase):
         self.device.native.check_config_mode.assert_called()
         self.device.native.exit_config_mode.assert_called()
 
-    # Test bundle mode upgrade, traditional IOS copy code, change boot statement, reload device
     @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
     @mock.patch.object(IOSDevice, "set_boot_options")
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
     def test_install_os(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
-        state = self.device.install_os(BOOT_IMAGE, install_mode=False)
+        state = self.device.install_os(BOOT_IMAGE)
         mock_set_boot.assert_called()
         mock_reboot.assert_called()
         mock_wait.assert_called()
@@ -610,7 +609,11 @@ def test_connected_setter(expected, ios_device):
 @mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
 @pytest.mark.parametrize(
     "redundancy_state,expected",
-    (("active", True), ("standby hot", False), (None, True),),
+    (
+        ("active", True),
+        ("standby hot", False),
+        (None, True),
+    ),
     ids=("active", "standby_hot", "unsupported"),
 )
 def test_is_active(mock_redundancy_state, ios_device, redundancy_state, expected):
@@ -668,7 +671,10 @@ def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_de
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (("show_redundancy", "standby hot"), ("show_redundancy_no_peer", "disabled"),),
+    (
+        ("show_redundancy", "standby hot"),
+        ("show_redundancy_no_peer", "disabled"),
+    ),
     ids=("standby_hot", "disabled"),
 )
 def test_peer_redundancy_state(filename, expected, ios_show):
@@ -738,7 +744,10 @@ def test_redundancy_mode_unsupported_command(ios_show):
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (("show_redundancy", "active"), ("show_redundancy_standby", "standby hot"),),
+    (
+        ("show_redundancy", "active"),
+        ("show_redundancy_standby", "standby hot"),
+    ),
     ids=("active", "standby_hot"),
 )
 def test_redundancy_state(filename, expected, ios_show):
@@ -847,7 +856,9 @@ def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config,
     device = ios_show(["dir_flash:.txt"])
     mock_config.side_effect = [
         ios_module.CommandListError(
-            ["no boot system", "invalid boot command"], "invalid boot command", r"% Invalid command",
+            ["no boot system", "invalid boot command"],
+            "invalid boot command",
+            r"% Invalid command",
         ),
         "valid boot command",
     ]
@@ -862,12 +873,12 @@ def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config,
     mock_save.assert_called_once()
 
 
-@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
-def test_set_boot_options_no_file(mock_facts, ios_show):
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
+def test_set_boot_options_no_file(mock_hostname, ios_show):
     bad_image = "bad_image.bin"
     host = "ios_host"
     file_system = "flash:"
-    mock_facts.return_value = {"hostname": "ios_host"}
+    mock_hostname.return_value = "ios_host"
     device = ios_show(["dir_flash:.txt"])
     with pytest.raises(ios_module.NTCFileNotFoundError) as err:
         device.set_boot_options(bad_image, file_system=file_system)
@@ -890,47 +901,78 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
 
 
 # Test install mode upgrade for install mode with latest method
-@mock.patch.object(IOSDevice, "facts")
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
 @mock.patch.object(IOSDevice, "set_boot_options")
-def test_install_os_install_mode_amsterdam(mock_set_boot_options, mock_image_booted, mock_facts, ios_device):
-    mock_facts.return_value = {"os_version": "16.12.03a", "hostname": "pyntc-rtr"}
-    ios_device.install_os("cat9k_iosxe.16.12.04.SPA.bin", install_mode=True)
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+def test_install_os_install_mode(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
     mock_image_booted.side_effect = [False, True]
+    mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
+    # Call the install os function
+    actual = ios_device.install_os(image_name, install_mode=True)
 
-    # Assert that set_boot_options was called with flash:packages.conf
-    # Assert install add file {self._get_file_system}:{image_name} activate commit prompt-level none was called
-    # Assert image_booted has proper image
-
-    filename = "install_mode_boot"
-    expected = True
-    device = ios_show()
-
-
-# @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
-# @mock.patch.object(IOSDevice, "set_boot_options")
-# @mock.patch.object(IOSDevice, "reboot")
-# @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    # Check the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=10
+    )
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+    assert actual is True
 
 
-# @mock.patch("pyntc.devices.ios_device.ConnectHandler")
-# @mock.patch.object(IOSDevice, "connected", new_callable=mock.PropertyMock)
-# def test_open_prompt_found(mock_connected, mock_connect_handler, ios_device):
-#     mock_connected.return_value = True
-#     ios_device.open()
-#     assert ios_device._connected is True
-#     ios_device.native.find_prompt.assert_called()
-#     mock_connected.assert_has_calls((mock.call(), mock.call()))
-#     mock_connect_handler.assert_not_called()
+# Test install mode upgrade for install mode with interim method on OS Version
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+def test_install_os_install_mode_from_everest(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.6.1"
+    mock_image_booted.side_effect = [False, True]
+    # Call the install_os
+    actual = ios_device.install_os(image_name, install_mode=True)
 
-# @mock.patch("pyntc.devices.ios_device.ConnectHandler")
-# @mock.patch.object(IOSDevice, "connected", new_callable=mock.PropertyMock)
-# @mock.patch.object(IOSDevice, "confirm_is_active")
-# def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_device):
-#     mock_connected.side_effect = [False, False, True]
-#     mock_confirm.side_effect = [ios_module.DeviceNotActiveError("host1", "standby", "active")]
-#     with pytest.raises(ios_module.DeviceNotActiveError):
-#         ios_device.open()
-
-#     ios_device.native.find_prompt.assert_not_called()
-#     mock_connected.assert_has_calls((mock.call(),) * 2)
+    # Test the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"request platform software package install switch all file {file_system}{image_name} auto-copy",
+        delay_factor=10,
+    )
+    mock_reboot.assert_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+    assert actual is True

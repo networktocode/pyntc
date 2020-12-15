@@ -332,19 +332,34 @@ Parameters:
 
 ### Installing Operating Systems
 
-```
+```python
 >>> device.install_os('nxos.7.0.3.I2.1.bin')
 >>>
 ```
 
 Full workflow example:
 
-```
+```python
 >>> device.file_copy('nxos.7.0.3.I2.1.bin')
 >>> device.install_os('nxos.7.0.3.I2.1.bin')
 >>> device.save()
 >>> device.reboot()          # IF NEEDED, NXOS automatically reboots
 >>>
+```
+
+#### Cisco IOS Install Mode Option
+
+New in 0.15 there is support for [Install Mode](https://content.cisco.com/chapter.sjs?uri=/searchable/chapter/c/en/us/td/docs/switches/lan/Denali_16-1/ConfigExamples_Technotes/Config_Examples/Misc/qos/m_install_vs_bundle.html.xml) upgrades. To execute this there is an option (defaults to False) to run install mode. **file_copy must be executed before install_os**
+
+```python
+device.install_os('cat9k_iosxe.16.12.04.SPA.bin', install_mode=True)
+```
+
+Workflow Example
+
+```python
+>>> device.file_copy('cat9k_iosxe.16.12.04.SPA.bin')
+>>> device.install_os('ncat9k_iosxe.16.12.04.SPA.bin', install_mode=True)  # Reboots device
 ```
 
 ## Contributing
