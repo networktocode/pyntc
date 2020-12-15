@@ -810,7 +810,6 @@ def test_send_command_timing(ios_send_command_timing):
     device.native.send_command_timing.assert_called_with(command)
 
 
-<<<<<<< Updated upstream
 @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
@@ -848,9 +847,7 @@ def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config,
     device = ios_show(["dir_flash:.txt"])
     mock_config.side_effect = [
         ios_module.CommandListError(
-            ["no boot system", "invalid boot command"],
-            "invalid boot command",
-            r"% Invalid command",
+            ["no boot system", "invalid boot command"], "invalid boot command", r"% Invalid command",
         ),
         "valid boot command",
     ]
@@ -890,7 +887,8 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
 
     assert err.value.command == f"boot system flash:/{BOOT_IMAGE}"
     assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"
-=======
+
+
 # Test install mode upgrade for install mode with latest method
 @mock.patch.object(IOSDevice, "facts")
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -936,4 +934,3 @@ def test_install_os_install_mode_amsterdam(mock_set_boot_options, mock_image_boo
 
 #     ios_device.native.find_prompt.assert_not_called()
 #     mock_connected.assert_has_calls((mock.call(),) * 2)
->>>>>>> Stashed changes
