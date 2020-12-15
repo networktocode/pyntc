@@ -36,6 +36,7 @@ RE_SHOW_REDUNDANCY = re.compile(
 RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
+INSTALL_MODE_FILE_NAME = "packages.conf"
 
 
 @fix_docs
@@ -134,6 +135,7 @@ class IOSDevice(BaseDevice):
 
         raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
+    # Get the version of the image that is booted into on the device
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
         if re.search(image_name, version_data):
@@ -541,12 +543,48 @@ class IOSDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, **vendor_specifics):
+        """Installs the prescribed Network OS, which must be present before issuing this command.
+
+        Args:
+            image_name (str): Name of the IOS image to boot into
+            install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
+
+        Raises:
+            OSInstallError: Unable to install OS Error type
+
+        Returns:
+            bool: False if no install is needed, true if the install completes successfully
+        """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            self.set_boot_options(image_name, **vendor_specifics)
-            self.reboot(confirm=True)
+            if install_mode:
+                # Change boot statement to be boot system <flash>:packages.conf
+                self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
+                delay_factor = 10
+
+                # Check for OS Version specific upgrade path
+                # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
+                os_version = self.os_version
+                if "16.5.1a" in os_version or "16.6.1" in os_version:
+                    # Run install command and reboot device
+                    command = f"request platform software package install switch all file {self._get_file_system}:{image_name} auto-copy"
+                    self.show(command, delay_factor=delay_factor)
+                    self.reboot(confirm=True)
+
+                else:
+                    # Run install command (which reboots the device)
+                    command = f"install add file {self._get_file_system}:{image_name} activate commit prompt-level none"
+                    # Set a higher delay factor and send it in
+                    self.show(command, delay_factor=delay_factor)
+            else:
+                self.set_boot_options(image_name, **vendor_specifics)
+                self.reboot(confirm=True)
+
+            # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
+
+            # Verify the OS level
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 

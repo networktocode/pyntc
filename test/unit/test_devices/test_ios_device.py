@@ -361,12 +361,13 @@ class TestIOSDevice(unittest.TestCase):
         self.device.native.check_config_mode.assert_called()
         self.device.native.exit_config_mode.assert_called()
 
+    # Test bundle mode upgrade, traditional IOS copy code, change boot statement, reload device
     @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
     @mock.patch.object(IOSDevice, "set_boot_options")
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
     def test_install_os(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
-        state = self.device.install_os(BOOT_IMAGE)
+        state = self.device.install_os(BOOT_IMAGE, install_mode=False)
         mock_set_boot.assert_called()
         mock_reboot.assert_called()
         mock_wait.assert_called()
@@ -609,11 +610,7 @@ def test_connected_setter(expected, ios_device):
 @mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
 @pytest.mark.parametrize(
     "redundancy_state,expected",
-    (
-        ("active", True),
-        ("standby hot", False),
-        (None, True),
-    ),
+    (("active", True), ("standby hot", False), (None, True),),
     ids=("active", "standby_hot", "unsupported"),
 )
 def test_is_active(mock_redundancy_state, ios_device, redundancy_state, expected):
@@ -671,10 +668,7 @@ def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_de
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (
-        ("show_redundancy", "standby hot"),
-        ("show_redundancy_no_peer", "disabled"),
-    ),
+    (("show_redundancy", "standby hot"), ("show_redundancy_no_peer", "disabled"),),
     ids=("standby_hot", "disabled"),
 )
 def test_peer_redundancy_state(filename, expected, ios_show):
@@ -744,10 +738,7 @@ def test_redundancy_mode_unsupported_command(ios_show):
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (
-        ("show_redundancy", "active"),
-        ("show_redundancy_standby", "standby hot"),
-    ),
+    (("show_redundancy", "active"), ("show_redundancy_standby", "standby hot"),),
     ids=("active", "standby_hot"),
 )
 def test_redundancy_state(filename, expected, ios_show):
@@ -819,6 +810,7 @@ def test_send_command_timing(ios_send_command_timing):
     device.native.send_command_timing.assert_called_with(command)
 
 
+<<<<<<< Updated upstream
 @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
@@ -898,3 +890,50 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
 
     assert err.value.command == f"boot system flash:/{BOOT_IMAGE}"
     assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"
+=======
+# Test install mode upgrade for install mode with latest method
+@mock.patch.object(IOSDevice, "facts")
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+def test_install_os_install_mode_amsterdam(mock_set_boot_options, mock_image_booted, mock_facts, ios_device):
+    mock_facts.return_value = {"os_version": "16.12.03a", "hostname": "pyntc-rtr"}
+    ios_device.install_os("cat9k_iosxe.16.12.04.SPA.bin", install_mode=True)
+    mock_image_booted.side_effect = [False, True]
+
+    # Assert that set_boot_options was called with flash:packages.conf
+    # Assert install add file {self._get_file_system}:{image_name} activate commit prompt-level none was called
+    # Assert image_booted has proper image
+
+    filename = "install_mode_boot"
+    expected = True
+    device = ios_show()
+
+
+# @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
+# @mock.patch.object(IOSDevice, "set_boot_options")
+# @mock.patch.object(IOSDevice, "reboot")
+# @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+
+
+# @mock.patch("pyntc.devices.ios_device.ConnectHandler")
+# @mock.patch.object(IOSDevice, "connected", new_callable=mock.PropertyMock)
+# def test_open_prompt_found(mock_connected, mock_connect_handler, ios_device):
+#     mock_connected.return_value = True
+#     ios_device.open()
+#     assert ios_device._connected is True
+#     ios_device.native.find_prompt.assert_called()
+#     mock_connected.assert_has_calls((mock.call(), mock.call()))
+#     mock_connect_handler.assert_not_called()
+
+# @mock.patch("pyntc.devices.ios_device.ConnectHandler")
+# @mock.patch.object(IOSDevice, "connected", new_callable=mock.PropertyMock)
+# @mock.patch.object(IOSDevice, "confirm_is_active")
+# def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_device):
+#     mock_connected.side_effect = [False, False, True]
+#     mock_confirm.side_effect = [ios_module.DeviceNotActiveError("host1", "standby", "active")]
+#     with pytest.raises(ios_module.DeviceNotActiveError):
+#         ios_device.open()
+
+#     ios_device.native.find_prompt.assert_not_called()
+#     mock_connected.assert_has_calls((mock.call(),) * 2)
+>>>>>>> Stashed changes
