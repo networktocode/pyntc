@@ -543,7 +543,7 @@ class IOSDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, install_mode=False, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=10, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
@@ -561,7 +561,6 @@ class IOSDevice(BaseDevice):
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
-                delay_factor = 10
 
                 # Check for OS Version specific upgrade path
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
@@ -569,7 +568,7 @@ class IOSDevice(BaseDevice):
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                    self.show(command, delay_factor=delay_factor)
+                    self.show(command, delay_factor=install_mode_delay_factor)
                     self.reboot(confirm=True)
 
                 else:
@@ -579,7 +578,7 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher delay factor and send it in
                     try:
-                        self.show(command, delay_factor=delay_factor)
+                        self.show(command, delay_factor=install_mode_delay_factor)
                     except IOError:
                         pass
             else:

@@ -900,6 +900,10 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
     assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"
 
 
+#
+# TESTS FOR IOS INSTALL MODE METHOD
+#
+
 # Test install mode upgrade for install mode with latest method
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -939,6 +943,91 @@ def test_install_os_install_mode(
     assert actual is True
 
 
+# Test install mode upgrade fail
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
+def test_install_os_install_mode_failed(
+    mock_hostname,
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    mock_hostname.return_value = "ntc-rtr01"
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_image_booted.side_effect = [False, False]
+    mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
+    # Call the install os function
+    with pytest.raises(ios_module.OSInstallError) as err:
+        ios_device.install_os(image_name, install_mode=True)
+
+    assert err.value.message == "ntc-rtr01 was unable to boot into cat9k_iosxe.16.12.04.SPA.bin"
+
+    # Check the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=10
+    )
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+
+
+# Test install mode upgrade for install mode with latest method
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+def test_install_os_install_mode_no_upgrade(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_image_booted.side_effect = [True, True]
+    mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
+    # Call the install os function
+    actual = ios_device.install_os(image_name, install_mode=True)
+
+    # Check the results
+    mock_set_boot_options.assert_not_called()
+    mock_show.assert_not_called()
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_not_called()
+    mock_image_booted.assert_called_once()
+    mock_wait_for_reboot.assert_not_called()
+    assert actual is False
+
+
+#
+# FROM CISCO IOS EVEREST VERSION TESTS
+#
+
 # Test install mode upgrade for install mode with interim method on OS Version
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -976,3 +1065,88 @@ def test_install_os_install_mode_from_everest(
     mock_image_booted.assert_called()
     mock_wait_for_reboot.assert_called()
     assert actual is True
+
+
+# Test install mode upgrade for install mode with interim method on OS Version with error unable to complete
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+# Mock hostname for error handling
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
+def test_install_os_install_mode_from_everest_failed(
+    mock_hostname,
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    mock_hostname.return_value = "ntc-rtr01"
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.6.1"
+    mock_image_booted.side_effect = [False, False]
+    # Call the install_os
+    with pytest.raises(ios_module.OSInstallError) as err:
+        ios_device.install_os(image_name, install_mode=True)
+
+    assert err.value.message == "ntc-rtr01 was unable to boot into cat9k_iosxe.16.12.04.SPA.bin"
+
+    # Test the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"request platform software package install switch all file {file_system}{image_name} auto-copy",
+        delay_factor=10,
+    )
+    mock_reboot.assert_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+
+
+# Test install mode upgrade for install mode with interim method on OS Version with error unable to complete
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+# Mock hostname for error handling
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
+def test_install_os_install_mode_from_everest_to_everest(
+    mock_hostname,
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+):
+    mock_hostname.return_value = "ntc-rtr01"
+    image_name = "cat9k_iosxe.16.05.01a.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.5.1"
+    mock_image_booted.side_effect = [True, True]
+    # Call the install_os
+    actual = ios_device.install_os(image_name, install_mode=True)
+
+    # Test the results
+    mock_set_boot_options.assert_not_called()
+    mock_show.assert_not_called()
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_not_called()
+    mock_image_booted.assert_called_once()
+    mock_wait_for_reboot.assert_not_called()
+    assert actual is False
