@@ -204,6 +204,15 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
+    def facts(self):
+        warnings.warn("facts() is deprecated; use individual fact properties.", DeprecationWarning)
+        facts = {
+            fact: getattr(self, fact, None)
+            for fact in ["vendor", "uptime", "uptime_string", "hostname", "fqdn", "interfaces", "vlans", "model", "serial_number", "os_version"]
+        }
+        if self.device_type == "cisco_ios_ssh":
+            facts[self.device_type] = {"config_register": self.config_register}
+
     @abc.abstractmethod
     def file_copy(self, src, dest=None, **kwargs):
         """Send a local file to the device.
