@@ -781,12 +781,12 @@ def test_get_file_system_first_error_then_pass(ios_show):
 
 
 @mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
-def test_get_file_system_raise_error(mock_facts, ios_show):
+def test_get_file_system_raise_error(mock_hostname, ios_show):
     # Set the command to run 5 times
     device = ios_show([""] * 5)
 
     # Set a return value for the Facts mock
-    mock_facts.return_value = {"hostname": "pyntc-rtr"}
+    mock_hostname.return_value = "pyntc-rtr"
 
     # Test with the raises
     with pytest.raises(ios_module.FileSystemNotFoundError):
@@ -873,12 +873,12 @@ def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config,
     mock_save.assert_called_once()
 
 
-@mock.patch.object(IOSDevice, "facts", new_callable=mock.PropertyMock)
-def test_set_boot_options_no_file(mock_facts, ios_show):
+@mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
+def test_set_boot_options_no_file(mock_hostname, ios_show):
     bad_image = "bad_image.bin"
     host = "ios_host"
     file_system = "flash:"
-    mock_facts.return_value = {"hostname": "ios_host"}
+    mock_hostname.return_value = "ios_host"
     device = ios_show(["dir_flash:.txt"])
     with pytest.raises(ios_module.NTCFileNotFoundError) as err:
         device.set_boot_options(bad_image, file_system=file_system)
