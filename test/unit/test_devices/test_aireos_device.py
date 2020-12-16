@@ -248,6 +248,7 @@ def test_config_pass_string(mock_enter_config, mock_check_for_errors, aireos_con
     device.native.send_config_set.assert_called_once()
     device.native.exit_config_mode.assert_called_once()
 
+
 @mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(AIREOSDevice, "_enter_config")
 def test_config_pass_list(mock_enter_config, mock_check_for_errors, aireos_config):
@@ -461,9 +462,7 @@ def test_disable_wlans_all_already_disabled(
 
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_all_fail(
-    mock_disabled_wlans, mock_wlans, aireos_device, aireos_expected_wlans
-):
+def test_disable_wlans_all_fail(mock_disabled_wlans, mock_wlans, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.return_value = [16, 21, 24]
     with pytest.raises(aireos_module.WLANDisableError) as disable_err:

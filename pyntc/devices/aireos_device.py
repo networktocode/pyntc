@@ -528,13 +528,12 @@ class AIREOSDevice(BaseDevice):
             # Ignore None or invalid args passed for exit_config_mode
             if original_exit_config_setting is not False:
                 self.native.exit_config_mode()
- 
+
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
             return command_responses[0]
 
         return command_responses
-
 
     def config_list(self, commands, **netmiko_args):
         """
