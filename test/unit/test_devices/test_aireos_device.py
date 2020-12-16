@@ -233,43 +233,149 @@ def test_boot_options_none(aireos_show):
     assert device.boot_options["sys"] is None
 
 
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config(mock_enter, aireos_send_command_timing):
-    config = "interface hostname virtual wlc1.site.com"
-    device = aireos_send_command_timing([config])
-    device.config(config)
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
+def test_config_pass_string(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = "boot primary"
+    device = aireos_config([""])
+    result = device.config(command)
 
+    assert isinstance(result, str)  # TODO: Change to list when deprecating config_list
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_called_with(command, result)
+    mock_check_for_errors.assert_called_once()
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    device.native.send_config_set.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
 
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config_list(mock_enter, aireos_send_command_timing):
-    configs = [
-        "interface hostname virtual wlc1.site.com",
-        "config interface vlan airway 20",
-    ]
-    device = aireos_send_command_timing([""] * 2)
-    device.config_list(configs)
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
-    device.native.send_command_timing.assert_has_calls([mock.call(cmd) for cmd in configs])
+def test_config_pass_list(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"]
+    device = aireos_config(["", ""])
+    result = device.config(command)
 
-
-@mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config_list_error(mock_enter, aireos_send_command_timing):
-    configs = [
-        "interface hostname virtual wlc1.site.com",
-        "config interface vlan airway 20",
-    ]
-    device = aireos_send_command_timing(
-        [aireos_module.CommandError("interface hostname virtual wlc1.site.com", "test")]
+    assert isinstance(result, list)
+    assert len(result) == 2
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_has_calls(mock.call(command[index], result[index]) for index in range(2))
+    device.native.send_config_set.assert_has_calls(
+        mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in command
     )
-    with pytest.raises(aireos_module.CommandListError):
-        device.config_list(configs)
+    device.native.exit_config_mode.assert_called_once()
 
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
-    device.native.send_command_timing.assert_called_once()
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_netmiko_args(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    device = aireos_config([1])
+    netmiko_args = {"strip_prompt": True}
+    device.config(command, **netmiko_args)
+
+    device.native.send_config_set.assert_called_with(
+        command[0], enter_config_mode=False, exit_config_mode=False, strip_prompt=True
+    )
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_netmiko_args(mock_enter_config, mock_check_for_errors, aireos_config):
+    error_message = "send_config_set() got an unexpected keyword argument 'invalid_arg'"
+    device = aireos_config([TypeError(error_message)])
+    netmiko_args = {"invalid_arg": True}
+    with pytest.raises(TypeError) as error:
+        device.config("command", **netmiko_args)
+
+    assert error.value.args[0] == (f"Netmiko Driver's {error_message}")
+    mock_check_for_errors.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_disable_enter_config(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    config_effects = [1]
+    device = aireos_config(config_effects)
+    device.config(command, enter_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_disable_exit_config(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    config_effects = [1]
+    device = aireos_config(config_effects)
+    device.config(command, exit_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_string_command(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = "invalid command"
+    result = "Incorrect usage. invalid output"
+    mock_check_for_errors.side_effect = [aireos_module.CommandError(command, result)]
+    device = aireos_config(result)
+    with pytest.raises(aireos_module.CommandError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    mock_check_for_errors.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.command == command
+    assert err.value.cli_error_msg == result
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_list_command(mock_enter_config, mock_check_for_errors, aireos_config):
+    mock_check_for_errors.side_effect = [
+        "valid output",
+        aireos_module.CommandError("invalid command", "Incorrect usage. invalid output"),
+    ]
+    command = ["valid command", "invalid command", "another valid command"]
+    result = ["valid output", "Incorrect usage. invalid output"]
+    device = aireos_config(result)
+    with pytest.raises(aireos_module.CommandListError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_has_calls(
+        (
+            mock.call(command[0], enter_config_mode=False, exit_config_mode=False),
+            mock.call(command[1], enter_config_mode=False, exit_config_mode=False),
+        )
+    )
+    assert (
+        mock.call(command[2], enter_config_mode=False, exit_config_mode=False)
+        not in device.native.send_config_set.call_args_list
+    )
+    mock_check_for_errors.assert_called_with(command[1], result[1])
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.commands == command[:2]
+    assert err.value.command == command[1]
+
+
+@mock.patch.object(AIREOSDevice, "config")
+def test_config_list(mock_config, aireos_device):
+    config_commands = ["a", "b"]
+    aireos_device.config_list(config_commands)
+    mock_config.assert_called_with(config_commands)
+
+
+@mock.patch.object(AIREOSDevice, "config")
+def test_config_list_pass_netmiko_args(mock_config, aireos_device):
+    config_commands = ["a", "b"]
+    aireos_device.config_list(config_commands, strip_prompt=True)
+    mock_config.assert_called_with(config_commands, strip_prompt=True)
 
 
 @mock.patch.object(AIREOSDevice, "is_active")
@@ -330,34 +436,33 @@ def test_close_not_connected(aireos_device):
     aireos_device.native.disconnect.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_all(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_disable_wlans_all(mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.disable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan disable all"])
+    mock_config.assert_called_with(["wlan disable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
 def test_disable_wlans_all_already_disabled(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
     aireos_device.disable_wlans("all")
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
 def test_disable_wlans_all_fail(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_disabled_wlans, mock_wlans, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.return_value = [16, 21, 24]
@@ -369,40 +474,40 @@ def test_disable_wlans_all_fail(
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
 def test_disable_wlans_all_partially_disabled(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.side_effect = [[16, 21, 24], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.disable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan disable all"])
+    mock_config.assert_called_with(["wlan disable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset(mock_disabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 22, 24]]
     aireos_device.disable_wlans([15, 22])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan disable 15", "wlan disable 22"])
+    mock_config.assert_called_with(["wlan disable 15", "wlan disable 22"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_already_disabled(mock_disabled_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_already_disabled(mock_disabled_wlans, mock_config, aireos_device):
     mock_disabled_wlans.return_value = [16, 21, 24]
     aireos_device.disable_wlans([16, 21])
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config, aireos_device):
     mock_disabled_wlans.return_value = [16, 21, 24]
     with pytest.raises(aireos_module.WLANDisableError) as disable_err:
         aireos_device.disable_wlans([15])
@@ -412,14 +517,14 @@ def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config_list, aireos
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 24]]
     aireos_device.disable_wlans([15, 21])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan disable 15"])
+    mock_config.assert_called_with(["wlan disable 15"])
 
 
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
@@ -452,33 +557,33 @@ def test_enable_from_config(aireos_device):
     aireos_device.native.exit_config_mode.assert_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_all(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_enable_wlans_all(mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.enable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan enable all"])
+    mock_config.assert_called_with(["wlan enable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
 def test_enable_wlans_all_already_enabled(
-    mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
     aireos_device.enable_wlans("all")
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     with pytest.raises(aireos_module.WLANEnableError) as enable_err:
@@ -489,40 +594,40 @@ def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config_list,
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
 def test_enable_wlans_all_partially_enabled(
-    mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.enable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan enable all"])
+    mock_config.assert_called_with(["wlan enable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset(mock_enabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 21, 22]]
     aireos_device.enable_wlans([16, 21])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan enable 16", "wlan enable 21"])
+    mock_config.assert_called_with(["wlan enable 16", "wlan enable 21"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_already_enabled(mock_enabled_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_already_enabled(mock_enabled_wlans, mock_config, aireos_device):
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     aireos_device.enable_wlans([5, 15])
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config, aireos_device):
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     with pytest.raises(aireos_module.WLANEnableError) as enable_err:
         aireos_device.enable_wlans([16])
@@ -532,14 +637,14 @@ def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config_list, aireos_d
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 22]]
     aireos_device.enable_wlans([16, 22])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan enable 16"])
+    mock_config.assert_called_with(["wlan enable 16"])
 
 
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)

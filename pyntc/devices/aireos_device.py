@@ -466,52 +466,104 @@ class AIREOSDevice(BaseDevice):
             self.native.disconnect()
             self._connected = False
 
-    def config(self, command):
+    def config(self, command, **netmiko_args):
         """
-        Configure the device with a single command.
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
+        This will send each command in ``command`` until either an Error is caught or all commands have been sent.
 
         Args:
-            command (str): The configuration command to send to the device.
-                           The command should not include the "config" keyword.
+            command (str|list): The command or commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
+
+        Returns:
+            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
+            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandError: When ``command`` is a str and its results report an error.
+            CommandListError: When ``command`` is a list and one of the commands reports an error.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.config("boot primary")
+            '(host) config>boot primary\n\n(host) config>
             >>>
-
-        Raises:
-            CommandError: When the device's response indicates the command failed.
         """
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
+        # TODO: Remove this when deprecating config_list method
+        original_command_is_str = isinstance(command, str)
 
-    def config_list(self, commands):
+        if original_command_is_str:  # TODO: switch to isinstance(command, str) when removing above
+            command = [command]
+
+        original_exit_config_setting = netmiko_args.get("exit_config_mode")
+        netmiko_args["exit_config_mode"] = False
+        # Ignore None or invalid args passed for enter_config_mode
+        if netmiko_args.get("enter_config_mode") is not False:
+            self._enter_config()
+            netmiko_args["enter_config_mode"] = False
+
+        entered_commands = []
+        command_responses = []
+        try:
+            for cmd in command:
+                entered_commands.append(cmd)
+                command_response = self.native.send_config_set(cmd, **netmiko_args)
+                command_responses.append(command_response)
+                self._check_command_output_for_errors(cmd, command_response)
+        except TypeError as err:
+            raise TypeError(f"Netmiko Driver's {err.args[0]}")
+        # TODO: Remove this when deprecating config_list method
+        except CommandError as err:
+            if not original_command_is_str:
+                raise CommandListError(entered_commands, cmd, err.cli_error_msg)
+            else:
+                raise err
+        # Don't let exception prevent exiting config mode
+        finally:
+            # Ignore None or invalid args passed for exit_config_mode
+            if original_exit_config_setting is not False:
+                self.native.exit_config_mode()
+ 
+        # TODO: Remove this when deprecating config_list method
+        if original_command_is_str:
+            return command_responses[0]
+
+        return command_responses
+
+
+    def config_list(self, commands, **netmiko_args):
         """
-        Send multiple configuration commands to the device.
+        DEPRECATED - Use the `config` method.
+
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
 
         Args:
-            commands (list): The list of commands to send to the device.
-                             The commands should not include the "config" keyword.
+            commands (list): The commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
+
+        Returns:
+            list: Each command's input and ouput from sending the command in ``commands``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandListError: When one of the commands reports an error on the device.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.config_list(["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"])
             >>>
-
-        Raises:
-            CommandListError: When the device's response indicates an error from sending one of the commands.
         """
-        self._enter_config()
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                self.native.exit_config_mode()
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        self.native.exit_config_mode()
+        warnings.warn("config_list() is deprecated; use config.", DeprecationWarning)
+        return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
         """
@@ -598,7 +650,7 @@ class AIREOSDevice(BaseDevice):
         # Only send commands for enabled wlan ids
         if not wlans_to_validate.issubset(disabled_wlans):
             commands = [f"wlan disable {wlan}" for wlan in wlan_ids if wlan not in disabled_wlans]
-            self.config_list(commands)
+            self.config(commands)
 
             post_disabled_wlans = self.disabled_wlans
             if not wlans_to_validate.issubset(post_disabled_wlans):
@@ -682,7 +734,7 @@ class AIREOSDevice(BaseDevice):
         # Only send commands for disabled wlan ids
         if not wlans_to_validate.issubset(enabled_wlans):
             commands = [f"wlan enable {wlan}" for wlan in wlan_ids if wlan not in enabled_wlans]
-            self.config_list(commands)
+            self.config(commands)
 
             post_enabled_wlans = self.enabled_wlans
             if not wlans_to_validate.issubset(post_enabled_wlans):
