@@ -684,7 +684,7 @@ class IOSDevice(BaseDevice):
             show_redundancy = self.show("show redundancy")
         except CommandError:
             return None
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         processor_redundancy_info = re_show_redundancy.group("other")
         if processor_redundancy_info is not None:
             re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)

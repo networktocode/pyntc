@@ -491,7 +491,7 @@ class AIREOSDevice(BaseDevice):
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.config("boot primary")
-            '(host) config>boot primary\n\n(host) config>
+            '(host) config>boot primary\n\n(host) config>'
             >>>
         """
         # TODO: Remove this when deprecating config_list method
