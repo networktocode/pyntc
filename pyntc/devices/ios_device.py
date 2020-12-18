@@ -529,6 +529,9 @@ class IOSDevice(BaseDevice):
             finally:
                 fc.close_scp_chan()
 
+            # Ensure connection to device is still open after long transfers
+            self.open()
+
             if not self.file_copy_remote_exists(src, dest, file_system):
                 raise FileTransferError(
                     message="Attempted file copy, but could not validate file existed after transfer"
