@@ -28,6 +28,17 @@ def aireos_boot_path(aireos_device_path):
 
 
 @pytest.fixture
+def aireos_config(aireos_device, aireos_mock_path):
+    def _mock(side_effects, existing_device=None, device=aireos_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_config_set.side_effect = get_side_effects(aireos_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
 def aireos_device():
     with mock.patch.object(AIREOSDevice, "confirm_is_active") as mock_confirm:
         mock_confirm.return_value = True

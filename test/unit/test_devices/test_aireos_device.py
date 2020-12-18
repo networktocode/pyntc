@@ -43,6 +43,19 @@ def test_ap_images_pass_boot_options(mock_ap_boot_options, aireos_device, aireos
     mock_ap_boot_options.assert_not_called()
 
 
+def test_check_command_output_for_errors(aireos_device):
+    command_passes = aireos_device._check_command_output_for_errors("valid command", "valid output")
+    assert command_passes is None
+
+
+@pytest.mark.parametrize("output", (r"Incorrect usage: invalid output", "Error: invalid output"))
+def test_check_command_output_for_errors_error(output, aireos_device):
+    with pytest.raises(aireos_module.CommandError) as err:
+        aireos_device._check_command_output_for_errors("invalid command", output)
+    assert err.value.command == "invalid command"
+    assert err.value.cli_error_msg == output
+
+
 def test_enter_config(aireos_device):
     aireos_device._enter_config()
     aireos_device.native.config_mode.assert_called()
@@ -220,43 +233,150 @@ def test_boot_options_none(aireos_show):
     assert device.boot_options["sys"] is None
 
 
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config(mock_enter, aireos_send_command_timing):
-    config = "interface hostname virtual wlc1.site.com"
-    device = aireos_send_command_timing([config])
-    device.config(config)
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
+def test_config_pass_string(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = "boot primary"
+    device = aireos_config([""])
+    result = device.config(command)
+
+    assert isinstance(result, str)  # TODO: Change to list when deprecating config_list
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_called_with(command, result)
+    mock_check_for_errors.assert_called_once()
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    device.native.send_config_set.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
 
 
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config_list(mock_enter, aireos_send_command_timing):
-    configs = [
-        "interface hostname virtual wlc1.site.com",
-        "config interface vlan airway 20",
-    ]
-    device = aireos_send_command_timing([""] * 2)
-    device.config_list(configs)
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
-    device.native.send_command_timing.assert_has_calls([mock.call(cmd) for cmd in configs])
+def test_config_pass_list(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"]
+    device = aireos_config(["", ""])
+    result = device.config(command)
 
-
-@mock.patch.object(AIREOSDevice, "_enter_config")
-def test_config_list_error(mock_enter, aireos_send_command_timing):
-    configs = [
-        "interface hostname virtual wlc1.site.com",
-        "config interface vlan airway 20",
-    ]
-    device = aireos_send_command_timing(
-        [aireos_module.CommandError("interface hostname virtual wlc1.site.com", "test")]
+    assert isinstance(result, list)
+    assert len(result) == 2
+    mock_enter_config.assert_called_once()
+    mock_check_for_errors.assert_has_calls(mock.call(command[index], result[index]) for index in range(2))
+    device.native.send_config_set.assert_has_calls(
+        mock.call(cmd, enter_config_mode=False, exit_config_mode=False) for cmd in command
     )
-    with pytest.raises(aireos_module.CommandListError):
-        device.config_list(configs)
+    device.native.exit_config_mode.assert_called_once()
 
-    mock_enter.assert_called()
-    device.native.exit_config_mode.assert_called()
-    device.native.send_command_timing.assert_called_once()
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_netmiko_args(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    device = aireos_config([1])
+    netmiko_args = {"strip_prompt": True}
+    device.config(command, **netmiko_args)
+
+    device.native.send_config_set.assert_called_with(
+        command[0], enter_config_mode=False, exit_config_mode=False, strip_prompt=True
+    )
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_netmiko_args(mock_enter_config, mock_check_for_errors, aireos_config):
+    error_message = "send_config_set() got an unexpected keyword argument 'invalid_arg'"
+    device = aireos_config([TypeError(error_message)])
+    netmiko_args = {"invalid_arg": True}
+    with pytest.raises(TypeError) as error:
+        device.config("command", **netmiko_args)
+
+    assert error.value.args[0] == (f"Netmiko Driver's {error_message}")
+    mock_check_for_errors.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_disable_enter_config(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    config_effects = [1]
+    device = aireos_config(config_effects)
+    device.config(command, enter_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_not_called()
+    device.native.exit_config_mode.assert_called_once()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_disable_exit_config(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = ["a"]
+    config_effects = [1]
+    device = aireos_config(config_effects)
+    device.config(command, exit_config_mode=False)
+
+    device.native.send_config_set.assert_called_with(command[0], enter_config_mode=False, exit_config_mode=False)
+    mock_enter_config.assert_called_once()
+    device.native.exit_config_mode.assert_not_called()
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_string_command(mock_enter_config, mock_check_for_errors, aireos_config):
+    command = "invalid command"
+    result = "Incorrect usage. invalid output"
+    mock_check_for_errors.side_effect = [aireos_module.CommandError(command, result)]
+    device = aireos_config(result)
+    with pytest.raises(aireos_module.CommandError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_called_with(command, enter_config_mode=False, exit_config_mode=False)
+    mock_check_for_errors.assert_called_once()
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.command == command
+    assert err.value.cli_error_msg == result
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+@mock.patch.object(AIREOSDevice, "_enter_config")
+def test_config_pass_invalid_list_command(mock_enter_config, mock_check_for_errors, aireos_config):
+    mock_check_for_errors.side_effect = [
+        "valid output",
+        aireos_module.CommandError("invalid command", "Incorrect usage. invalid output"),
+    ]
+    command = ["valid command", "invalid command", "another valid command"]
+    result = ["valid output", "Incorrect usage. invalid output"]
+    device = aireos_config(result)
+    with pytest.raises(aireos_module.CommandListError) as err:
+        device.config(command)
+
+    device.native.send_config_set.assert_has_calls(
+        (
+            mock.call(command[0], enter_config_mode=False, exit_config_mode=False),
+            mock.call(command[1], enter_config_mode=False, exit_config_mode=False),
+        )
+    )
+    assert (
+        mock.call(command[2], enter_config_mode=False, exit_config_mode=False)
+        not in device.native.send_config_set.call_args_list
+    )
+    mock_check_for_errors.assert_called_with(command[1], result[1])
+    device.native.exit_config_mode.assert_called_once()
+    assert err.value.commands == command[:2]
+    assert err.value.command == command[1]
+
+
+@mock.patch.object(AIREOSDevice, "config")
+def test_config_list(mock_config, aireos_device):
+    config_commands = ["a", "b"]
+    aireos_device.config_list(config_commands)
+    mock_config.assert_called_with(config_commands)
+
+
+@mock.patch.object(AIREOSDevice, "config")
+def test_config_list_pass_netmiko_args(mock_config, aireos_device):
+    config_commands = ["a", "b"]
+    aireos_device.config_list(config_commands, strip_prompt=True)
+    mock_config.assert_called_with(config_commands, strip_prompt=True)
 
 
 @mock.patch.object(AIREOSDevice, "is_active")
@@ -317,35 +437,32 @@ def test_close_not_connected(aireos_device):
     aireos_device.native.disconnect.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_all(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_disable_wlans_all(mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.disable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan disable all"])
+    mock_config.assert_called_with(["wlan disable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
 def test_disable_wlans_all_already_disabled(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
     aireos_device.disable_wlans("all")
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_all_fail(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
-):
+def test_disable_wlans_all_fail(mock_disabled_wlans, mock_wlans, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.return_value = [16, 21, 24]
     with pytest.raises(aireos_module.WLANDisableError) as disable_err:
@@ -356,40 +473,40 @@ def test_disable_wlans_all_fail(
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
 def test_disable_wlans_all_partially_disabled(
-    mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_disabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_disabled_wlans.side_effect = [[16, 21, 24], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.disable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan disable all"])
+    mock_config.assert_called_with(["wlan disable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset(mock_disabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 22, 24]]
     aireos_device.disable_wlans([15, 22])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan disable 15", "wlan disable 22"])
+    mock_config.assert_called_with(["wlan disable 15", "wlan disable 22"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_already_disabled(mock_disabled_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_already_disabled(mock_disabled_wlans, mock_config, aireos_device):
     mock_disabled_wlans.return_value = [16, 21, 24]
     aireos_device.disable_wlans([16, 21])
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config, aireos_device):
     mock_disabled_wlans.return_value = [16, 21, 24]
     with pytest.raises(aireos_module.WLANDisableError) as disable_err:
         aireos_device.disable_wlans([15])
@@ -399,14 +516,14 @@ def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config_list, aireos
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "disabled_wlans", new_callable=mock.PropertyMock)
-def test_disable_wlans_subset_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_disable_wlans_subset_partially_disabled(mock_disabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_disabled_wlans.side_effect = [[16, 21, 24], [15, 16, 21, 24]]
     aireos_device.disable_wlans([15, 21])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan disable 15"])
+    mock_config.assert_called_with(["wlan disable 15"])
 
 
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
@@ -439,33 +556,33 @@ def test_enable_from_config(aireos_device):
     aireos_device.native.exit_config_mode.assert_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_all(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_enable_wlans_all(mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.side_effect = [[], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.enable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan enable all"])
+    mock_config.assert_called_with(["wlan enable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
 def test_enable_wlans_all_already_enabled(
-    mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.return_value = [5, 15, 16, 20, 21, 22, 24]
     aireos_device.enable_wlans("all")
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans):
+def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     with pytest.raises(aireos_module.WLANEnableError) as enable_err:
@@ -476,40 +593,40 @@ def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config_list,
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
 def test_enable_wlans_all_partially_enabled(
-    mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device, aireos_expected_wlans
+    mock_enabled_wlans, mock_wlans, mock_config, aireos_device, aireos_expected_wlans
 ):
     mock_wlans.return_value = aireos_expected_wlans
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 21, 22, 24]]
     aireos_device.enable_wlans("all")
     mock_wlans.assert_called()
-    mock_config_list.assert_called_with(["wlan enable all"])
+    mock_config.assert_called_with(["wlan enable all"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset(mock_enabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 21, 22]]
     aireos_device.enable_wlans([16, 21])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan enable 16", "wlan enable 21"])
+    mock_config.assert_called_with(["wlan enable 16", "wlan enable 21"])
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_already_enabled(mock_enabled_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_already_enabled(mock_enabled_wlans, mock_config, aireos_device):
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     aireos_device.enable_wlans([5, 15])
-    mock_config_list.assert_not_called()
+    mock_config.assert_not_called()
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config, aireos_device):
     mock_enabled_wlans.return_value = [5, 15, 20, 22]
     with pytest.raises(aireos_module.WLANEnableError) as enable_err:
         aireos_device.enable_wlans([16])
@@ -519,14 +636,14 @@ def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config_list, aireos_d
     )
 
 
-@mock.patch.object(AIREOSDevice, "config_list")
+@mock.patch.object(AIREOSDevice, "config")
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "enabled_wlans", new_callable=mock.PropertyMock)
-def test_enable_wlans_subset_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config_list, aireos_device):
+def test_enable_wlans_subset_partially_enabled(mock_enabled_wlans, mock_wlans, mock_config, aireos_device):
     mock_enabled_wlans.side_effect = [[5, 15, 20, 22], [5, 15, 16, 20, 22]]
     aireos_device.enable_wlans([16, 22])
     mock_wlans.assert_not_called()
-    mock_config_list.assert_called_with(["wlan enable 16"])
+    mock_config.assert_called_with(["wlan enable 16"])
 
 
 @mock.patch.object(AIREOSDevice, "wlans", new_callable=mock.PropertyMock)
@@ -536,16 +653,18 @@ def test_enabled_wlans(mock_wlans, aireos_device, aireos_expected_wlans):
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy(mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list):
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy(
+    mock_boot_options, mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_send_command_timing
+):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_show_list([""] * 7)
-    aireos_show(["transfer_download_start.txt", "transfer_download_start_yes.txt"], device)
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
-        mock_boot_options.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
-        file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot_options.assert_called_once()
+    mock_boot_options.return_value = {"primary": "8.9.0.0", "backup": "8.8.0.0", "sys": "8.9.0.0"}
+    device = aireos_show([[""] * 7, "transfer_download_start_yes.txt"])
+    aireos_send_command_timing(["transfer_download_start.txt"], device)
+    file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    mock_boot_options.assert_called_once()
     mock_convert_filename_to_version.assert_called_once()
-    device.show_list.assert_has_calls(
+    device.show.assert_has_calls(
         [
             mock.call(
                 [
@@ -556,27 +675,23 @@ def test_file_copy(mock_convert_filename_to_version, aireos_device_path, aireos_
                     "transfer download serverip 10.1.1.1",
                     "transfer download path images/",
                     "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
-                ]
-            )
-        ]
+                ],
+            ),
+            mock.call("y", auto_find_prompt=False, delay_factor=10),
+        ],
     )
-    device.show.assert_has_calls(
-        [
-            mock.call("transfer download start"),
-            mock.call("y", expect_string="File transfer is successful.", delay_factor=3),
-        ]
-    )
+    device.native.send_command_timing.assert_called_with("transfer download start")
     assert file_copied is True
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_config(mock_convert_filename_to_version, aireos_show, aireos_show_list):
+def test_file_copy_config(mock_convert_filename_to_version, aireos_show, aireos_send_command_timing):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_show_list([""] * 7)
-    aireos_show(["transfer_download_start_yes.txt"], device)
+    device = aireos_show([[""] * 7])
+    aireos_send_command_timing(["transfer_download_start_yes.txt"], device)
     device.file_copy("user", "pass", "10.1.1.1", "configs/host/latest.cfg", protocol="ftp", filetype="config")
     mock_convert_filename_to_version.assert_not_called()
-    device.show_list.assert_has_calls(
+    device.show.assert_has_calls(
         [
             mock.call(
                 [
@@ -591,67 +706,126 @@ def test_file_copy_config(mock_convert_filename_to_version, aireos_show, aireos_
             ),
         ],
     )
-    device.show.assert_called_once()
-    device.show.assert_has_calls([mock.call("transfer download start")])
+    device.native.send_command_timing.assert_called_with("transfer download start")
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_no_copy(mock_convert_filename_to_version, aireos_device_path, aireos_show):
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy_no_copy(mock_boot_options, mock_convert_filename_to_version, aireos_device_path, aireos_show):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
     device = aireos_show([])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
-        mock_boot_options.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
-        file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        mock_boot_options.assert_called()
+    mock_boot_options.return_value = {"primary": "8.10.105.0", "backup": "8.8.0.0", "sys": "8.10.105.0"}
+    file_copied = device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    mock_boot_options.assert_called()
     device.show.assert_not_called()
+    device.native.send_command_timing.assert_not_called()
     assert file_copied is False
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_error_setup(
-    mock_convert_filename_to_version, aireos_device_path, aireos_send_command_timing, aireos_show
-):
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy_error_setup(mock_boot_options, mock_convert_filename_to_version, aireos_show):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_send_command_timing(["", "", "send_command_error.txt"])
-    aireos_show([], device)
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
-        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
-        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
-            device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        assert transfer_error.value.message == (
-            "\nCommand transfer download username user failed with message: This is only a test\n"
-            "Incorrect usage.  Use the '?' or <TAB> key to list commands.\n\nCommand List: \n"
-            "\ttransfer download datatype code\n\ttransfer download mode sftp\n\ttransfer download username user\n"
-        )
-        device.show.assert_not_called()
+    mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+    device = aireos_show(
+        [
+            aireos_module.CommandListError(
+                ["transfer download datatype code", "transfer download mode"],
+                "transfer download mode",
+                "invalid command",
+            )
+        ]
+    )
+    with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+        device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    assert transfer_error.value.message == (
+        "\nCommand transfer download mode failed with message: invalid command\n"
+        "Command List: \n"
+        "\ttransfer download datatype code\n"
+        "\ttransfer download mode\n"
+    )
+    device.show.assert_called_once()
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_error_command_error(
-    mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy_yes_command_error(
+    mock_boot_options, mock_convert_filename_to_version, aireos_show, aireos_send_command_timing
 ):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_show([aireos_module.CommandError("transfer download start", "Auth failure")])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
-        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
-        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
-            device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        assert transfer_error.value.message == (
-            f"{aireos_module.FileTransferError.default_message}\n\n"
-            "Command transfer download start was not successful: Auth failure"
-        )
-        device.show.assert_called_once()
+    mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+    device = aireos_show([[""] * 7, aireos_module.CommandError("y", "Incorrect Usage: inalid command 'y'")])
+    aireos_send_command_timing(["transfer_download_start.txt"])
+    with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+        device.file_copy("user", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    assert transfer_error.value.message == (
+        f"{aireos_module.FileTransferError.default_message}\n\n"
+        "Command y was not successful: Incorrect Usage: inalid command 'y'"
+    )
+    device.show.assert_has_calls(
+        [
+            mock.call(
+                [
+                    "transfer download datatype code",
+                    "transfer download mode sftp",
+                    "transfer download username user",
+                    "transfer download password pass",
+                    "transfer download serverip 10.1.1.1",
+                    "transfer download path images/",
+                    "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
+                ],
+            ),
+            mock.call("y", auto_find_prompt=False, delay_factor=10),
+        ],
+    )
+    device.native.send_command_timing.assert_called_with("transfer download start")
 
 
 @mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
-def test_file_copy_error_other(mock_convert_filename_to_version, aireos_device_path, aireos_show, aireos_show_list):
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy_error_during_transfer(
+    mock_boot_options, mock_convert_filename_to_version, aireos_show, aireos_send_command_timing
+):
     mock_convert_filename_to_version.return_value = "8.10.105.0"
-    device = aireos_show([Exception])
-    with mock.patch(f"{aireos_device_path}.boot_options", new_callable=mock.PropertyMock) as mock_boot_options:
-        mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
-        with pytest.raises(aireos_module.FileTransferError) as transfer_error:
-            device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
-        assert transfer_error.value.message == aireos_module.FileTransferError.default_message
+    mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+    device = aireos_show([[""] * 7, aireos_module.CommandError("transfer download start", "Auth failure")])
+    aireos_send_command_timing(["transfer_download_start.txt"], device)
+    with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+        device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    assert transfer_error.value.message == (
+        f"{aireos_module.FileTransferError.default_message}\n\n"
+        "Command transfer download start was not successful: Auth failure"
+    )
+    device.show.assert_has_calls(
+        [
+            mock.call(
+                [
+                    "transfer download datatype code",
+                    "transfer download mode sftp",
+                    "transfer download username invalid",
+                    "transfer download password pass",
+                    "transfer download serverip 10.1.1.1",
+                    "transfer download path images/",
+                    "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
+                ],
+            ),
+            mock.call("y", auto_find_prompt=False, delay_factor=10),
+        ],
+    )
+
+
+@mock.patch("pyntc.devices.aireos_device.convert_filename_to_version")
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+def test_file_copy_error_other(
+    mock_boot_options, mock_convert_filename_to_version, aireos_show, aireos_send_command_timing
+):
+    mock_convert_filename_to_version.return_value = "8.10.105.0"
+    mock_boot_options.return_value = {"primary": "8.8.105.0", "backup": "8.8.0.0", "sys": "8.8.105.0"}
+    device = aireos_show([[""] * 7])
+    aireos_send_command_timing([Exception], device)
+    with pytest.raises(aireos_module.FileTransferError) as transfer_error:
+        device.file_copy("invalid", "pass", "10.1.1.1", "images/AIR-CT5520-K9-8-10-105-0.aes")
+    assert transfer_error.value.message == aireos_module.FileTransferError.default_message
 
 
 @mock.patch.object(AIREOSDevice, "enable_wlans")
@@ -1131,48 +1305,135 @@ def test_set_boot_options_error(mock_save, mock_config, aireos_device, aireos_bo
     mock_save.assert_called()
 
 
-@mock.patch.object(AIREOSDevice, "enable")
-def test_show(mock_enable, aireos_send_command_timing):
-    device = aireos_send_command_timing(["send_command_timing.txt"])
-    data = device.show("send command timing")
-    assert data.strip() == "This is only a test"
-    mock_enable.assert_called()
-    device.native.send_command_timing.assert_called()
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_string(mock_check_for_errors, aireos_send_command):
+    command = "send command"
+    device = aireos_send_command([f"{command.replace(' ', '_')}.txt"])
+    result = device.show(command)
+    assert isinstance(result, str)
+    mock_check_for_errors.assert_called_once()
+    mock_check_for_errors.assert_called_with(command, result)
+    device.native.send_command.assert_called_with("send command")
 
 
-@mock.patch.object(AIREOSDevice, "enable")
-def test_show_kwargs(mock_enable, aireos_send_command_timing):
-    device = aireos_send_command_timing(["send_command_timing.txt"])
-    data = device.show("send command timing", delay_factor=3)
-    assert data.strip() == "This is only a test"
-    mock_enable.assert_called()
-    device.native.send_command_timing.assert_called_with("send command timing", delay_factor=3)
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_list(mock_check_for_errors, aireos_send_command):
+    command = ["send command", "send command also"]
+    device = aireos_send_command([f"{cmd.replace(' ', '_')}.txt" for cmd in command])
+    result = device.show(command)
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert "also" not in result[0]
+    assert "also" in result[1]
+    mock_check_for_errors.assert_has_calls([mock.call(command[index], result[index]) for index in range(2)])
+    device.native.send_command.assert_has_calls(
+        [
+            mock.call("send command"),
+            mock.call("send command also"),
+        ]
+    )
 
 
-@mock.patch.object(AIREOSDevice, "enable")
-def test_show_expect(mock_enable, aireos_send_command):
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_netmiko_args(mock_check_for_errors, aireos_send_command):
+    command = "send command"
+    device = aireos_send_command([""])
+    netmiko_args = {"auto_find_prompt": False}
+    device.show(command, **netmiko_args)
+    device.native.send_command.assert_called_with(command, auto_find_prompt=False)
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_invalid_netmiko_args(mock_check_for_errors, aireos_send_command):
+    command = "send command"
+    error_message = "send_command() got an unexpected keyword argument 'invalid_arg'"
+    device = aireos_send_command([TypeError(error_message)])
+    netmiko_args = {"invalid_arg": True}
+    with pytest.raises(TypeError) as error:
+        device.show(command, **netmiko_args)
+
+    assert error.value.args[0] == (f"Netmiko Driver's {error_message}")
+    mock_check_for_errors.assert_not_called()
+    device.native.send_command.assert_called_with(command, invalid_arg=True)
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_expect_string(mock_check_for_errors, aireos_send_command):
+    command = "send command expect"
+    expect_string = "Continue?"
     device = aireos_send_command(["send_command_expect.txt"])
-    data = device.show("send command expect", expect_string="Continue?")
-    assert data.strip() == "This is only a test\nContinue?"
-    device.native.send_command.assert_called()
+    device.show(command, expect_string=expect_string)
+    device.native.send_command.assert_called_with(command, expect_string=expect_string)
 
 
-@mock.patch.object(AIREOSDevice, "enable")
-def test_show_expect_kwargs(mock_enable, aireos_send_command):
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_expect_string_and_netmiko_args(mock_check_for_errors, aireos_send_command):
+    command = "send command expect"
+    expect_string = "Continue?"
     device = aireos_send_command(["send_command_expect.txt"])
-    data = device.show("send command expect", expect_string="Continue?", delay_factor=3)
-    assert data.strip() == "This is only a test\nContinue?"
-    device.native.send_command.assert_called_with("send command expect", expect_string="Continue?", delay_factor=3)
+    netmiko_args = {"auto_find_prompt": False}
+    device.show(command, expect_string=expect_string, **netmiko_args)
+    device.native.send_command.assert_called_with(command, expect_string=expect_string, auto_find_prompt=False)
 
 
-@mock.patch.object(AIREOSDevice, "enable")
-def test_show_list(mock_enable, aireos_send_command_timing):
-    device = aireos_send_command_timing(["send_command_timing.txt"] * 2)
-    data = device.show_list(["send command timing"] * 2)
-    clean_data = [result.strip() for result in data]
-    assert clean_data == ["This is only a test"] * 2
-    mock_enable.assert_called()
-    device.native.send_command_timing.assert_has_calls([mock.call("send command timing")] * 2)
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_invalid_string_command(mock_check_for_errors, aireos_send_command):
+    command = "send command error"
+    result = "Incorrect usage."
+    mock_check_for_errors.side_effect = [aireos_module.CommandError(command, result)]
+    device = aireos_send_command([result])
+    with pytest.raises(aireos_module.CommandError) as err:
+        device.show(command)
+
+    mock_check_for_errors.assert_called_once()
+    assert err.value.command == command
+    assert err.value.cli_error_msg == result
+
+
+@mock.patch.object(AIREOSDevice, "_check_command_output_for_errors")
+def test_show_pass_invalid_list_command(mock_check_for_errors, aireos_send_command):
+    command = ["send command", "send command error", "command not sent"]
+    result = ["Correct usage.", "Incorrect usage."]
+    mock_check_for_errors.side_effect = [None, aireos_module.CommandError(command[1], result[1])]
+    device = aireos_send_command(result)
+    with pytest.raises(aireos_module.CommandListError) as err:
+        device.show(command)
+
+    device.native.send_command.assert_has_calls((mock.call(command[0]), mock.call(command[1])))
+    assert mock.call(command[2]) not in device.native.send_command.call_args_list
+    mock_check_for_errors.assert_called_with(command[1], result[1])
+    assert err.value.command == command[1]
+    assert err.value.commands == command[:2]
+
+
+@mock.patch.object(AIREOSDevice, "show")
+def test_show_list(mock_show, aireos_device):
+    commands = ["a", "b"]
+    aireos_device.show_list(commands)
+    mock_show.assert_called_with(commands)
+
+
+@mock.patch.object(AIREOSDevice, "show")
+def test_show_list_pass_netmiko_args(mock_show, aireos_device):
+    commands = ["a", "b"]
+    netmiko_args = {"auto_find_prompt": False}
+    aireos_device.show_list(commands, **netmiko_args)
+    mock_show.assert_called_with(commands, auto_find_prompt=False)
+
+
+@mock.patch.object(AIREOSDevice, "show")
+def test_show_list_pass_expect_string(mock_show, aireos_device):
+    commands = ["a", "b"]
+    aireos_device.show_list(commands, expect_string="Continue?")
+    mock_show.assert_called_with(commands, expect_string="Continue?")
+
+
+@mock.patch.object(AIREOSDevice, "show")
+def test_show_list_pass_netmiko_args_and_expect_string(mock_show, aireos_device):
+    commands = ["a", "b"]
+    netmiko_args = {"auto_find_prompt": False}
+    aireos_device.show_list(commands, expect_string="Continue?", **netmiko_args)
+    mock_show.assert_called_with(commands, expect_string="Continue?", auto_find_prompt=False)
 
 
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")

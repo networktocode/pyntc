@@ -1,0 +1,4 @@
+Protocol  Address          Age (min)  Hardware Addr   Type   Interface
+Internet  192.0.2.1              0   fcee.da7a.c955  ARPA   Vlan2
+Internet  192.0.2.2              -   00ee.4710.af41  ARPA   Vlan2
+Internet  192.0.2.11           101   b8ee.eb6b.bbd7  ARPA   Vlan2
