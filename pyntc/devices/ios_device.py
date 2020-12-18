@@ -73,7 +73,7 @@ class IOSDevice(BaseDevice):
         Check response from device to see if an error was reported.
 
         Args:
-            command (str|list): The command(s) that were sent to the device.
+            command (str): The command that was sent to the device.
 
         Raises:
             CommandError: When ``command_response`` reports an error in sending ``command``.
@@ -82,7 +82,7 @@ class IOSDevice(BaseDevice):
             >>> device = IOSDevice(**connection_args)
             >>> command = "show version"
             >>> command_response = "output from show version"
-            >>> device._check_command_output_for_errors(command, command_resposne)
+            >>> device._check_command_output_for_errors(command, command_response)
             >>> command = "invalid command"
             >>> command_response = "% invalid command"
             >>> device._check_command_output_for_errors(command, command_resposne)
@@ -90,9 +90,6 @@ class IOSDevice(BaseDevice):
             >>>
         """
         if "% " in command_response or "Error:" in command_response:
-            if not isinstance(command, str):
-                command = "\n".join(command)
-
             raise CommandError(command, command_response)
 
     def _enable(self):
@@ -161,11 +158,18 @@ class IOSDevice(BaseDevice):
 
         return version_data
 
-    def _send_command(self, command, expect_string=None):
-        if expect_string is None:
-            response = self.native.send_command_timing(command)
-        else:
-            response = self.native.send_command(command, expect_string=expect_string)
+    def _send_command(self, command, expect_string=None, **kwargs):
+        # Set command args and assign the command to command_string argument
+        command_args = {"command_string": command}
+
+        # Check for an expect_string being passed in
+        if expect_string is not None:
+            command_args["expect_string"] = expect_string
+
+        # Update command_args with additional arguments passed in, must be a valid Netmiko argument
+        command_args.update(kwargs)
+
+        response = self.native.send_command(**command_args)
 
         if "% " in response or "Error:" in response:
             raise CommandError(command, response)
@@ -262,12 +266,12 @@ class IOSDevice(BaseDevice):
 
         By default, entering and exiting config mode is handled automatically.
         To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
         This will send each command in ``command`` until either an Error is caught or all commands have been sent.
 
         Args:
             command (str|list): The command or commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
             str: When ``command`` is a str, the config session input and ouput from sending ``command``.
@@ -313,7 +317,6 @@ class IOSDevice(BaseDevice):
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
-                warnings.warn("This will raise CommandError in the future", FutureWarning)
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
                 raise err
@@ -325,7 +328,6 @@ class IOSDevice(BaseDevice):
 
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
-            warnings.warn("This will return a list in the future", FutureWarning)
             return command_responses[0]
 
         return command_responses
@@ -338,11 +340,11 @@ class IOSDevice(BaseDevice):
 
         By default, entering and exiting config mode is handled automatically.
         To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-        This supports all arguments supported by Netmiko's `send_command_set` method using ``netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
 
         Args:
             commands (list): The commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command_set``.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
             list: Each command's input and ouput from sending the command in ``commands``.
@@ -699,9 +701,9 @@ class IOSDevice(BaseDevice):
 
             try:
                 if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
+                    first_response = self.native.send_command_timing("reload in %d" % timer)
                 else:
-                    first_response = self.show("reload")
+                    first_response = self.native.send_command_timing("reload")
 
                 if "System configuration" in first_response:
                     self.native.send_command_timing("no")
@@ -733,7 +735,7 @@ class IOSDevice(BaseDevice):
             show_redundancy = self.show("show redundancy")
         except CommandError:
             return "n/a"
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         redundancy_info = re_show_redundancy.group("info")
         re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
         redundancy_mode = re_redundancy_mode.group(1).lower()
@@ -758,7 +760,7 @@ class IOSDevice(BaseDevice):
             show_redundancy = self.show("show redundancy")
         except CommandError:
             return None
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy)
+        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         processor_redundancy_info = re_show_redundancy.group("self")
         re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
         processor_redundancy_state = re_redundancy_state.group(1).lower()

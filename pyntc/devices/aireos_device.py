@@ -4,6 +4,7 @@ import os
 import re
 import time
 import signal
+import warnings
 
 from netmiko import ConnectHandler
 
@@ -116,6 +117,30 @@ class AIREOSDevice(BaseDevice):
             ap_boot_options = self.ap_boot_options
 
         return all([boot_option[image_option] == image for boot_option in ap_boot_options.values()])
+
+    def _check_command_output_for_errors(self, command, command_response):
+        """
+        Check response from device to see if an error was reported.
+
+        Args:
+            command (str): The command that was sent to the device.
+
+        Raises:
+            CommandError: When ``command_response`` reports an error in sending ``command``.
+
+        Example:
+            >>> device = AIREOSDevice(**connection_args)
+            >>> command = "show version"
+            >>> command_response = "output from show version"
+            >>> device._check_command_output_for_errors(command, command_response)
+            >>> command = "invalid command"
+            >>> command_response = "Incorrect Usage: invalid command"
+            >>> device._check_command_output_for_errors(command, command_resposne)
+            CommandError: ...
+            >>>
+        """
+        if "Incorrect usage" in command_response or "Error:" in command_response:
+            raise CommandError(command, command_response)
 
     def _enter_config(self):
         """Enter into config mode."""
@@ -441,52 +466,103 @@ class AIREOSDevice(BaseDevice):
             self.native.disconnect()
             self._connected = False
 
-    def config(self, command):
+    def config(self, command, **netmiko_args):
         """
-        Configure the device with a single command.
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
+        This will send each command in ``command`` until either an Error is caught or all commands have been sent.
 
         Args:
-            command (str): The configuration command to send to the device.
-                           The command should not include the "config" keyword.
+            command (str|list): The command or commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
+
+        Returns:
+            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
+            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandError: When ``command`` is a str and its results report an error.
+            CommandListError: When ``command`` is a list and one of the commands reports an error.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.config("boot primary")
+            '(host) config>boot primary\n\n(host) config>
             >>>
-
-        Raises:
-            CommandError: When the device's response indicates the command failed.
         """
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
+        # TODO: Remove this when deprecating config_list method
+        original_command_is_str = isinstance(command, str)
 
-    def config_list(self, commands):
+        if original_command_is_str:  # TODO: switch to isinstance(command, str) when removing above
+            command = [command]
+
+        original_exit_config_setting = netmiko_args.get("exit_config_mode")
+        netmiko_args["exit_config_mode"] = False
+        # Ignore None or invalid args passed for enter_config_mode
+        if netmiko_args.get("enter_config_mode") is not False:
+            self._enter_config()
+            netmiko_args["enter_config_mode"] = False
+
+        entered_commands = []
+        command_responses = []
+        try:
+            for cmd in command:
+                entered_commands.append(cmd)
+                command_response = self.native.send_config_set(cmd, **netmiko_args)
+                command_responses.append(command_response)
+                self._check_command_output_for_errors(cmd, command_response)
+        except TypeError as err:
+            raise TypeError(f"Netmiko Driver's {err.args[0]}")
+        # TODO: Remove this when deprecating config_list method
+        except CommandError as err:
+            if not original_command_is_str:
+                raise CommandListError(entered_commands, cmd, err.cli_error_msg)
+            else:
+                raise err
+        # Don't let exception prevent exiting config mode
+        finally:
+            # Ignore None or invalid args passed for exit_config_mode
+            if original_exit_config_setting is not False:
+                self.native.exit_config_mode()
+
+        # TODO: Remove this when deprecating config_list method
+        if original_command_is_str:
+            return command_responses[0]
+
+        return command_responses
+
+    def config_list(self, commands, **netmiko_args):
         """
-        Send multiple configuration commands to the device.
+        DEPRECATED - Use the `config` method.
+
+        Send config commands to device.
+
+        By default, entering and exiting config mode is handled automatically.
+        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
+        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
 
         Args:
-            commands (list): The list of commands to send to the device.
-                             The commands should not include the "config" keyword.
+            commands (list): The commands to send to the device.
+            **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
+
+        Returns:
+            list: Each command's input and ouput from sending the command in ``commands``.
+
+        Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandListError: When one of the commands reports an error on the device.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
             >>> device.config_list(["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"])
             >>>
-
-        Raises:
-            CommandListError: When the device's response indicates an error from sending one of the commands.
         """
-        self._enter_config()
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                self.native.exit_config_mode()
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        self.native.exit_config_mode()
+        warnings.warn("config_list() is deprecated; use config.", DeprecationWarning)
+        return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
         """
@@ -573,7 +649,7 @@ class AIREOSDevice(BaseDevice):
         # Only send commands for enabled wlan ids
         if not wlans_to_validate.issubset(disabled_wlans):
             commands = [f"wlan disable {wlan}" for wlan in wlan_ids if wlan not in disabled_wlans]
-            self.config_list(commands)
+            self.config(commands)
 
             post_disabled_wlans = self.disabled_wlans
             if not wlans_to_validate.issubset(post_disabled_wlans):
@@ -657,7 +733,7 @@ class AIREOSDevice(BaseDevice):
         # Only send commands for disabled wlan ids
         if not wlans_to_validate.issubset(enabled_wlans):
             commands = [f"wlan enable {wlan}" for wlan in wlan_ids if wlan not in enabled_wlans]
-            self.config_list(commands)
+            self.config(commands)
 
             post_enabled_wlans = self.enabled_wlans
             if not wlans_to_validate.issubset(post_enabled_wlans):
@@ -702,7 +778,7 @@ class AIREOSDevice(BaseDevice):
         filepath,
         protocol="sftp",
         filetype="code",
-        delay_factor=3,
+        delay_factor=10,
     ):
         """
         Copy a file from server to Controller.
@@ -746,7 +822,7 @@ class AIREOSDevice(BaseDevice):
             if version in self.boot_options.values():
                 return False
         try:
-            self.show_list(
+            self.show(
                 [
                     f"transfer download datatype {filetype}",
                     f"transfer download mode {protocol}",
@@ -761,13 +837,16 @@ class AIREOSDevice(BaseDevice):
             raise FileTransferError(error.message)
 
         try:
-            response = self.show("transfer download start")
+            response = self.native.send_command_timing("transfer download start")
             if "Are you sure you want to start? (y/N)" in response:
-                response = self.show("y", expect_string="File transfer is successful.", delay_factor=delay_factor)
+                response = self.show("y", auto_find_prompt=False, delay_factor=delay_factor)
         except CommandError as error:
             raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
             raise FileTransferError
+
+        if "File transfer is successful" not in response:
+            raise FileTransferError(message=f"Did not find expected success message in response, found:\n{response}")
 
         return True
 
@@ -1081,22 +1160,23 @@ class AIREOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results",
             )
 
-    def show(self, command, expect_string=None, **kwargs):
+    def show(self, command, expect_string=None, **netmiko_args):
         """
         Send an operational command to the device.
 
         Args:
-            command (str): The command to send to the device.
+            command (str|list): The commands to send to the device.
             expect_string (str): The expected prompt after running the command.
-
-        Kwargs:
-            Any argument supported by Netmiko's ``send_command_timing`` method.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command``.
 
         Returns:
-            str: The data returned from the device
+            str: When ``command`` is str, the data returned from the device.
+            list: When ``command`` is list, the data returned from the device for each command.
 
         Raises:
-            CommandError: When the returned data indicates the command failed.
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
+            CommandError: When ``command`` is str, and the returned data indicates the command failed.
+            CommandListError: When ``command`` is list, and the return data indicates the command failed.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1105,23 +1185,59 @@ class AIREOSDevice(BaseDevice):
             Product Version.....8.2.170.0
             System Up Time......3 days 2 hrs 20 mins 30 sec
             ...
+            >>> sysinfo = device._send_command(["show sysinfo"])
+            >>> print(sysinfo[0])
+            Product Version.....8.2.170.0
+            System Up Time......3 days 2 hrs 20 mins 30 sec
+            ...
             >>>
         """
-        self.enable()
-        return self._send_command(command, expect_string=expect_string, **kwargs)
+        # TODO: Remove this when deprecating config_list method
+        original_command_is_str = isinstance(command, str)
 
-    def show_list(self, commands):
+        if original_command_is_str:  # TODO: switch to isinstance(command, str) when removing above
+            command = [command]
+
+        entered_commands = []
+        command_responses = []
+        if expect_string is not None:
+            netmiko_args["expect_string"] = expect_string
+
+        try:
+            for cmd in command:
+                entered_commands.append(cmd)
+                command_response = self.native.send_command(cmd, **netmiko_args)
+                command_responses.append(command_response)
+                self._check_command_output_for_errors(cmd, command_response)
+        except TypeError as err:
+            raise TypeError(f"Netmiko Driver's {err.args[0]}")
+        # TODO: Remove this when deprecating config_list method
+        except CommandError as err:
+            if not original_command_is_str:
+                raise CommandListError(entered_commands, cmd, err.cli_error_msg)
+            else:
+                raise err
+
+        # TODO: Remove this when deprecating config_list method
+        if original_command_is_str:
+            return command_responses[0]
+
+        return command_responses
+
+    def show_list(self, commands, **netmiko_args):
         """
-        Send an operational command to the device.
+        DEPRECATED - Use the `show` method.
+        Send operational commands to the device.
 
         Args:
             commands (list): The list of commands to send to the device.
-            expect_string (str): The expected prompt after running the command.
+            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command``.
 
         Returns:
             list: The data returned from the device for all commands.
 
         Raises:
+            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
             CommandListError: When the returned data indicates one of the commands failed.
 
         Example:
@@ -1136,18 +1252,8 @@ class AIREOSDevice(BaseDevice):
             Backup Boot Image................................ 8.5.110.0
             >>>
         """
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
+        warnings.warn("show_list() is deprecated; use show.", DeprecationWarning)
+        return self.show(commands, **netmiko_args)
 
     @property
     def startup_config(self):
