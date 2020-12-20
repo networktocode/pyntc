@@ -8,7 +8,8 @@ import warnings
 
 from netmiko import ConnectHandler
 
-from .base_device import BaseDevice, fix_docs
+from .base_device import fix_docs
+from .base_netmiko import BaseNetmikoDevice
 from pyntc.errors import (
     NTCError,
     CommandError,
@@ -63,7 +64,7 @@ def convert_filename_to_version(filename):
 
 
 @fix_docs
-class AIREOSDevice(BaseDevice):
+class AIREOSDevice(BaseNetmikoDevice):
     """Cisco AIREOS Device Implementation."""
 
     vendor = "cisco"
@@ -81,13 +82,9 @@ class AIREOSDevice(BaseDevice):
             port (int): The port to use to establish the connection.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
         """
-        super().__init__(host, username, password, device_type="cisco_aireos_ssh")
-        self.native = None
-        self.secret = secret
-        self.port = int(port)
+        super().__init__(host, username, password, device_type="cisco_aireos_ssh", secret=secret, port=port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
-        self._connected = False
         self.open(confirm_active=confirm_active)
 
     def _ap_images_match_expected(self, image_option, image, ap_boot_options=None):
