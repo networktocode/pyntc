@@ -6,10 +6,12 @@ from .device_mocks.asa import send_command
 from pyntc.devices import ASADevice
 from pyntc.devices.asa_device import FileTransferError
 from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
-
+from pyntc.devices import asa_device as asa_module
 
 BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.asa_device.ASADevice.boot_options"
+ACTIVE = "active"
+STANDBY = "standby ready"
 
 
 class TestASADevice:
@@ -302,6 +304,59 @@ class TestASADevice:
     def test_count_teardown(self):
         # This class is reinstantiated in every test, so the counter is reset
         assert self.count_teardown == 0
+
+
+@pytest.mark.parametrize(
+    "side_effect,expected",
+    (
+        ("show_failover_host_active.txt", STANDBY),
+        ("show_failover_host_standby.txt", ACTIVE),
+        ("show_failover_host_off.txt", "disabled"),
+        ("show_failover_groups_active_active.txt", ACTIVE),
+        ("show_failover_groups_active_standby.txt", STANDBY),
+        ("show_failover_groups_standby_active.txt", ACTIVE),
+        (asa_module.CommandError("show failover", r"% invalid command"), None),
+    ),
+    ids=("standby", ACTIVE, "disabled", "active_active", "active_standby", "standby_active", "none"),
+)
+def test_peer_redundancy_state(side_effect, expected, asa_show):
+    device = asa_show([side_effect])
+    actual = device.peer_redundancy_state
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "side_effect,expected",
+    (
+        ("show_failover_host_active.txt", "on"),
+        ("show_failover_host_off.txt", "off"),
+        (asa_module.CommandError("show failover", r"% invalid command"), "n/a"),
+    ),
+    ids=("on", "off", "n/a"),
+)
+def test_redundancy_mode(side_effect, expected, asa_show):
+    device = asa_show([side_effect])
+    actual = device.redundancy_mode
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "side_effect,expected",
+    (
+        ("show_failover_host_active.txt", ACTIVE),
+        ("show_failover_host_standby.txt", STANDBY),
+        ("show_failover_host_off.txt", "disabled"),
+        ("show_failover_groups_active_active.txt", ACTIVE),
+        ("show_failover_groups_active_standby.txt", ACTIVE),
+        ("show_failover_groups_standby_active.txt", STANDBY),
+        (asa_module.CommandError("show failover", r"% invalid command"), None),
+    ),
+    ids=(ACTIVE, "standby", "disabled", "active_active", "active_standby", "standby_active", "none"),
+)
+def test_redundancy_state(side_effect, expected, asa_show):
+    device = asa_show([side_effect])
+    actual = device.redundancy_state
+    assert actual == expected
 
 
 def test_send_command_timing(asa_send_command_timing):
