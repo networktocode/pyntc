@@ -306,6 +306,22 @@ class TestASADevice:
         assert self.count_teardown == 0
 
 
+@mock.patch.object(ASADevice, "redundancy_state", new_callable=mock.PropertyMock)
+@pytest.mark.parametrize(
+    "redundancy_state,expected",
+    (
+        ("active", True),
+        ("standby ready", False),
+        (None, True),
+    ),
+    ids=("active", "standby_ready", "unsupported"),
+)
+def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected):
+    mock_redundancy_state.return_value = redundancy_state
+    actual = asa_device.is_active()
+    assert actual is expected
+
+
 @pytest.mark.parametrize(
     "side_effect,expected",
     (

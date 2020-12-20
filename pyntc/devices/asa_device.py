@@ -262,6 +262,22 @@ class ASADevice(BaseDevice):
             return True
 
         return False
+        return False
+
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        return self.redundancy_state in self.active_redundancy_states
 
     def open(self):
         if self._connected:
