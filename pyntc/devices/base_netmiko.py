@@ -2,6 +2,7 @@
 from typing import Any  # , List, Union, Iterable, Callable, Mapping
 
 from .base_device import BaseDevice, fix_docs
+
 # from pyntc.errors import CommandError, CommandListError
 
 
