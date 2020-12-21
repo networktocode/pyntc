@@ -15,8 +15,8 @@ class BaseNetmikoDevice(BaseDevice):
         username: str,
         password: str,
         device_type: str,
-        secret: str,
-        port: int,
+        secret: str = "",
+        port: int = 22,
         **netmiko_args: Any,
     ) -> None:
         """
