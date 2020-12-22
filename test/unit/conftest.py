@@ -215,6 +215,19 @@ def asa_send_command_timing(asa_device, asa_mock_path):
 
 
 @pytest.fixture
+def asa_show(asa_device, asa_mock_path):
+    def _mock(side_effects, existing_device=None, device=asa_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(ASADevice, "show") as mock_show:
+            mock_show.side_effect = get_side_effects(asa_mock_path, side_effects)
+        device.show = mock_show
+        return device
+
+    return _mock
+
+
+@pytest.fixture
 def ios_config(ios_device, ios_mock_path):
     def _mock(side_effects, existing_device=None, device=ios_device):
         if existing_device is not None:

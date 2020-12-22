@@ -6,7 +6,7 @@ import re
 import signal
 import time
 import warnings
-
+from collections import Counter
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
@@ -25,11 +25,16 @@ from pyntc.errors import (
 )
 
 
+RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
+RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
+
+
 @fix_docs
 class ASADevice(BaseDevice):
     """Cisco ASA Device Implementation."""
 
     vendor = "cisco"
+    active_redundancy_states = {None, "active"}
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
@@ -257,6 +262,22 @@ class ASADevice(BaseDevice):
             return True
 
         return False
+        return False
+
+    def is_active(self):
+        """
+        Determine if the current processor is the active processor.
+
+        Returns:
+            bool: True if the processor is active or does not support HA, else False.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.is_active()
+            True
+            >>>
+        """
+        return self.redundancy_state in self.active_redundancy_states
 
     def open(self):
         if self._connected:
@@ -277,6 +298,47 @@ class ASADevice(BaseDevice):
                 verbose=False,
             )
             self._connected = True
+
+    @property
+    def peer_redundancy_state(self):
+        """
+        Determine the current redundancy state of the peer processor.
+
+        In the case of multi-context configurations, a peer will be considered
+        active if it is the active device for any context. Otherwise, the most
+        common state will be returned.
+
+        Returns:
+            str: The redundancy state of the peer processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.peer_redundancy_state
+            'standby ready'
+            >>>
+        """
+        try:
+            show_failover = self.show("show failover")
+        except CommandError:
+            return None
+
+        if "Failover On" in show_failover:
+            peer_failover_data = show_failover.split("Other host:")[1]
+            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(peer_failover_data)
+            if not show_failover_groups:
+                re_show_failover_peer_state = RE_SHOW_FAILOVER_STATE.search(peer_failover_data)
+                peer_redundancy_state = re_show_failover_peer_state.group(1)
+            else:
+                if "Active" in show_failover_groups:
+                    peer_redundancy_state = "active"
+                else:
+                    peer_redundancy_state_counter = Counter(show_failover_groups)
+                    peer_redundancy_state = peer_redundancy_state_counter.most_common()[0][0]
+        else:
+            peer_redundancy_state = "disabled"
+
+        return peer_redundancy_state.lower()
 
     def reboot(self, timer=0, confirm=False):
         if confirm:
@@ -303,6 +365,71 @@ class ASADevice(BaseDevice):
             signal.alarm(0)
         else:
             print("Need to confirm reboot with confirm=True")
+
+    @property
+    def redundancy_mode(self):
+        """
+        The operating redundancy mode of the device.
+
+        Returns:
+            str: The redundancy mode the device is operating in.
+                If the command is not supported, then "n/a" is returned.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.redundancy_mode
+            'on'
+            >>>
+        """
+        try:
+            show_failover = self.show("show failover")
+        except CommandError:
+            return "n/a"
+
+        show_failover_first_line = show_failover.splitlines()[0].strip()
+        redundancy_mode = show_failover_first_line.lower().lstrip("failover")
+        return redundancy_mode.lstrip()
+
+    @property
+    def redundancy_state(self):
+        """
+        Determine the current redundancy state of the processor.
+
+        In the case of multi-context configurations, a device will be considered
+        active if it is the active device for any context. Otherwise, the most
+        common state will be returned.
+
+        Returns:
+            str: The redundancy state of the processor.
+            None: When the processor does not support redundancy.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.redundancy_state
+            'active'
+            >>>
+        """
+        try:
+            show_failover = self.show("show failover")
+        except CommandError:
+            return None
+
+        if "Failover On" in show_failover:
+            failover_data = show_failover.split("Other host:")[0]
+            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(failover_data)
+            if not show_failover_groups:
+                re_show_failover_state = RE_SHOW_FAILOVER_STATE.search(failover_data)
+                redundancy_state = re_show_failover_state.group(1)
+            else:
+                if "Active" in show_failover_groups:
+                    redundancy_state = "active"
+                else:
+                    redundancy_state_counter = Counter(show_failover_groups)
+                    redundancy_state = redundancy_state_counter.most_common()[0][0]
+        else:
+            redundancy_state = "disabled"
+
+        return redundancy_state.lower()
 
     def rollback(self, rollback_to):
         raise NotImplementedError
