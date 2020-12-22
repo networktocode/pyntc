@@ -11,7 +11,8 @@ from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
 from pyntc.utils import get_structured_data
-from .base_device import BaseDevice, RollbackError, fix_docs
+from .base_device import RollbackError, fix_docs
+from .base_netmiko import BaseNetmikoDevice
 from pyntc.errors import (
     NTCError,
     CommandError,
@@ -40,7 +41,7 @@ INSTALL_MODE_FILE_NAME = "packages.conf"
 
 
 @fix_docs
-class IOSDevice(BaseDevice):
+class IOSDevice(BaseNetmikoDevice):
     """Cisco IOS Device Implementation."""
 
     vendor = "cisco"
@@ -58,14 +59,11 @@ class IOSDevice(BaseDevice):
             port (int): The port to use to establish the connection.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
         """
-        super().__init__(host, username, password, device_type="cisco_ios_ssh")
+        # TODO: make device_type a class attribute
+        super().__init__(host, username, password, device_type="cisco_ios_ssh", secret=secret, port=port)
 
-        self.native = None
-        self.secret = secret
-        self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
-        self._connected = False
         self.open(confirm_active=confirm_active)
 
     def _check_command_output_for_errors(self, command, command_response):

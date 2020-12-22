@@ -12,7 +12,8 @@ from netmiko import ConnectHandler
 from netmiko import FileTransfer
 
 from pyntc.utils import get_structured_data
-from .base_device import BaseDevice, fix_docs
+from .base_device import fix_docs
+from .base_netmiko import BaseNetmikoDevice
 from pyntc.errors import (
     NTCError,
     CommandError,
@@ -26,20 +27,16 @@ from pyntc.errors import (
 
 
 @fix_docs
-class ASADevice(BaseDevice):
+class ASADevice(BaseNetmikoDevice):
     """Cisco ASA Device Implementation."""
 
     vendor = "cisco"
 
     def __init__(self, host, username, password, secret="", port=22, **kwargs):
-        super().__init__(host, username, password, device_type="cisco_asa_ssh")
+        super().__init__(host, username, password, device_type="cisco_asa_ssh", secret=secret, port=port)
 
-        self.native = None
-        self.secret = secret
-        self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
-        self._connected = False
         self.open()
 
     def _enable(self):
