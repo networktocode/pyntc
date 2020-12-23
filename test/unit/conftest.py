@@ -3,6 +3,7 @@ import os
 import pytest
 from unittest import mock
 
+from pyntc.devices.base_netmiko import BaseNetmikoDevice
 from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice
 
 
@@ -320,3 +321,13 @@ def ios_show(ios_device, ios_mock_path):
         return device
 
     return _mock
+
+
+@pytest.fixture
+def netmiko_device():
+    # with mock.patch.object(BaseNetmikoDevice, "confirm_is_active") as mock_confirm:
+    #     mock_confirm.return_value = True
+    with mock.patch("netmiko.ConnectHandler") as ch:
+        device = BaseNetmikoDevice("host", "user", "password", "cisco_ios_ssh")
+        device.native = ch
+        yield device
