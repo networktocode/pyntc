@@ -24,7 +24,7 @@ from pyntc.errors import (
 )
 
 
-RE_FILENAME_FIND_VERSION = re.compile(r"^\S+?-[A-Za-z]{2}\d+-(?:\S+-?)?(?:K9-)?(?P<version>\d+-\d+-\d+-\d+)", re.M)
+RE_FILENAME_FIND_VERSION = re.compile(r"^.+?(?P<version>\d+(?:-|_)\d+(?:-|_)\d+(?:-|_)\d+)\.", re.M)
 RE_AP_IMAGE_COUNT = re.compile(r"^[Tt]otal\s+number\s+of\s+APs\.+\s+(?P<count>\d+)\s*$", re.M)
 RE_AP_IMAGE_DOWNLOADED = re.compile(r"^\s*[Cc]ompleted\s+[Pp]redownloading\.+\s+(?P<downloaded>\d+)\s*$", re.M)
 RE_AP_IMAGE_UNSUPPORTED = re.compile(r"^\s*[Nn]ot\s+[Ss]upported\.+\s+(?P<unsupported>\d+)\s*$", re.M)
@@ -58,7 +58,7 @@ def convert_filename_to_version(filename):
     """
     version_match = RE_FILENAME_FIND_VERSION.match(filename)
     version_string = version_match.groupdict()["version"]
-    version = version_string.replace("-", ".")
+    version = re.sub("-|_", ".", version_string)
     return version
 
 
@@ -97,17 +97,17 @@ class AIREOSDevice(BaseDevice):
         Args:
             image_option (str): The boot_option dict key ("primary", "backup") to validate.
             image (str): The image that the ``image_option`` should match.
-            ap_boot_options (dict): The results from
+            ap_boot_options (dict): The results from ``self.ap_boot_options``.
 
         Returns:
             bool: True if all APs have ``image_option`` equal to ``image``, else False.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
-            >>> device.ap_boot_options()
+            >>> device.ap_boot_options
             {
-                'ap1': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0'},
-                'ap2': {'primary': {'8.10.105.0', 'secondary': '8.10.103.0'},
+                'ap1': {'primary': '8.10.105.0', 'secondary': '8.10.103.0'},
+                'ap2': {'primary': '8.10.105.0', 'secondary': '8.10.103.0'},
             }
             >>> device._ap_images_match_expected("primary", "8.10.105.0")
             True
