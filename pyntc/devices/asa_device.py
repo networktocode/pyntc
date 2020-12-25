@@ -286,9 +286,9 @@ class ASADevice(BaseNetmikoDevice):
 
             try:
                 if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
+                    first_response = self.native.send_command_timing("reload in %d" % timer)
                 else:
-                    first_response = self.show("reload")
+                    first_response = self.native.send_command_timing("reload")
 
                 if "System configuration" in first_response:
                     self.native.send_command_timing("no")
@@ -346,24 +346,6 @@ class ASADevice(BaseNetmikoDevice):
                 command="boot system {0}/{1}".format(file_system, image_name),
                 message="Setting boot command did not yield expected results",
             )
-
-    def show(self, command, expect_string=None):
-        self.enable()
-        return self._send_command(command, expect_string=expect_string)
-
-    def show_list(self, commands):
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
 
     @property
     def startup_config(self):

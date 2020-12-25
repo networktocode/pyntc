@@ -800,24 +800,6 @@ class IOSDevice(BaseNetmikoDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect_string=None):
-        self.enable()
-        return self._send_command(command, expect_string=expect_string)
-
-    def show_list(self, commands):
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
-
     @property
     def startup_config(self):
         return self.show("show startup-config")

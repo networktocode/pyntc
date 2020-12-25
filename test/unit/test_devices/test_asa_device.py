@@ -97,40 +97,6 @@ class TestASADevice:
         with pytest.raises(CommandListError, match=commands[1]):
             self.device.config_list(commands)
 
-    def test_show(self):
-        command = "show running config"
-        result = self.device.show(command)
-
-        assert isinstance(result, str)
-        assert "interface" in result
-        assert "inspect" in result
-
-    def test_bad_show(self):
-        command = "show linux"
-        self.device.native.send_command_timing.return_value = "Error: linux"
-        with pytest.raises(CommandError):
-            self.device.show(command)
-
-    def test_show_list(self):
-        commands = ["show running config", "show startup-config"]
-
-        result = self.device.show_list(commands)
-        assert isinstance(result, list)
-        assert "console" in result[0]
-        assert "security-level" in result[1]
-
-        calls = list(mock.call(x) for x in commands)
-        self.device.native.send_command_timing.assert_has_calls(calls)
-
-    def test_bad_show_list(self):
-        commands = ["show badcommand", "show clock"]
-        results = ["Error: badcommand", "14:31:57.089 PST Tue Feb 10 2008"]
-
-        self.device.native.send_command_timing.side_effect = results
-
-        with pytest.raises(CommandListError, match="show badcommand"):
-            self.device.show_list(commands)
-
     def test_save(self):
         result = self.device.save()
 
@@ -229,16 +195,14 @@ class TestASADevice:
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
+        self.device.native.send_command.side_effect = [f"Current BOOT variable = disk0:/{BOOT_IMAGE}"]
         boot_options = self.device.boot_options
         assert boot_options == {"sys": BOOT_IMAGE}
-        self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
+        self.device.native.send_command.assert_called_with("show boot | i BOOT variable")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_none(self, mock_boot):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = ""
+        self.device.native.send_command.side_effect = [""]
         boot_options = self.device.boot_options
         assert boot_options["sys"] is None
 

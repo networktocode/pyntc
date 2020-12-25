@@ -1,10 +1,19 @@
 import os
+from unittest import mock
 
 import pytest
-from unittest import mock
+from netmiko.cisco import CiscoWlcSSH, CiscoAsaSSH, CiscoIosSSH
 
 from pyntc.devices.base_netmiko import BaseNetmikoDevice
 from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice
+from pyntc.devices.base_netmiko import BaseNetmikoDevice
+
+
+NETMIKO_CLASS_MAP = {
+    AIREOSDevice: CiscoWlcSSH,
+    ASADevice: CiscoAsaSSH,
+    IOSDevice: CiscoIosSSH,
+}
 
 
 def get_side_effects(mock_path, side_effects):
@@ -327,7 +336,83 @@ def ios_show(ios_device, ios_mock_path):
 def netmiko_device():
     # with mock.patch.object(BaseNetmikoDevice, "confirm_is_active") as mock_confirm:
     #     mock_confirm.return_value = True
-    with mock.patch("netmiko.ConnectHandler") as ch:
-        device = BaseNetmikoDevice("host", "user", "password", "cisco_ios_ssh")
-        device.native = ch
+    with mock.patch("netmiko.base_connection.BaseConnection", autospec=True) as base_connection:
+        with mock.patch.object(BaseNetmikoDevice, "__init__", return_value=None):
+            device = BaseNetmikoDevice()
+            device.native = base_connection
         return device
+
+
+@pytest.fixture
+def netmiko_command(netmiko_device, netmiko_mock_path):
+    def _mock(netmiko_method, side_effects, existing_device=None, device=netmiko_device):
+        if existing_device is not None:
+            device = existing_device
+        side_effects = get_side_effects(netmiko_mock_path, side_effects)
+        native_method = getattr(device.native, netmiko_method)
+        native_method.side_effect = side_effects
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def netmiko_mock_path(mock_path):
+    return f"{mock_path}/netmiko"
+
+
+@pytest.fixture
+def netmiko_send_commands(netmiko_device, netmiko_mock_path):
+    def _mock(side_effects, existing_device=None, device=netmiko_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(device, "_send_commands", autospec=True) as mock_send_commands:
+            mock_send_commands.side_effect = get_side_effects(netmiko_mock_path, side_effects)
+        device._send_commands = mock_send_commands
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def netmiko_show(netmiko_device, netmiko_mock_path):
+    def _mock(side_effects, existing_device=None, device=netmiko_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(device, "show", autospec=True) as mock_show:
+            mock_show.side_effect = get_side_effects(netmiko_mock_path, side_effects)
+        device.show = mock_show
+        return device
+
+    return _mock
+
+
+@pytest.fixture()
+def mock_implementation_show():
+    def _mock(implementation, side_effects):
+        device = implementation()
+        with mock.patch.object(device, "show", autospec=True) as mock_show:
+            mock_show.side_effect = side_effects
+        device.show = mock_show
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def netmiko_base_implementation(request):
+    pyntc_class = request.param
+    original_init = pyntc_class.__init__
+    pyntc_class.__init__ = mock.Mock(spec=original_init, return_value=None)
+    pyntc_class.native = mock.Mock(NETMIKO_CLASS_MAP[pyntc_class])
+    yield pyntc_class
+    pyntc_class.__init__ = original_init
+
+
+def pytest_generate_tests(metafunc):
+    if "netmiko_method" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "netmiko_method",
+            ("send_command", "send_command_timing", "send_config_set"),
+            ids=["command", "timing", "config"],
+        )

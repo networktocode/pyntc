@@ -369,19 +369,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def test_check_command_output_for_errors(ios_device):
-    command_passes = ios_device._check_command_output_for_errors("valid command", "valid output")
-    assert command_passes is None
-
-
-@pytest.mark.parametrize("output", (r"% invalid output", "Error: invalid output"))
-def test_check_command_output_for_errors_error(output, ios_device):
-    with pytest.raises(ios_module.CommandError) as err:
-        ios_device._check_command_output_for_errors("invalid command", output)
-    assert err.value.command == "invalid command"
-    assert err.value.cli_error_msg == output
-
-
 @mock.patch.object(IOSDevice, "_check_command_output_for_errors")
 @mock.patch.object(IOSDevice, "_enter_config")
 def test_config_pass_string(mock_enter_config, mock_check_for_errors, ios_config):
@@ -774,29 +761,6 @@ def test_get_file_system_raise_error(mock_hostname, ios_show):
     device.show.assert_has_calls([mock.call("dir")] * 5)
 
 
-def test_send_command_error(ios_send_command):
-    command = "send_command_error"
-    device = ios_send_command([f"{command}.txt"])
-    with pytest.raises(ios_module.CommandError):
-        device._send_command(command)
-    device.native.send_command.assert_called()
-
-
-def test_send_command_expect(ios_send_command):
-    command = "send_command_expect"
-    device = ios_send_command([f"{command}.txt"])
-    device._send_command(command, expect_string="Continue?")
-    device.native.send_command.assert_called_with(command_string="send_command_expect", expect_string="Continue?")
-
-
-def test_send_command_timing(ios_send_command_timing):
-    command = "send_command_timing"
-    device = ios_send_command_timing([f"{command}.txt"])
-    device.native.send_command_timing(command)
-    device.native.send_command_timing.assert_called()
-    device.native.send_command_timing.assert_called_with(command)
-
-
 @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
@@ -1128,23 +1092,6 @@ def test_install_os_install_mode_from_everest_to_everest(
     mock_image_booted.assert_called_once()
     mock_wait_for_reboot.assert_not_called()
     assert actual is False
-
-
-def test_show(ios_send_command):
-    command = "show_ip_arp"
-    device = ios_send_command([f"{command}.txt"])
-    device.show(command)
-    device.native.send_command.assert_called_with(command_string="show_ip_arp")
-    device.native.send_command.assert_called_once()
-
-
-def test_show_list(ios_send_command):
-    commands = ["show_version", "show_ip_arp"]
-    device = ios_send_command([f"{commands[0]}.txt", f"{commands[1]}"])
-    device.show_list(commands)
-    device.native.send_command.assert_has_calls(
-        [mock.call(command_string="show_version"), mock.call(command_string="show_ip_arp")]
-    )
 
 
 @mock.patch.object(IOSDevice, "model", new_callable=mock.PropertyMock)

@@ -55,16 +55,18 @@ class ConfFileNotFoundError(NTCError):
 
 
 class CommandError(NTCError):
-    def __init__(self, command, message):
+    def __init__(self, command, message, commands=None):
         """
         Error for issuing ``command`` on device.
 
         Args:
             command (str): The command that failed.
             message (str): The error message returned from the device.
+            commands (list): The commands that were sent before an error was encountered.
         """
         self.command = command
         self.cli_error_msg = message
+        self.commands = commands
         message = "Command %s was not successful: %s" % (command, message)
         super().__init__(message)
 
