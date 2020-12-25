@@ -152,16 +152,12 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.native.file_copy.assert_called()
 
     def test_reboot(self):
-        self.device.reboot(confirm=True)
-        self.device.native.reboot.assert_called_with(confirm=True)
-
-    def test_reboot_no_confirm(self):
         self.device.reboot()
-        self.device.native.reboot.assert_called_with(confirm=False)
+        self.device.native.reboot.assert_called_with(confirm=True)
 
     def test_reboot_with_timer(self):
         with self.assertRaises(RebootTimerError):
-            self.device.reboot(confirm=True, timer=3)
+            self.device.reboot(timer=3)
 
     def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}

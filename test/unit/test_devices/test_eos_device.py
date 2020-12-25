@@ -233,16 +233,12 @@ class TestEOSDevice(unittest.TestCase):
             self.device.file_copy("source_file")
 
     def test_reboot(self):
-        self.device.reboot(confirm=True)
-        self.device.native.enable.assert_called_with(["reload now"], encoding="json")
-
-    def test_reboot_no_confirm(self):
         self.device.reboot()
-        assert not self.device.native.enable.called
+        self.device.native.enable.assert_called_with(["reload now"], encoding="json")
 
     def test_reboot_with_timer(self):
         with self.assertRaises(RebootTimerError):
-            self.device.reboot(confirm=True, timer=3)
+            self.device.reboot(timer=3)
 
     def test_boot_options(self):
         boot_options = self.device.boot_options

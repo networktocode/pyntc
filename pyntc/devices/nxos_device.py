@@ -166,11 +166,25 @@ class NXOSDevice(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, confirm=False, timer=0):
+    def reboot(self, timer=0):
+        """
+        Reload the controller or controller pair.
+
+        Args:
+            timer (int, optional): The time to wait before reloading. Defaults to 0.
+
+        Raises:
+            RebootTimerError: When the device is still unreachable after the timeout period.
+
+        Example:
+            >>> device = NXOSDevice(**connection_args)
+            >>> device.reboot()
+            >>
+        """
         if timer != 0:
             raise RebootTimerError(self.device_type)
 
-        self.native.reboot(confirm=confirm)
+        self.native.reboot(confirm=True)
 
     def rollback(self, filename):
         try:

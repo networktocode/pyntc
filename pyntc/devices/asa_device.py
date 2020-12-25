@@ -294,7 +294,7 @@ class ASADevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
-            self.reboot(confirm=True)
+            self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
@@ -379,31 +379,41 @@ class ASADevice(BaseDevice):
 
         return peer_redundancy_state.lower()
 
-    def reboot(self, timer=0, confirm=False):
-        if confirm:
+    def reboot(self, timer=0):
+        """
+        Reload the controller or controller pair.
 
-            def handler(signum, frame):
-                raise RebootSignal("Interrupting after reload")
+        Args:
+            timer (int, optional): The time to wait before reloading. Defaults to 0.
 
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
+        Raises:
+            RebootSignal: When the device is still unreachable after the timeout period.
 
-            try:
-                if timer > 0:
-                    first_response = self.show("reload in %d" % timer)
-                else:
-                    first_response = self.show("reload")
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.reboot()
+            >>>
+        """
+        def handler(signum, frame):
+            raise RebootSignal("Interrupting after reload")
 
-                if "System configuration" in first_response:
-                    self.native.send_command_timing("no")
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(10)
 
-                self.native.send_command_timing("\n")
-            except RebootSignal:
-                signal.alarm(0)
+        try:
+            if timer > 0:
+                first_response = self.show("reload in %d" % timer)
+            else:
+                first_response = self.show("reload")
 
+            if "System configuration" in first_response:
+                self.native.send_command_timing("no")
+
+            self.native.send_command_timing("\n")
+        except RebootSignal:
             signal.alarm(0)
-        else:
-            print("Need to confirm reboot with confirm=True")
+
+        signal.alarm(0)
 
     def reboot_standby(self, acceptable_states: Optional[Iterable[str]] = None, timeout: Optional[int] = None) -> None:
         """

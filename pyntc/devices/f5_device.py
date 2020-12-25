@@ -510,19 +510,31 @@ class F5Device(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, timer=0, confirm=False, volume=None):
-        if confirm:
-            if self._get_active_volume() == volume:
-                volume_name = None
-            else:
-                volume_name = volume
+    def reboot(self, timer=0, volume=None):
+        """
+        Reload the controller or controller pair.
 
-            self._reboot_to_volume(volume_name=volume_name)
+        Args:
+            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            volume (str, optional): Active volume to reboot. Defaults to None.
 
-            if not self._wait_for_device_reboot(volume_name=volume):
-                raise RuntimeError("Reboot to volume {} failed".format(volume))
+        Raises:
+            RuntimeError: If device is unreachable after timeout period, raise an error.
+        
+        Example:
+            >>> device = F5Device(**connection_args)
+            >>> device.reboot()
+            >>>
+        """
+        if self._get_active_volume() == volume:
+            volume_name = None
         else:
-            print("Need to confirm reboot with confirm=True")
+            volume_name = volume
+
+        self._reboot_to_volume(volume_name=volume_name)
+
+        if not self._wait_for_device_reboot(volume_name=volume):
+            raise RuntimeError("Reboot to volume {} failed".format(volume))
 
     def rollback(self, checkpoint_file):
         raise NotImplementedError

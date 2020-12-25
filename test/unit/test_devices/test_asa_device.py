@@ -222,16 +222,12 @@ class TestASADevice:
             self.device.file_copy("source_file")
 
     def test_reboot(self):
-        self.device.reboot(confirm=True)
+        self.device.reboot()
         self.device.native.send_command_timing.assert_any_call("reload")
 
     def test_reboot_with_timer(self):
-        self.device.reboot(confirm=True, timer=5)
+        self.device.reboot(timer=5)
         self.device.native.send_command_timing.assert_any_call("reload in 5")
-
-    def test_reboot_no_confirm(self):
-        self.device.reboot()
-        assert not self.device.native.send_command_timing.called
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):

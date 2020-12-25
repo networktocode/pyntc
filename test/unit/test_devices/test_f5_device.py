@@ -136,8 +136,7 @@ class TestF5Device:
         volume = VOLUME
         # skip the wait_for_device_reboot
         with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
-            self.device.reboot(confirm=True, volume=volume)
-            # self.device.reboot(confirm=True)
+            self.device.reboot(volume=volume)
 
         # # Check if _get_active_volume worked
         api.tm.sys.software.volumes.get_collection.assert_called()
@@ -151,26 +150,18 @@ class TestF5Device:
 
         # skipping timeout! It's too long!!
         with (mock.patch.object(self.device, "_wait_for_device_reboot", timeout=0)):
-            self.device.reboot(confirm=True, volume=volume)
+            self.device.reboot(volume=volume)
 
         # # Check if _get_active_volume worked
         api.tm.sys.software.volumes.get_collection.assert_called()
         # Check if _reboot_to_volume worked
         api.tm.sys.software.volumes.exec_cmd.assert_called_with("reboot", volume=volume)
 
-    def test_reboot_no_confirm(self):
-        api = self.device.api_handler
-        volume = VOLUME
-
-        self.device.reboot(confirm=False, volume=volume)
-
-        assert not api.tm.sys.software.volumes.exec_cmd.called
-
     def test_reboot_no_volume(self):
         api = self.device.api_handler
 
         with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
-            self.device.reboot(confirm=True)
+            self.device.reboot()
 
         # Check if _reboot_to_volume worked
         api.tm.util.bash.exec_cmd.assert_called_with("run", utilCmdArgs='-c "reboot"')

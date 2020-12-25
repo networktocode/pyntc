@@ -897,7 +897,7 @@ class AIREOSDevice(BaseDevice):
             self.set_boot_options(image_name, **vendor_specifics)
             if disable_wlans is not None:
                 self.disable_wlans(disable_wlans)
-            self.reboot(confirm=True, controller=controller, save_config=save_config)
+            self.reboot(controller=controller, save_config=save_config)
             self._wait_for_device_reboot(timeout=timeout)
             if disable_wlans is not None:
                 self.enable_wlans(disable_wlans)
@@ -1002,58 +1002,53 @@ class AIREOSDevice(BaseDevice):
             peer_redundancy_state = "disabled"
         return peer_redundancy_state
 
-    def reboot(self, timer=0, confirm=False, controller="self", save_config=True):
+    def reboot(self, timer=0, controller="self", save_config=True):
         """
         Reload the controller or controller pair.
 
         Args:
             timer (int): The time to wait before reloading.
-            confirm (bool): Whether to reboot the device or not.
             controller (str): Which controller(s) to reboot (only applies to HA pairs).
-            save_config (bool): Whether the configuraion should be saved before reload.
+            save_config (bool): Whether the configuration should be saved before reload.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
-            >>> device.reboot(confirm=True)
+            >>> device.reboot()
             >>>
         """
-        if confirm:
+        def handler(signum, frame):
+            raise RebootSignal("Interrupting after reload")
 
-            def handler(signum, frame):
-                raise RebootSignal("Interrupting after reload")
+        signal.signal(signal.SIGALRM, handler)
 
-            signal.signal(signal.SIGALRM, handler)
-
-            if self.redundancy_mode != "sso disabled":
-                reboot_command = f"reset system {controller}"
-            else:
-                reboot_command = "reset system"
-
-            if timer:
-                reboot_command += f" in {timer}"
-
-            if save_config:
-                self.save()
-
-            signal.alarm(20)
-            try:
-                response = self.native.send_command_timing(reboot_command)
-                if "save" in response:
-                    if not save_config:
-                        response = self.native.send_command_timing("n")
-                    else:
-                        response = self.native.send_command_timing("y")
-                if "reset" in response:
-                    self.native.send_command_timing("y")
-            except RebootSignal:
-                signal.alarm(0)
-
-            signal.alarm(0)
+        if self.redundancy_mode != "sso disabled":
+            reboot_command = f"reset system {controller}"
         else:
-            print("Need to confirm reboot with confirm=True")
+            reboot_command = "reset system"
+
+        if timer:
+            reboot_command += f" in {timer}"
+
+        if save_config:
+            self.save()
+
+        signal.alarm(20)
+        try:
+            response = self.native.send_command_timing(reboot_command)
+            if "save" in response:
+                if not save_config:
+                    response = self.native.send_command_timing("n")
+                else:
+                    response = self.native.send_command_timing("y")
+            if "reset" in response:
+                self.native.send_command_timing("y")
+        except RebootSignal:
+            signal.alarm(0)
+
+        signal.alarm(0)
 
     @property
     def redundancy_mode(self):

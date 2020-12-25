@@ -199,16 +199,12 @@ class TestJnprDevice(unittest.TestCase):
         mock_scp.assert_called_with(self.device.native)
 
     def test_reboot(self):
-        self.device.reboot(confirm=True)
+        self.device.reboot()
         self.device.sw.reboot.assert_called_with(in_min=0)
 
     def test_reboot_timer(self):
-        self.device.reboot(confirm=True, timer=2)
+        self.device.reboot(timer=2)
         self.device.sw.reboot.assert_called_with(in_min=2)
-
-    def test_reboot_no_confirm(self):
-        self.device.reboot()
-        assert not self.device.sw.reboot.called
 
     @mock.patch("pyntc.devices.jnpr_device.JunosDevice.running_config", new_callable=mock.PropertyMock)
     def test_backup_running_config(self, mock_run):

@@ -256,12 +256,20 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, timer=0, confirm=False):
+    def reboot(self, timer=0):
+        """
+        Reload the controller or controller pair.
+
+        Args:
+            timer (int, optional): The time to wait before reloading. Defaults to 0.
+
+        Example:
+            >>> device = JunosDevice(**connection_args)
+            >>> device.reboot()
+            >>>
+        """
         self.sw = JunosNativeSW(self.native)
-        if confirm:
-            self.sw.reboot(in_min=timer)
-        else:
-            print("Need to confirm reboot with confirm=True")
+        self.sw.reboot(in_min=timer)
 
     def rollback(self, filename):
         self.native.timeout = 60
