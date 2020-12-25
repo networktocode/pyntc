@@ -330,4 +330,4 @@ def netmiko_device():
     with mock.patch("netmiko.ConnectHandler") as ch:
         device = BaseNetmikoDevice("host", "user", "password", "cisco_ios_ssh")
         device.native = ch
-        yield device
+        return device
