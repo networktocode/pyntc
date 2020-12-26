@@ -520,7 +520,7 @@ class F5Device(BaseDevice):
 
         Raises:
             RuntimeError: If device is unreachable after timeout period, raise an error.
-        
+
         Example:
             >>> device = F5Device(**connection_args)
             >>> device.reboot()

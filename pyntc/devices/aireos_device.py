@@ -1019,6 +1019,7 @@ class AIREOSDevice(BaseDevice):
             >>> device.reboot()
             >>>
         """
+
         def handler(signum, frame):
             raise RebootSignal("Interrupting after reload")
 
