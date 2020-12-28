@@ -9,8 +9,13 @@ from pyntc.devices import aireos_device as aireos_module
 
 @pytest.mark.parametrize(
     "filename,version",
-    (("AIR-CT5520-K9-8-8-125-0.aes", "8.8.125.0"), ("AIR-CT5520-8-8-125-0.aes", "8.8.125.0")),
-    ids=("encrypted", "unencrypted"),
+    (
+        ("AIR-CT5520-K9-8-8-125-0.aes", "8.8.125.0"),
+        ("AIR-CT5520-8-8-125-0.aes", "8.8.125.0"),
+        ("AS_5500_8_5_161_7.aes", "8.5.161.7"),
+        ("AP_BUNDLE_5500_8_5_161_7.aes", "8.5.161.7"),
+    ),
+    ids=("encrypted", "unencrypted", "ircm", "ircm-bundle"),
 )
 def test_convert_filename_to_version(filename, version):
     assert aireos_module.convert_filename_to_version(filename) == version
