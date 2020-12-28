@@ -395,20 +395,6 @@ class IOSDevice(BaseNetmikoDevice):
 
         return True
 
-    @property
-    def connected(self):
-        """
-        The connection status of the device.
-
-        Returns:
-            bool: True if the device is connected, else False.
-        """
-        return self._connected
-
-    @connected.setter
-    def connected(self, value):
-        self._connected = value
-
     def enable(self):
         """Ensure device is in enable mode.
 
