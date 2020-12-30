@@ -12,6 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.16.0]
+### Added
+- ASADevice `is_active`, `peer_redundancy_state`, `redundancy_mode`, `redundancy_state` methods
+### Changed
+- AIREOSDevice `convert_filename_to_version` function now supports IRCM images
 
 ## [0.15.0]
 ### Added
