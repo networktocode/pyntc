@@ -6,7 +6,6 @@ from netmiko.cisco import CiscoWlcSSH, CiscoAsaSSH, CiscoIosSSH
 
 from pyntc.devices.base_netmiko import BaseNetmikoDevice
 from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice
-from pyntc.devices.base_netmiko import BaseNetmikoDevice
 
 
 NETMIKO_CLASS_MAP = {
