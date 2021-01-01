@@ -11,7 +11,11 @@ from pyntc.devices import asa_device as asa_module
 BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.asa_device.ASADevice.boot_options"
 ACTIVE = "active"
-STANDBY = "standby ready"
+STANDBY_READY = "standby ready"
+NEGOTIATION = "negotiation"
+FAILED = "failed"
+NOT_DETECTED = "not detected"
+COLD_STANDBY = "cold standby"
 
 
 class TestASADevice:
@@ -306,15 +310,72 @@ class TestASADevice:
         assert self.count_teardown == 0
 
 
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
+    mock_peer_redundancy_state.side_effect = [STANDBY_READY, FAILED, FAILED, STANDBY_READY]
+    asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
+    assert mock_peer_redundancy_state.call_count == 4
+
+
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_device):
+    mock_peer_redundancy_state.return_value = STANDBY_READY
+    with pytest.raises(asa_module.RebootTimeoutError):
+        asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
+
+    assert mock_peer_redundancy_state.call_count > 1
+
+
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_wait_for_peer_reboot_fail_state_error(mock_peer_redundancy_state, asa_device):
+    mock_peer_redundancy_state.side_effect = [FAILED, FAILED, COLD_STANDBY, COLD_STANDBY]
+    with pytest.raises(asa_module.RebootTimeoutError):
+        asa_device._wait_for_peer_reboot([STANDBY_READY], 1)
+
+    assert mock_peer_redundancy_state.call_count > 1
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_reboot_standby(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
+    mock_peer_redundancy_state.return_value = STANDBY_READY
+    device = asa_show([""])
+    assert device.reboot_standby() is None
+    mock_peer_redundancy_state.assert_called_once()
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[STANDBY_READY])
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_reboot_standby_pass_args(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
+    device = asa_show([""])
+    device.reboot_standby(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+    mock_peer_redundancy_state.assert_not_called()
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+def test_reboot_standby_error(mock_wait_for_peer_reboot, asa_show):
+    device = asa_show([""])
+    mock_wait_for_peer_reboot.side_effect = [asa_module.RebootTimeoutError(device.host, 1)]
+    with pytest.raises(asa_module.RebootTimeoutError):
+        device.reboot_standby(acceptable_states=[STANDBY_READY], timeout=1)
+
+    mock_wait_for_peer_reboot.assert_called()
+
+
 @mock.patch.object(ASADevice, "redundancy_state", new_callable=mock.PropertyMock)
 @pytest.mark.parametrize(
     "redundancy_state,expected",
     (
-        ("active", True),
-        ("standby ready", False),
+        (ACTIVE, True),
+        (STANDBY_READY, False),
+        (NEGOTIATION, False),
+        (FAILED, False),
+        (COLD_STANDBY, False),
         (None, True),
     ),
-    ids=("active", "standby_ready", "unsupported"),
+    ids=(ACTIVE, "standby_ready", NEGOTIATION, FAILED, "cold_standby", "unsupported"),
 )
 def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected):
     mock_redundancy_state.return_value = redundancy_state
@@ -325,15 +386,29 @@ def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected
 @pytest.mark.parametrize(
     "side_effect,expected",
     (
-        ("show_failover_host_active.txt", STANDBY),
+        ("show_failover_host_active.txt", STANDBY_READY),
         ("show_failover_host_standby.txt", ACTIVE),
         ("show_failover_host_off.txt", "disabled"),
         ("show_failover_groups_active_active.txt", ACTIVE),
-        ("show_failover_groups_active_standby.txt", STANDBY),
+        ("show_failover_groups_active_standby.txt", STANDBY_READY),
         ("show_failover_groups_standby_active.txt", ACTIVE),
+        ("show_failover_peer_cold.txt", COLD_STANDBY),
+        ("show_failover_peer_failed.txt", FAILED),
+        ("show_failover_peer_not_detected.txt", NOT_DETECTED),
         (asa_module.CommandError("show failover", r"% invalid command"), None),
     ),
-    ids=("standby", ACTIVE, "disabled", "active_active", "active_standby", "standby_active", "none"),
+    ids=(
+        "standby",
+        ACTIVE,
+        "disabled",
+        "active_active",
+        "active_standby",
+        "standby_active",
+        COLD_STANDBY,
+        FAILED,
+        NOT_DETECTED,
+        "none",
+    ),
 )
 def test_peer_redundancy_state(side_effect, expected, asa_show):
     device = asa_show([side_effect])
@@ -360,14 +435,15 @@ def test_redundancy_mode(side_effect, expected, asa_show):
     "side_effect,expected",
     (
         ("show_failover_host_active.txt", ACTIVE),
-        ("show_failover_host_standby.txt", STANDBY),
+        ("show_failover_host_standby.txt", STANDBY_READY),
         ("show_failover_host_off.txt", "disabled"),
+        ("show_failover_host_negotiation.txt", NEGOTIATION),
         ("show_failover_groups_active_active.txt", ACTIVE),
         ("show_failover_groups_active_standby.txt", ACTIVE),
-        ("show_failover_groups_standby_active.txt", STANDBY),
+        ("show_failover_groups_standby_active.txt", STANDBY_READY),
         (asa_module.CommandError("show failover", r"% invalid command"), None),
     ),
-    ids=(ACTIVE, "standby", "disabled", "active_active", "active_standby", "standby_active", "none"),
+    ids=(ACTIVE, "standby", "disabled", NEGOTIATION, "active_active", "active_standby", "standby_active", "none"),
 )
 def test_redundancy_state(side_effect, expected, asa_show):
     device = asa_show([side_effect])
