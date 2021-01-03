@@ -7,10 +7,11 @@ import signal
 import time
 import warnings
 from collections import Counter
+from typing import List, Dict, Union, Optional, Iterable
+from ipaddress import ip_address, IPv4Address, IPv6Address, IPv4Interface, IPv6Interface
 
-from netmiko import ConnectHandler
-from netmiko import FileTransfer
-from typing import Iterable, Optional
+from netmiko import ConnectHandler, FileTransfer
+from netmiko.cisco import CiscoAsaSSH
 
 from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
@@ -28,6 +29,8 @@ from pyntc.errors import (
 
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
+RE_SHOW_IP_ADDRESS = re.compile(r"^\S+\s+(\S+)\s+((?:\d+.){3}\d+)\s+((?:\d+.){3}\d+)", re.M)
+RE_IPV6_INTERFACE_MATCH = re.compile(r"^\s+([A-Fa-f0-9:]{5,}).+?(/\d+)\s*$", re.M)
 
 
 @fix_docs
@@ -37,16 +40,18 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, **kwargs):
+    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
-        self.native = None
+        self.native: Optional[CiscoAsaSSH] = None
         self.secret = secret
         self.port = int(port)
-        self.global_delay_factor = kwargs.get("global_delay_factor", 1)
-        self.delay_factor = kwargs.get("delay_factor", 1)
+        self.kwargs = kwargs
+        self.global_delay_factor: int = kwargs.get("global_delay_factor", 1)
+        self.delay_factor: int = kwargs.get("delay_factor", 1)
         self._connected = False
         self.open()
+        self._peer_device: Optional[ASADevice] = None
 
     def _enable(self):
         warnings.warn("_enable() is deprecated; use enable().", DeprecationWarning)
@@ -81,6 +86,82 @@ class ASADevice(BaseDevice):
 
             raise FileSystemNotFoundError(hostname=self.host, command="dir")
         return file_system
+
+    def _get_ipv4_addresses(self, host: str) -> Dict[str, List[IPv4Address]]:
+        """
+        Get IPv4 Addresses for ``host``.
+
+        Args:
+            host (str): Whether to get IP Addresses for `self` or `peer` device.
+
+        Returns:
+            dict: The list of ``ip_interface`` objects mapped to their associated interface.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev._get_ipv4_addresses("self")
+            {'outside': [IPv4Interface('10.132.8.6/24')], 'inside': [IPv4Interface('10.1.1.2/23')]}
+            >>> dev._get_ipv4_addresses("peer")
+            {'outside': [IPv4Interface('10.132.8.7')], 'inside': [IPv4Interface('10.1.1.3')]}
+            >>>
+        """
+        if host == "self":
+            command = "show ip address"
+        elif host == "peer":
+            command = "failover exec mate show ip address"
+
+        show_ip_address = self.show(command)
+        re_ip_addresses = RE_SHOW_IP_ADDRESS.findall(show_ip_address)
+
+        return {interface: [IPv4Interface(f"{address}/{netmask}")] for interface, address, netmask in re_ip_addresses}
+
+    def _get_ipv6_addresses(self, host: str) -> Dict[str, List[IPv6Address]]:
+        """
+        Get IPv6 Addresses for ``host``.
+
+        Args:
+            host (str): Whether to get IP Addresses for `self` or `peer` device.
+
+        Returns:
+            dict: The list of ``ip_interface`` objects mapped to their associated interface.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev._get_ipv6_addresses("self")
+            {'outside': [IPv6Interface('fe80::2a0:c9ff:fe03:101')]}
+            >>> dev._get_ipv6_addresses("peer")
+            {'outside': [IPv6Interface('fe80::2a0:c9ff:fe03:102')]}
+            >>>
+        """
+        if host == "self":
+            command = "show ipv6 interface"
+        elif host == "peer":
+            command = "failover exec mate show ipv6 interface"
+
+        show_ipv6_interface = self.show(command)
+        show_ipv6_interface_lines: List[str] = show_ipv6_interface.strip().splitlines()
+        first_line = show_ipv6_interface_lines.pop(0)
+        interface: str = first_line.split()[0]
+        ipv6_addresses: List[IPv6Interface] = []
+        results: Dict[str, List] = {}
+        for line in show_ipv6_interface_lines:
+            # match IPv6 addresses under interface line
+            if line[0].isspace():
+                match = RE_IPV6_INTERFACE_MATCH.match(line)
+                if match:
+                    ipv6_addresses.append(IPv6Interface(f"{match.group(1)}{match.group(2)}"))
+            # update results mapping interface to matched IPv6 addresses and generate the next interface name
+            else:
+                if ipv6_addresses:
+                    results[interface] = ipv6_addresses
+                    ipv6_addresses = []
+                interface = line.split()[0]
+
+        # Add final interface in iteration if it has IPv6 addresses
+        if ipv6_addresses:
+            results[interface] = ipv6_addresses
+
+        return results
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
@@ -237,6 +318,30 @@ class ASADevice(BaseDevice):
                 raise CommandListError(entered_commands, command, e.cli_error_msg)
         self.native.exit_config_mode()
 
+    @property
+    def connected_interface(self) -> str:
+        """
+        The interface that is assigned an IP Address of ``self.ip_address``.
+
+        Returns:
+            str: The name of the interfaces associated to ``self.ip_address``.
+
+        Example:
+            >>> dev = ASADevice("10.1.1.1", **connection_args)
+            >>> dev.connected_interface
+            'management'
+            >>>
+        """
+        address = self.ip_address
+        ip_property = getattr(self, f"{self.ip_protocol}_addresses")
+        for interface, addresses in ip_property.items():
+            addrs = {ip_address(addr.ip) for addr in addresses}
+            if address in addrs:
+                connected_interface = interface
+                break
+
+        return connected_interface  # TODO: Raise custom exception for when connected_interface is not discovered
+
     def enable(self):
         """Ensure device is in enable mode.
 
@@ -303,6 +408,90 @@ class ASADevice(BaseDevice):
 
         return False
 
+    @property
+    def ip_address(self) -> Union[IPv4Address, IPv6Address]:
+        """
+        The IP Address used to establish the connection to the device.
+
+        Returns:
+            IPv4Address/IPv6Address: The IP address used by the paramiko connection.
+
+        Raises:
+            ValueError: When a valid IP Address is unable to be derived from ``self.host``.
+
+        Example:
+            >>> dev = ASADevice("10.1.1.1", **connection_args)
+            >>> dev.ip_address
+            IPv4Address('10.1.1.1')
+            >>> dev = ASADevice("asa_host", **connection_args)
+            >>> dev.ip_address
+            IPv6Address('fe80::2a0:c9ff:fe03:102')
+            >>>
+        """
+        try:
+            ip = ip_address(self.host)
+        except ValueError:
+            # Assume hostname was used, and retrieve resolved IP from paramiko transport
+            ip = ip_address(self.native.remote_conn.transport.getpeername()[0])
+
+        return ip
+
+    @property
+    def ipv4_addresses(self) -> Dict[str, List[IPv4Address]]:
+        """
+        The IPv4 addresses of the device's interfaces.
+
+        Returns:
+            dict: The ipv4 addresses mapped to their interfaces.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.ipv4_addresses
+            {'outside': [IPv4Interface('10.132.8.6/24')], 'inside': [IPv4Interface('10.1.1.2/23')]}
+            >>>
+        """
+        return self._get_ipv4_addresses("self")
+
+    @property
+    def ipv6_addresses(self) -> Dict[str, List[IPv6Address]]:
+        """
+        The IPv6 addresses of the device's interfaces.
+
+        Returns:
+            dict: The ipv6 addresses mapped to their interfaces.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.ipv6_addresses
+            {'outside': [IPv6Interface('fe80::5200:ff:fe0a:1')]}
+            >>>
+        """
+        return self._get_ipv6_addresses("self")
+
+    @property
+    def ip_protocol(self) -> str:
+        """
+        The IP Protocol of the IP Addressed used by the underlying paramiko connection.
+
+        Returns:
+            str: "ipv4" for IPv4 Addresses and "ipv6" for IPv6 Addresses.
+
+        Raises:
+            ValueError: When ``self.ip_address`` is unable to derive a valid IP Address.
+
+        Example:
+            >>> dev = ASADevice("10.1.1.1", **connection_args)
+            >>> dev.ip_protocol
+            'ipv4'
+            >>> dev = ASADevice("asa_host", **connection_args)
+            >>> dev.ip_protocol
+            'ipv6'
+            >>>
+        """
+        protocol = f"ipv{self.ip_address.version}"
+
+        return protocol
+
     def is_active(self):
         """
         Determine if the current processor is the active processor.
@@ -337,6 +526,76 @@ class ASADevice(BaseDevice):
                 verbose=False,
             )
             self._connected = True
+
+    @property
+    def peer_device(self) -> "ASADevice":
+        if self._peer_device is None:
+            self._peer_device = self.__class__(
+                str(self.peer_ip_address), self.username, self.password, self.secret, self.port, **self.kwargs
+            )
+        else:
+            self._peer_device.open()
+
+        return self._peer_device
+
+    @property
+    def peer_ip_address(self) -> Union[IPv4Address, IPv6Address]:
+        """
+        The IP Address associated with ``self.ip_address`` on the peer device.
+
+        Returns:
+            IPv4Address/IPv6Address: The IP address used by the paramiko connection.
+
+        Raises:
+            ValueError: When a valid IP Address is unable to be derived from ``self.host``.
+
+        Example:
+            >>> dev = ASADevice("10.1.1.1", **connection_args)
+            >>> dev.peer_ip_address
+            IPv4Address('10.1.1.2')
+            >>> dev = ASADevice("asa_host", **connection_args)
+            >>> dev.peer_ip_address
+            IPv6Address('fe80::2a0:c9ff:fe03:103')
+            >>>
+        """
+        self_address = self.ip_address
+        peer_ip_property = getattr(self, f"peer_{self.ip_protocol}_addresses")
+        peer_ip_addresses = peer_ip_property[self.connected_interface]
+        for address in peer_ip_addresses:
+            if self_address in address.network:
+                return address.ip
+
+    @property
+    def peer_ipv4_addresses(self) -> Dict[str, List[IPv4Address]]:
+        """
+        The IPv4 addresses of the peer device's interfaces.
+
+        Returns:
+            dict: The ipv4 addresses mapped to their interfaces.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.peer_ipv4_addresses
+            {'outside': [IPv4Address('10.132.8.7')], 'inside': [IPv4Address('10.1.1.3')]}
+            >>>
+        """
+        return self._get_ipv4_addresses("peer")
+
+    @property
+    def peer_ipv6_addresses(self) -> Dict[str, List[IPv6Address]]:
+        """
+        The IPv6 addresses of the peer device's interfaces.
+
+        Returns:
+            dict: The ipv6 addresses mapped to their interfaces.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.peer_ipv6_addresses
+            {'outside': [IPv6Address('fe80::5200:ff:fe0a:2')]}
+            >>>
+        """
+        return self._get_ipv6_addresses("peer")
 
     @property
     def peer_redundancy_state(self):
