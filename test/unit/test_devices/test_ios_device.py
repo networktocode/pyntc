@@ -21,6 +21,35 @@ DEVICE_FACTS = {
     "serial": "",
     "config_register": "0x2102",
 }
+SHOW_BOOT_VARIABLE = (
+    "Current Boot Variables:\n"
+    "BOOT variable = flash:/cat3k_caa-universalk9.16.11.03a.SPA.bin;\n\n"
+    "Boot Variables on next reload:\n"
+    f"BOOT variable = flash:/{BOOT_IMAGE};\n"
+    "Manual Boot = no\n"
+    "Enable Break = no\n"
+    "Boot Mode = DEVICE\n"
+    "iPXE Timeout = 0"
+)
+
+SHOW_BOOT_PATH_LIST = (
+    f"BOOT path-list      : {BOOT_IMAGE}\n"
+    "Config file         : flash:/config.text\n"
+    "Private Config file : flash:/private-config.text\n"
+    "Enable Break        : yes\n"
+    "Manual Boot         : no\n"
+    "Allow Dev Key         : yes\n"
+    "HELPER path-list    :  \n"
+    "Auto upgrade        : yes\n"
+    "Auto upgrade path   :  \n"
+    "Boot optimization   : disabled\n"
+    "NVRAM/Config file\n"
+    "      buffer size:   524288\n"
+    "Timeout for Config\n"
+    "          Download:    0 seconds\n"
+    "Config Download\n"
+    "      via DHCP:       disabled (next boot: disabled)"
+)
 
 
 class TestIOSDevice(unittest.TestCase):
@@ -194,24 +223,6 @@ class TestIOSDevice(unittest.TestCase):
         boot_options = self.device.boot_options
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command.assert_called_with("show bootvar")
-
-    @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-    def test_boot_options_show_boot(self, mock_boot):
-        show_boot_out = (
-            "Current Boot Variables:\n"
-            "BOOT variable = flash:/cat3k_caa-universalk9.16.11.03a.SPA.bin;\n\n"
-            "Boot Variables on next reload:\n"
-            f"BOOT variable = flash:/{BOOT_IMAGE};\n"
-            "Manual Boot = no\n"
-            "Enable Break = no\n"
-            "Boot Mode = DEVICE\n"
-            "iPXE Timeout = 0"
-        )
-        results = [ios_module.CommandError("show bootvar", "fail"), show_boot_out]
-        self.device.native.send_command.side_effect = results
-        boot_options = self.device.boot_options
-        self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
-        self.device.native.send_command.assert_called_with("show boot")
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
     def test_boot_options_show_run(self, mock_boot):
@@ -1155,3 +1166,13 @@ def test_vlans(mock_show_vlan, mock_model, ios_show):
     print(device)
     mock_show_vlan.return_value = [{"vlan_id": "1"}, {"vlan_id": "2"}, {"vlan_id": "3"}, {"vlan_id": "4"}]
     assert device.vlans == ["1", "2", "3", "4"]
+
+
+@pytest.mark.parametrize("show_boot_out", (SHOW_BOOT_VARIABLE, SHOW_BOOT_PATH_LIST), ids=("bootvar", "bootpath"))
+@mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
+def test_boot_options_show_boot(mock_boot, show_boot_out, ios_send_command):
+    results = [ios_module.CommandError("show bootvar", "fail"), show_boot_out]
+    device = ios_send_command(results)
+    boot_options = device.boot_options
+    assert boot_options == {"sys": BOOT_IMAGE}
+    device.native.send_command.assert_called_with(command_string="show boot")
