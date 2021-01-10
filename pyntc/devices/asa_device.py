@@ -10,6 +10,7 @@ from collections import Counter
 
 from netmiko import ConnectHandler
 from netmiko import FileTransfer
+from typing import Iterable, Optional
 
 from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
@@ -155,6 +156,45 @@ class ASADevice(BaseDevice):
         # TODO: Get proper hostname parameter
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
+    def _wait_for_peer_reboot(self, acceptable_states: Iterable[str], timeout: int = 3600) -> None:
+        """
+        Wait for peer device to come online and reach an acceptable state.
+
+        Args:
+            acceptable_states (iter): A list of states that are acceptable for considering peer to be ready.
+            timeout (int): The maximum amount of time to wait for peer device to be online and reach a state in ``acceptable_states``.
+
+        Raises:
+            RebootTimeoutError: When the ``timeout`` value has been reached and the peer has not reached a state in ``acceptable_states``.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.peer_redundancy_state
+            'standby ready'
+            >>> dev.show("failover reload-standby")
+            >>> dev._wait_for_peer_reboot(acceptable_states=["standy ready"])
+            RebootTimeoutError...
+            >>> dev.peer_redundancy_state
+            'cold standby'
+            >>> dev.show("failover reload-standby")
+            >>> dev._wait_for_peer_reboot(acceptable_states=["cold-standby", "standy ready"])
+            >>> dev.peer_redundancy_state
+            'cold standby'
+            >>>
+        """
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.peer_redundancy_state == "failed":
+                break
+
+        while time.time() - start < timeout:
+            if self.peer_redundancy_state in acceptable_states:
+                return
+            time.sleep(1)
+
+        # TODO: Get proper hostname parameter
+        raise RebootTimeoutError(hostname=f"{self.host}-peer", wait_time=timeout)
+
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
@@ -262,7 +302,6 @@ class ASADevice(BaseDevice):
             return True
 
         return False
-        return False
 
     def is_active(self):
         """
@@ -365,6 +404,39 @@ class ASADevice(BaseDevice):
             signal.alarm(0)
         else:
             print("Need to confirm reboot with confirm=True")
+
+    def reboot_standby(self, acceptable_states: Optional[Iterable[str]] = None, timeout: Optional[int] = None) -> None:
+        """
+        Reload the standby device from the active device.
+
+        Args:
+            acceptable_states (iter): List of acceptable redundancy states for the peer device after reboot.
+                Default will use the current value of ``peer_redundancy_state``.
+            timeout (int): The maximum time to wait for the device to boot back into an ``acceptable_state``.
+
+        Raises:
+            RebootTimeoutError: When ``timeout`` is reached before the peer reaches a state in ``acceptable_states``.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.peer_redundancy_state
+            'standby ready'
+            >>> dev.reboot_standby()
+            RebootTimeoutError...
+            >>> dev.peer_redundancy_state
+            'cold standby'
+            >>> dev.reboot_standby(acceptbale_states=["standby ready", "cold standby"])
+            >>> dev.peer_redundancy_state
+            'cold standby'
+            >>>
+        """
+        if acceptable_states is None:
+            acceptable_states = [self.peer_redundancy_state]
+        kwargs = {"acceptable_states": acceptable_states}
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        self.show("failover reload-standby")
+        self._wait_for_peer_reboot(**kwargs)
 
     @property
     def redundancy_mode(self):
