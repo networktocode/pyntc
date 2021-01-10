@@ -241,7 +241,10 @@ class IOSDevice(BaseDevice):
 
         match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
         if match:
-            boot_path = match.group(1)
+            boot_path_tuple = match.groups()
+            # The regex match will return two values: the boot value and None
+            # The return order will depend on which side of the `or` is matched in the regex
+            boot_path = [value for value in boot_path_tuple if value is not None][0]
             file_system = self._get_file_system()
             boot_image = boot_path.replace(file_system, "")
             boot_image = boot_image.replace("/", "")
