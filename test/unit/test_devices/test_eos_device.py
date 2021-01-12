@@ -31,17 +31,17 @@ class TestEOSDevice(unittest.TestCase):
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.native.config.assert_called_with([command])
+        self.device.native.config.assert_called_with(command)
 
     def test_bad_config(self):
         command = "asdf poknw"
 
-        with self.assertRaisesRegex(CommandError, command):
+        with self.assertRaisesRegex(CommandListError, command[0]):
             self.device.config(command)
 
     def test_config_list(self):
         commands = ["interface Eth1", "no shutdown"]
-        result = self.device.config_list(commands)
+        result = self.device.config(commands)
 
         self.assertIsNone(result)
         self.device.native.config.assert_called_with(commands)
@@ -50,7 +50,7 @@ class TestEOSDevice(unittest.TestCase):
         commands = ["interface Eth1", "apons"]
 
         with self.assertRaisesRegex(CommandListError, commands[1]):
-            self.device.config_list(commands)
+            self.device.config(commands)
 
     def test_show(self):
         command = "show ip arp"

@@ -150,17 +150,32 @@ class EOSDevice(BaseDevice):
     def close(self):
         pass
 
-    def config(self, command):
-        try:
-            self.config_list([command])
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
+    def config(self, commands):
+        """Merged config and config_list methods.
 
-    def config_list(self, commands):
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
+
+        Raises:
+            CommandListError: Issue with the command list provided.
+        """
+        # pyeapi config() method already takes (str, list) and converts it to a list if its a str.
         try:
             self.native.config(commands)
         except EOSCommandError as e:
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+
+    # def config(self, command):
+    #     try:
+    #         self.config_list([command])
+    #     except CommandListError as e:
+    #         raise CommandError(e.command, e.message)
+
+    # def config_list(self, commands):
+    #     try:
+    #         self.native.config(commands)
+    #     except EOSCommandError as e:
+    #         raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def enable(self):
         """Ensure device is in enable mode.
