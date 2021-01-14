@@ -36,7 +36,7 @@ class TestEOSDevice(unittest.TestCase):
     def test_bad_config(self):
         command = "asdf poknw"
 
-        with self.assertRaisesRegex(CommandListError, command[0]):
+        with self.assertRaisesRegex(CommandError, command[0]):
             self.device.config(command)
 
     def test_config_list(self):

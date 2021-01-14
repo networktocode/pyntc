@@ -158,12 +158,12 @@ class EOSDevice(BaseDevice):
             commands (str, list): String with single command, or list with multiple commands.
 
         Raises:
-            CommandListError: Issue with the command list provided.
+            CommandError: Issue with the command provided.
+            CommandListError: Issue with a command in the list provided.
         """
         try:
             self.native.config(commands)
         except EOSCommandError as e:
-            print("this exception")
             if isinstance(commands, str):
                 raise CommandError(commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
