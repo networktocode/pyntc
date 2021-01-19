@@ -139,12 +139,12 @@ class JunosDevice(BaseDevice):
     def config_list(self, commands, format="set"):
         """Send configuration commands in list format to a device.
 
-         DEPRECATED - Use the `config` method.
+        DEPRECATED - Use the `config` method.
 
-         Args:
-             commands (list): List with multiple commands.
-         """
-         warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
         self.config(commands, format="set")
 
     @property
