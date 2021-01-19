@@ -69,12 +69,12 @@ class TestJnprDevice(unittest.TestCase):
         command = "asdf poknw"
         self.device.cu.load.side_effect = ConfigLoadError(command)
 
-        with self.assertRaisesRegex(CommandError, command):
+        with self.assertRaisesRegex(CommandListError, command):
             self.device.config(command)
 
     def test_config_list(self):
         commands = ["set interfaces lo0", "set snmp community jason"]
-        result = self.device.config_list(commands)
+        result = self.device.config(commands)
 
         self.assertIsNone(result)
 
@@ -93,7 +93,7 @@ class TestJnprDevice(unittest.TestCase):
         self.device.cu.load.side_effect = load_side_effect
 
         with self.assertRaisesRegex(CommandListError, commands[1]):
-            self.device.config_list(commands)
+            self.device.config(commands)
 
     def test_show(self):
         command = "show configuration snmp"
