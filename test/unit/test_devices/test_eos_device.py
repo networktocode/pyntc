@@ -41,9 +41,6 @@ class TestEOSDevice(unittest.TestCase):
         self.assertIsNone(result)
         self.device.native.config.assert_called_with(commands)
 
-
-    def test_config_list(self):
-
     def test_bad_config_as_str(self):
         command = "asdf poknw"
         response = "Error [1002]: asdf_poknw failed [None]"
