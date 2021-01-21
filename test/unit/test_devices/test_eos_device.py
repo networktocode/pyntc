@@ -27,21 +27,27 @@ class TestEOSDevice(unittest.TestCase):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
-    def test_config_as_str(self):
+    def test_config_pass_string(self):
         command = "interface Eth1"
         result = self.device.config(command)
 
         self.assertIsNone(result)
         self.device.native.config.assert_called_with(command)
 
-    def test_config_as_list(self):
+    def test_config_pass_list(self):
         commands = ["interface Eth1", "no shutdown"]
         result = self.device.config(commands)
 
         self.assertIsNone(result)
         self.device.native.config.assert_called_with(commands)
 
-    def test_bad_config_as_str(self):
+    @mock.patch.object(EOSDevice, "config")
+    def test_config_list(self, mock_config):
+        commands = ["interface Eth1", "no shutdown"]
+        self.device.config_list(commands)
+        self.device.config.assert_called_with(commands)
+
+    def test_bad_config_pass_string(self):
         command = "asdf poknw"
         response = "Error [1002]: asdf_poknw failed [None]"
 
@@ -50,7 +56,7 @@ class TestEOSDevice(unittest.TestCase):
         assert err.value.command == command
         assert err.value.cli_error_msg == response
 
-    def test_bad_config_as_list(self):
+    def test_bad_config_pass_list(self):
         commands = ["interface Eth1", "apons"]
         response = [
             "Valid",
