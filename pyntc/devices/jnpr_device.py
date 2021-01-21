@@ -125,6 +125,7 @@ class JunosDevice(BaseDevice):
 
          Raises:
              ConfigLoadError: Issue with loading the command.
+             CommandError: Issue with the command provided, if its a single command, passed in as a string.
              CommandListError: Issue with a command in the list provided.
         """
         if isinstance(commands, str):
