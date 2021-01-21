@@ -134,7 +134,6 @@ class JunosDevice(BaseDevice):
             except ConfigLoadError as e:
                 raise CommandError(commands, e.message)
         else:
-            print("got into list")
             try:
                 for command in commands:
                     self.cu.load(command, format=format)
