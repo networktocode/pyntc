@@ -71,13 +71,15 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(commands)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_called_with(commands, format="set")
+        self.device.cu.load.assert_any_call(commands[0], format="set")
+        self.device.cu.load.assert_any_call(commands[1], format="set")
         self.device.cu.commit.assert_called_with()
 
     @mock.patch.object(JunosDevice, "config")
     def test_config_list(self, mock_config):
-        commands = ["interface Eth1", "no shutdown"]
-        self.device.config_list(commands)
+        commands = ["set interfaces lo0", "set snmp community jason"]
+
+        self.device.config_list(commands, format="set")
         self.device.config.assert_called_with(commands, format="set")
 
     def test_bad_config_pass_string(self):
