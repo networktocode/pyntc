@@ -1,6 +1,7 @@
 import unittest
 import mock
 import os
+import pytest
 import time
 
 from .device_mocks.eos import enable, config
@@ -26,31 +27,46 @@ class TestEOSDevice(unittest.TestCase):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
-    def test_config(self):
+    def test_config_pass_string(self):
         command = "interface Eth1"
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.native.config.assert_called_with([command])
+        self.device.native.config.assert_called_with(command)
 
-    def test_bad_config(self):
-        command = "asdf poknw"
-
-        with self.assertRaisesRegex(CommandError, command):
-            self.device.config(command)
-
-    def test_config_list(self):
+    def test_config_pass_list(self):
         commands = ["interface Eth1", "no shutdown"]
-        result = self.device.config_list(commands)
+        result = self.device.config(commands)
 
         self.assertIsNone(result)
         self.device.native.config.assert_called_with(commands)
 
-    def test_bad_config_list(self):
-        commands = ["interface Eth1", "apons"]
+    @mock.patch.object(EOSDevice, "config")
+    def test_config_list(self, mock_config):
+        commands = ["interface Eth1", "no shutdown"]
+        self.device.config_list(commands)
+        self.device.config.assert_called_with(commands)
 
-        with self.assertRaisesRegex(CommandListError, commands[1]):
-            self.device.config_list(commands)
+    def test_bad_config_pass_string(self):
+        command = "asdf poknw"
+        response = "Error [1002]: asdf_poknw failed [None]"
+
+        with pytest.raises(CommandError) as err:
+            self.device.config(command)
+        assert err.value.command == command
+        assert err.value.cli_error_msg == response
+
+    def test_bad_config_pass_list(self):
+        commands = ["interface Eth1", "apons"]
+        response = [
+            "Valid",
+            "\nCommand apons failed with message: Error [1002]: apons failed [None]\nCommand List: \n\tinterface Eth1\n\tapons\n",
+        ]
+
+        with pytest.raises(CommandListError) as err:
+            self.device.config(commands)
+        assert err.value.command == commands[1]
+        assert err.value.message == response[1]
 
     def test_show(self):
         command = "show ip arp"

@@ -29,6 +29,11 @@ def enable(commands, encoding="json"):
 
 
 def config(commands):
+    original_command_is_str: bool = isinstance(commands, str)
+
+    if original_command_is_str:
+        commands = [commands]  # type: ignore [list-item]
+
     responses = []
     executed_commands = []
     for command in commands:
