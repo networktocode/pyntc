@@ -71,8 +71,7 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(commands)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_any_call(commands[0], format="set")
-        self.device.cu.load.assert_any_call(commands[1], format="set")
+        self.device.cu.load.assert_has_calls(mock.call(command, format="set") for command in commands)
         self.device.cu.commit.assert_called_with()
 
     @mock.patch.object(JunosDevice, "config")
