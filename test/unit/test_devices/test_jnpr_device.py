@@ -1,6 +1,7 @@
 import unittest
 import mock
 import os
+import pytest
 
 from tempfile import NamedTemporaryFile
 
@@ -57,7 +58,7 @@ class TestJnprDevice(unittest.TestCase):
         self.mock_config.stop()
         self.mock_device.stop()
 
-    def test_config(self):
+    def test_config_pass_string(self):
         command = "set interfaces lo0"
         result = self.device.config(command)
 
@@ -65,25 +66,30 @@ class TestJnprDevice(unittest.TestCase):
         self.device.cu.load.assert_called_with(command, format="set")
         self.device.cu.commit.assert_called_with()
 
-    def test_bad_config(self):
+    def test_config_pass_list(self):
+        commands = ["set interfaces lo0", "set snmp community jason"]
+        result = self.device.config(commands)
+
+        self.assertIsNone(result)
+        self.device.cu.load.assert_has_calls(mock.call(command, format="set") for command in commands)
+        self.device.cu.commit.assert_called_with()
+
+    @mock.patch.object(JunosDevice, "config")
+    def test_config_list(self, mock_config):
+        commands = ["set interfaces lo0", "set snmp community jason"]
+
+        self.device.config_list(commands, format="set")
+        self.device.config.assert_called_with(commands, format="set")
+
+    def test_bad_config_pass_string(self):
         command = "asdf poknw"
         self.device.cu.load.side_effect = ConfigLoadError(command)
 
-        with self.assertRaisesRegex(CommandError, command):
+        with pytest.raises(CommandError) as err:
             self.device.config(command)
+        assert err.value.command == command
 
-    def test_config_list(self):
-        commands = ["set interfaces lo0", "set snmp community jason"]
-        result = self.device.config_list(commands)
-
-        self.assertIsNone(result)
-
-        for command in commands:
-            self.device.cu.load.assert_any_call(command, format="set")
-
-        self.device.cu.commit.assert_called_with()
-
-    def test_bad_config_list(self):
+    def test_bad_config_pass_list(self):
         commands = ["set interface lo0", "apons"]
 
         def load_side_effect(*args, **kwargs):
@@ -92,8 +98,9 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device.cu.load.side_effect = load_side_effect
 
-        with self.assertRaisesRegex(CommandListError, commands[1]):
-            self.device.config_list(commands)
+        with pytest.raises(CommandListError) as err:
+            self.device.config(commands)
+        assert err.value.command == commands[1]
 
     def test_show(self):
         command = "show configuration snmp"

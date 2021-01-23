@@ -3,6 +3,7 @@ import re
 import time
 import hashlib
 from tempfile import NamedTemporaryFile
+import warnings
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
@@ -116,21 +117,42 @@ class JunosDevice(BaseDevice):
         if self.connected:
             self.native.close()
 
-    def config(self, command, format="set"):
-        try:
-            self.cu.load(command, format=format)
-            self.cu.commit()
-        except ConfigLoadError as e:
-            raise CommandError(command, e.message)
+    def config(self, commands, format="set"):
+        """Send configuration commands to a device.
+
+        Args:
+             commands (str, list): String with single command, or list with multiple commands.
+
+         Raises:
+             ConfigLoadError: Issue with loading the command.
+             CommandError: Issue with the command provided, if its a single command, passed in as a string.
+             CommandListError: Issue with a command in the list provided.
+        """
+        if isinstance(commands, str):
+            try:
+                self.cu.load(commands, format=format)
+                self.cu.commit()
+            except ConfigLoadError as e:
+                raise CommandError(commands, e.message)
+        else:
+            try:
+                for command in commands:
+                    self.cu.load(command, format=format)
+
+                self.cu.commit()
+            except ConfigLoadError as e:
+                raise CommandListError(commands, command, e.message)
 
     def config_list(self, commands, format="set"):
-        try:
-            for command in commands:
-                self.cu.load(command, format=format)
+        """Send configuration commands in list format to a device.
 
-            self.cu.commit()
-        except ConfigLoadError as e:
-            raise CommandListError(commands, command, e.message)
+        DEPRECATED - Use the `config` method.
+
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+        self.config(commands, format=format)
 
     @property
     def connected(self):
