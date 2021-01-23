@@ -342,7 +342,7 @@ class EOSDevice(BaseDevice):
             )
             self._connected = True
 
-    def reboot(self, timer=0):
+    def reboot(self, timer=0, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -358,6 +358,9 @@ class EOSDevice(BaseDevice):
             >>>
 
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+
         if timer != 0:
             raise RebootTimerError(self.device_type)
 

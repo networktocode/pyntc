@@ -229,6 +229,10 @@ class TestASADevice:
         self.device.reboot(timer=5)
         self.device.native.send_command_timing.assert_any_call("reload in 5")
 
+    def test_reboot_confirm_deprecated(self):
+        self.device.reboot(confirm=True)
+        self.device.native.send_command_timing.assert_any_call("reload")
+
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None

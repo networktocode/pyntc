@@ -1002,7 +1002,7 @@ class AIREOSDevice(BaseDevice):
             peer_redundancy_state = "disabled"
         return peer_redundancy_state
 
-    def reboot(self, timer=0, controller="self", save_config=True):
+    def reboot(self, timer=0, controller="self", save_config=True, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -1019,6 +1019,8 @@ class AIREOSDevice(BaseDevice):
             >>> device.reboot()
             >>>
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
             raise RebootSignal("Interrupting after reload")

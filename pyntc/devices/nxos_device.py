@@ -3,6 +3,7 @@
 import os
 import re
 import time
+import warnings
 
 from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
@@ -166,7 +167,7 @@ class NXOSDevice(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, timer=0):
+    def reboot(self, timer=0, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -181,6 +182,9 @@ class NXOSDevice(BaseDevice):
             >>> device.reboot()
             >>
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+
         if timer != 0:
             raise RebootTimerError(self.device_type)
 

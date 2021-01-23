@@ -379,7 +379,7 @@ class ASADevice(BaseDevice):
 
         return peer_redundancy_state.lower()
 
-    def reboot(self, timer=0):
+    def reboot(self, timer=0, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -394,6 +394,8 @@ class ASADevice(BaseDevice):
             >>> device.reboot()
             >>>
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
             raise RebootSignal("Interrupting after reload")

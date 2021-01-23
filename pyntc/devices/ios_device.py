@@ -696,7 +696,7 @@ class IOSDevice(BaseDevice):
             processor_redundancy_state = "disabled"
         return processor_redundancy_state
 
-    def reboot(self, timer=0):
+    def reboot(self, timer=0, **kwargs):
         """Reboot device.
         Reload the controller or controller pair.
 
@@ -706,7 +706,8 @@ class IOSDevice(BaseDevice):
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
         """
-        # if confirm:
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
             raise RebootSignal("Interrupting after reload")

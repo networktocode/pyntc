@@ -302,7 +302,7 @@ class BaseDevice(object):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def reboot(self, timer=0, confirm=False):
+    def reboot(self, timer=0):
         """Reboot the device.
 
         Args:

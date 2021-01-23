@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import time
+import warnings
 
 import bigsuds
 import requests
@@ -510,7 +511,7 @@ class F5Device(BaseDevice):
     def open(self):
         pass
 
-    def reboot(self, timer=0, volume=None):
+    def reboot(self, timer=0, volume=None, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -526,6 +527,9 @@ class F5Device(BaseDevice):
             >>> device.reboot()
             >>>
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+
         if self._get_active_volume() == volume:
             volume_name = None
         else:

@@ -256,7 +256,7 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, timer=0):
+    def reboot(self, timer=0, **kwargs):
         """
         Reload the controller or controller pair.
 
@@ -268,6 +268,9 @@ class JunosDevice(BaseDevice):
             >>> device.reboot()
             >>>
         """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+
         self.sw = JunosNativeSW(self.native)
         self.sw.reboot(in_min=timer)
 
