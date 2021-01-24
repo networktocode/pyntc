@@ -387,7 +387,7 @@ class ASADevice(BaseDevice):
             timer (int, optional): The time to wait before reloading. Defaults to 0.
 
         Raises:
-            RebootSignal: When the device is still unreachable after the timeout period.
+            RebootTimeoutError: When the device is still unreachable after the timeout period.
 
         Example:
             >>> device = ASADevice(**connection_args)
