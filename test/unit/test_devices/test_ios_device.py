@@ -205,16 +205,12 @@ class TestIOSDevice(unittest.TestCase):
         mock_open.assert_not_called()
 
     def test_reboot(self):
-        self.device.reboot(confirm=True)
+        self.device.reboot()
         self.device.native.send_command_timing.assert_any_call("reload")
 
     def test_reboot_with_timer(self):
-        self.device.reboot(confirm=True, timer=5)
+        self.device.reboot(timer=5)
         self.device.native.send_command_timing.assert_any_call("reload in 5")
-
-    def test_reboot_no_confirm(self):
-        self.device.reboot()
-        assert not self.device.native.send_command_timing.called
 
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
     def test_boot_options_show_bootvar(self, mock_boot):

@@ -855,7 +855,7 @@ def test_install_os(
     assert device.install_os(aireos_boot_image) is True
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
     mock_set_boot_options.assert_has_calls([mock.call(aireos_boot_image)])
-    mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
+    mock_reboot.assert_called_with(controller="both", save_config=True)
     mock_peer_redundancy_state.assert_called()
     mock_disable_wlans.assert_not_called()
     mock_enable_wlans.assert_not_called()
@@ -929,7 +929,7 @@ def test_install_os_pass_controller(
 ):
     device = aireos_image_booted([False, True])
     assert device.install_os(aireos_boot_image, controller="self", save_config=False) is True
-    mock_reboot.assert_called_with(confirm=True, controller="self", save_config=False)
+    mock_reboot.assert_called_with(controller="self", save_config=False)
 
 
 @mock.patch.object(AIREOSDevice, "enable_wlans")
@@ -954,7 +954,7 @@ def test_install_os_disable_all_wlans(
     assert device.install_os(aireos_boot_image, disable_wlans="all") is True
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
     mock_set_boot_options.assert_has_calls([mock.call(aireos_boot_image)])
-    mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
+    mock_reboot.assert_called_with(controller="both", save_config=True)
     mock_peer_redundancy_state.assert_called()
     mock_disable_wlans.assert_called_with("all")
     mock_enable_wlans.assert_called_with("all")
@@ -982,7 +982,7 @@ def test_install_os_disable_select_wlans(
     assert device.install_os(aireos_boot_image, disable_wlans=[1, 3, 7]) is True
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
     mock_set_boot_options.assert_has_calls([mock.call(aireos_boot_image)])
-    mock_reboot.assert_called_with(confirm=True, controller="both", save_config=True)
+    mock_reboot.assert_called_with(controller="both", save_config=True)
     mock_peer_redundancy_state.assert_called()
     mock_disable_wlans.assert_called_with([1, 3, 7])
     mock_enable_wlans.assert_called_with([1, 3, 7])
@@ -1170,6 +1170,17 @@ def test_reboot_confirm(mock_save, mock_reboot, aireos_send_command_timing, aire
     device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso enabled"
+        device.reboot()
+    device.native.send_command_timing.assert_has_calls([mock.call("reset system self"), mock.call("y")])
+    mock_save.assert_called()
+
+
+@mock.patch("pyntc.devices.aireos_device.RebootSignal")
+@mock.patch.object(AIREOSDevice, "save")
+def test_reboot_confirm_deprecation(mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path):
+    device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
+    with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
+        redundnacy_mode.return_value = "sso enabled"
         device.reboot(confirm=True)
     device.native.send_command_timing.assert_has_calls([mock.call("reset system self"), mock.call("y")])
     mock_save.assert_called()
@@ -1183,7 +1194,7 @@ def test_reboot_confirm_args(mock_save, mock_reboot, aireos_send_command_timing,
     )
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso enabled"
-        device.reboot(confirm=True, timer="00:00:10", controller="both", save_config=False)
+        device.reboot(timer="00:00:10", controller="both", save_config=False)
     device.native.send_command_timing.assert_has_calls(
         [mock.call("reset system both in 00:00:10"), mock.call("n"), mock.call("y")]
     )
@@ -1196,7 +1207,7 @@ def test_reboot_confirm_standalone(mock_save, mock_reboot, aireos_send_command_t
     device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso disabled"
-        device.reboot(confirm=True)
+        device.reboot()
     device.native.send_command_timing.assert_has_calls([mock.call("reset system"), mock.call("y")])
     mock_save.assert_called()
 
@@ -1211,17 +1222,11 @@ def test_reboot_confirm_standalone_args(
     )
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso disabled"
-        device.reboot(confirm=True, timer="00:00:10", controller="both", save_config=False)
+        device.reboot(timer="00:00:10", controller="both", save_config=False)
     device.native.send_command_timing.assert_has_calls(
         [mock.call("reset system in 00:00:10"), mock.call("n"), mock.call("y")]
     )
     mock_save.assert_not_called()
-
-
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
-def test_reboot_no_confirm(mock_reboot, aireos_device):
-    aireos_device.reboot(confirm=False)
-    aireos_device.native.send_command_timing.assert_not_called()
 
 
 def test_redundancy_mode_sso(aireos_show):

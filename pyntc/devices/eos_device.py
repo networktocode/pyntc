@@ -312,7 +312,7 @@ class EOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
-            self.reboot(confirm=True)
+            self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
@@ -342,14 +342,29 @@ class EOSDevice(BaseDevice):
             )
             self._connected = True
 
-    def reboot(self, confirm=False, timer=0):
+    def reboot(self, timer=0, **kwargs):
+        """
+        Reload the controller or controller pair.
+
+        Args:
+            timer (int, optional): The time to wait before reloading. Defaults to 0.
+
+        Raises:
+            RebootTimeoutError: When the device is still unreachable after the timeout period.
+
+        Example:
+            >>> device = EOSDevice(**connection_args)
+            >>> device.reboot()
+            >>>
+
+        """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+
         if timer != 0:
             raise RebootTimerError(self.device_type)
 
-        if confirm:
-            self.show("reload now")
-        else:
-            print("Need to confirm reboot with confirm=True")
+        self.show("reload now")
 
     def rollback(self, rollback_to):
         try:

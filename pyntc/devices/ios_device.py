@@ -577,7 +577,7 @@ class IOSDevice(BaseDevice):
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
                     self.show(command, delay_factor=install_mode_delay_factor)
-                    self.reboot(confirm=True)
+                    self.reboot()
 
                 else:
                     # Run install command (which reboots the device)
@@ -591,7 +591,7 @@ class IOSDevice(BaseDevice):
                         pass
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
-                self.reboot(confirm=True)
+                self.reboot()
 
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
@@ -696,31 +696,41 @@ class IOSDevice(BaseDevice):
             processor_redundancy_state = "disabled"
         return processor_redundancy_state
 
-    def reboot(self, timer=0, confirm=False):
-        if confirm:
+    def reboot(self, timer=0, **kwargs):
+        """Reboot device.
+        Reload the controller or controller pair.
 
-            def handler(signum, frame):
-                raise RebootSignal("Interrupting after reload")
+        Args:
+            timer (int): The time to wait before reloading.
 
-            signal.signal(signal.SIGALRM, handler)
-            signal.alarm(10)
+        Raises:
+            ReloadTimeoutError: When the device is still unreachable after the timeout period.
+        """
+        if kwargs.get("confirm"):
+            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
-            try:
-                if timer > 0:
-                    first_response = self.native.send_command_timing("reload in %d" % timer)
-                else:
-                    first_response = self.native.send_command_timing("reload")
+        def handler(signum, frame):
+            raise RebootSignal("Interrupting after reload")
 
-                if "System configuration" in first_response:
-                    self.native.send_command_timing("no")
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(10)
 
-                self.native.send_command_timing("\n")
-            except RebootSignal:
-                signal.alarm(0)
+        try:
+            if timer > 0:
+                first_response = self.native.send_command_timing("reload in %d" % timer)
+            else:
+                first_response = self.native.send_command_timing("reload")
 
+            if "System configuration" in first_response:
+                self.native.send_command_timing("no")
+
+            self.native.send_command_timing("\n")
+        except RebootSignal:
             signal.alarm(0)
-        else:
-            print("Need to confirm reboot with confirm=True")
+
+        signal.alarm(0)
+        # else:
+        #     print("Need to confirm reboot with confirm=True")
 
     @property
     def redundancy_mode(self):
