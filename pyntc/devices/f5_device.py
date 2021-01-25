@@ -375,9 +375,6 @@ class F5Device(BaseDevice):
     def config(self, command):
         raise NotImplementedError
 
-    def config_list(self, commands):
-        raise NotImplementedError
-
     @property
     def uptime(self):
         if self._uptime is None:
@@ -542,9 +539,6 @@ class F5Device(BaseDevice):
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 
     def show(self, command, raw_text=False):
-        raise NotImplementedError
-
-    def show_list(self, commands, raw_text=False):
         raise NotImplementedError
 
     def startup_config(self):
