@@ -3,6 +3,7 @@
 import re
 import time
 import os
+import warnings
 
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
@@ -364,24 +365,45 @@ class EOSDevice(BaseDevice):
                 message="Setting install source did not yield expected results",
             )
 
-    def show(self, command, raw_text=False):
-        try:
-            response_list = self.show_list([command], raw_text=raw_text)
-        except CommandListError as e:
-            raise CommandError(e.command, e.message)
+    def show(self, commands, raw_text=False):
+        """Send configuration commands to a device.
 
-        return response_list[0]
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
+            raw_text (bool, optional): False if encode should be json, True if encoding is text. Defaults to False.
 
-    def show_list(self, commands, raw_text=False):
+        Raises:
+            CommandError: Issue with the command provided.
+            CommandListError: Issue with a command in the list provided.
+        """
         if raw_text:
             encoding = "text"
         else:
             encoding = "json"
 
+        if isinstance(commands, str):
+            command_list = dict(type="string", commands=[commands])
+        else:
+            command_list = dict(type="list", commands=commands)
+
         try:
-            return self._parse_response(self.native.enable(commands, encoding=encoding), raw_text=raw_text)
+            return self._parse_response(
+                self.native.enable(command_list.get("commands"), encoding=encoding), raw_text=raw_text
+            )
         except EOSCommandError as e:
+            if command_list.get("type") == "string":
+                raise CommandError(e.commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+
+    def show_list(self, commands):
+        """Send show commands in list format to a device.
+        DEPRECATED - Use the `show` method.
+
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        self.show(commands)
 
     @property
     def startup_config(self):
