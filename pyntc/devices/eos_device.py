@@ -387,9 +387,12 @@ class EOSDevice(BaseDevice):
             command_list = dict(type="list", commands=commands)
 
         try:
-            return self._parse_response(
+            response_list = self._parse_response(
                 self.native.enable(command_list.get("commands"), encoding=encoding), raw_text=raw_text
             )
+            if command_list.get("type") == "string":
+                return response_list[0]
+            return response_list
         except EOSCommandError as e:
             if command_list.get("type") == "string":
                 raise CommandError(e.commands, e.message)
