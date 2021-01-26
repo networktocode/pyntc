@@ -1,6 +1,7 @@
 import pytest
 import os
 from unittest import mock
+from ipaddress import ip_interface, ip_address
 
 from .device_mocks.asa import send_command
 from pyntc.devices import ASADevice
@@ -310,6 +311,29 @@ class TestASADevice:
         assert self.count_teardown == 0
 
 
+@pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
+def test_get_ipv4_addresses(host, command_prefix, asa_show):
+    command = "show ip address"
+    device = asa_show([f"{command.replace(' ', '_')}.txt"])
+    actual = device._get_ipv4_addresses(host)
+    device.show.assert_called_with(f"{command_prefix}{command}")
+    expected = {"inside": [ip_interface("10.1.1.1/24")], "outside": [ip_interface("10.2.2.1/27")]}
+    assert actual == expected
+
+
+@pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
+def test_get_ipv6_addresses(host, command_prefix, asa_show):
+    command = "show ipv6 interface"
+    device = asa_show([f"{command.replace(' ', '_')}.txt"])
+    actual = device._get_ipv6_addresses(host)
+    device.show.assert_called_with(f"{command_prefix}{command}")
+    expected = {
+        "inside": [ip_interface("2001:db8:2:3::1/64"), ip_interface("2002:db8:2:3::1/64")],
+        "outside": [ip_interface("2003:db8:3:3::1/64")],
+    }
+    assert actual == expected
+
+
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.side_effect = [STANDBY_READY, FAILED, FAILED, STANDBY_READY]
@@ -335,33 +359,76 @@ def test_wait_for_peer_reboot_fail_state_error(mock_peer_redundancy_state, asa_d
     assert mock_peer_redundancy_state.call_count > 1
 
 
-@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
-@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_reboot_standby(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
-    mock_peer_redundancy_state.return_value = STANDBY_READY
-    device = asa_show([""])
-    assert device.reboot_standby() is None
-    mock_peer_redundancy_state.assert_called_once()
-    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[STANDBY_READY])
+@mock.patch.object(ASADevice, "ip_address", new_callable=mock.PropertyMock, return_value=ip_address("10.1.1.1"))
+@mock.patch.object(ASADevice, "ip_protocol", new_callable=mock.PropertyMock, return_value="ipv4")
+@mock.patch.object(ASADevice, "ipv4_addresses", new_callable=mock.PropertyMock)
+def test_connected_interface_ipv4(mock_ipv4_addresses, mock_ip_protocol, mock_ip_address, asa_device):
+    mock_ipv4_addresses.return_value = {
+        "outside": [ip_interface("10.2.2.2/24")],
+        "management": [ip_interface("10.1.1.1/23")],
+    }
+    actual = asa_device.connected_interface
+    assert actual == "management"
+    mock_ipv4_addresses.assert_called_once()
 
 
-@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
-@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_reboot_standby_pass_args(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
-    device = asa_show([""])
-    device.reboot_standby(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
-    mock_peer_redundancy_state.assert_not_called()
-    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+@mock.patch.object(ASADevice, "ip_address", new_callable=mock.PropertyMock, return_value=ip_address("2002:db8:2:3::1"))
+@mock.patch.object(ASADevice, "ip_protocol", new_callable=mock.PropertyMock, return_value="ipv6")
+@mock.patch.object(ASADevice, "ipv6_addresses", new_callable=mock.PropertyMock)
+def test_connected_interface_ipv6(mock_ipv6_addresses, mock_ip_protocol, mock_ip_address, asa_device):
+    mock_ipv6_addresses.return_value = {
+        "outside": [ip_interface("2001:db8:2:3::1/64"), ip_interface("2002:db8:2:3::1/64")],
+        "management": [ip_interface("2003:db8:2:3::1/64")],
+    }
+    actual = asa_device.connected_interface
+    assert actual == "outside"
+    mock_ipv6_addresses.assert_called_once()
 
 
-@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
-def test_reboot_standby_error(mock_wait_for_peer_reboot, asa_show):
-    device = asa_show([""])
-    mock_wait_for_peer_reboot.side_effect = [asa_module.RebootTimeoutError(device.host, 1)]
-    with pytest.raises(asa_module.RebootTimeoutError):
-        device.reboot_standby(acceptable_states=[STANDBY_READY], timeout=1)
+@mock.patch("pyntc.devices.asa_device.ConnectHandler")
+@pytest.mark.parametrize("ip", ("10.1.1.1", "2001:db8:2:3::1"), ids=("ipv4", "ipv6"))
+def test_ip_address_from_ip(mock_connect_handler, ip, asa_device):
+    device = ASADevice(ip, "username", "password")
+    actual = device.ip_address
+    expected = ip_address(ip)
+    assert actual == expected
+    device.native.remote_conn.transport.getpeername.assert_not_called()
 
-    mock_wait_for_peer_reboot.assert_called()
+
+def test_ip_address_from_hostname(asa_device):
+    with mock.patch.object(asa_device.native.remote_conn.transport, "getpeername") as mock_getpeername:
+        mock_getpeername.return_value = ("10.1.1.1", None)
+        actual = asa_device.ip_address
+    expected = ip_address("10.1.1.1")
+    assert actual == expected
+    asa_device.native.remote_conn.transport.getpeername.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "_get_ipv4_addresses")
+def test_ipv4_addresses(mock_get_ipv4_addresses, asa_device):
+    expected = {"outside": [ip_interface("10.132.8.6/24")], "inside": [ip_interface("10.1.1.2/23")]}
+    mock_get_ipv4_addresses.return_value = expected
+    actual = asa_device.ipv4_addresses
+    assert actual == expected
+    mock_get_ipv4_addresses.assert_called_with("self")
+
+
+@mock.patch.object(ASADevice, "_get_ipv6_addresses")
+def test_ipv6_addresses(mock_get_ipv6_addresses, asa_device):
+    expected = {"outside": [ip_interface("fe80::5200:ff:fe0a:1/64")]}
+    mock_get_ipv6_addresses.return_value = expected
+    actual = asa_device.ipv6_addresses
+    assert actual == expected
+    mock_get_ipv6_addresses.assert_called_with("self")
+
+
+@mock.patch.object(ASADevice, "ip_address", new_callable=mock.PropertyMock)
+@pytest.mark.parametrize("ip,ip_version", (("10.1.1.1", "4"), ("fe80::5200:ff:fe0a:1", "6")), ids=("ipv4", "ipv6"))
+def test_ip_protocol(mock_ip_address, ip, ip_version, asa_device):
+    mock_ip_address.return_value = ip_address(ip)
+    actual = asa_device.ip_protocol
+
+    assert actual == f"ipv{ip_version}"
 
 
 @mock.patch.object(ASADevice, "redundancy_state", new_callable=mock.PropertyMock)
@@ -381,6 +448,90 @@ def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected
     mock_redundancy_state.return_value = redundancy_state
     actual = asa_device.is_active()
     assert actual is expected
+
+
+@mock.patch.object(ASADevice, "peer_ip_address", new_callable=mock.PropertyMock, return_value="10.1.1.2")
+@mock.patch.object(ASADevice, "__init__", return_value=None)
+def test_peer_device(mock_init, mock_peer_ip_address, asa_device):
+    assert asa_device._peer_device is None
+    peer_device = asa_device.peer_device
+    assert isinstance(peer_device, ASADevice)
+    assert peer_device == asa_device._peer_device
+    mock_init.assert_called_with(
+        "10.1.1.2", asa_device.username, asa_device.password, asa_device.secret, asa_device.port, **asa_device.kwargs
+    )
+
+
+@mock.patch.object(ASADevice, "peer_ip_address")
+@mock.patch.object(ASADevice, "__init__", return_value=None)
+@mock.patch.object(ASADevice, "open")
+def test_peer_device_already_exists(mock_open, mock_init, mock_peer_ip_address, asa_device):
+    asa_device._peer_device = asa_device
+    assert asa_device._peer_device is not None
+    peer_device = asa_device.peer_device
+    assert isinstance(peer_device, ASADevice)
+    assert peer_device == asa_device._peer_device
+    mock_init.assert_not_called()
+    mock_open.assert_called()
+
+
+@mock.patch.object(ASADevice, "ip_address", new_callable=mock.PropertyMock)
+@mock.patch.object(ASADevice, "ip_protocol", new_callable=mock.PropertyMock)
+@mock.patch.object(ASADevice, "connected_interface", new_callable=mock.PropertyMock, return_value="mgmt")
+@pytest.mark.parametrize(
+    "ip,ip_version,peer_addresses",
+    (
+        (
+            "10.3.3.2",
+            "4",
+            {
+                "outside": [ip_interface("10.1.1.2/24")],
+                "inside": [ip_interface("10.2.2.2/24")],
+                "mgmt": [ip_interface("10.3.3.2/24")],
+            },
+        ),
+        (
+            "2003:db8:2:3::2",
+            "6",
+            {
+                "outside": [ip_interface("2001:db8:2:3::2/64")],
+                "inside": [ip_interface("2002:db8:2:3::2/64")],
+                "mgmt": [ip_interface("2003:db8:2:3::2/64")],
+            },
+        ),
+    ),
+    ids=("ipv4", "ipv6"),
+)
+def test_peer_ip_address(
+    mock_connected_interface, mock_ip_protocol, mock_ip_address, ip, ip_version, peer_addresses, asa_device
+):
+    mock_ip_address.return_value = ip_address(ip)
+    mock_ip_protocol.return_value = f"ipv{ip_version}"
+    with mock.patch.object(
+        ASADevice, f"peer_ipv{ip_version}_addresses", new_callable=mock.PropertyMock
+    ) as mock_peer_addresses:
+        mock_peer_addresses.return_value = peer_addresses
+        actual = asa_device.peer_ip_address
+
+    assert actual == peer_addresses["mgmt"][0].ip
+
+
+@mock.patch.object(ASADevice, "_get_ipv4_addresses")
+def test_peer_ipv4_addresses(mock_get_ipv4_addresses, asa_device):
+    expected = {"outside": [ip_interface("10.132.8.7/24")], "inside": [ip_interface("10.1.1.3/23")]}
+    mock_get_ipv4_addresses.return_value = expected
+    actual = asa_device.peer_ipv4_addresses
+    assert actual == expected
+    mock_get_ipv4_addresses.assert_called_with("peer")
+
+
+@mock.patch.object(ASADevice, "_get_ipv6_addresses")
+def test_peer_ipv6_addresses(mock_get_ipv6_addresses, asa_device):
+    expected = {"outside": [ip_interface("fe80::5200:ff:fe0a:2/64")]}
+    mock_get_ipv6_addresses.return_value = expected
+    actual = asa_device.peer_ipv6_addresses
+    assert actual == expected
+    mock_get_ipv6_addresses.assert_called_with("peer")
 
 
 @pytest.mark.parametrize(
@@ -414,6 +565,35 @@ def test_peer_redundancy_state(side_effect, expected, asa_show):
     device = asa_show([side_effect])
     actual = device.peer_redundancy_state
     assert actual == expected
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_reboot_standby(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
+    mock_peer_redundancy_state.return_value = STANDBY_READY
+    device = asa_show([""])
+    assert device.reboot_standby() is None
+    mock_peer_redundancy_state.assert_called_once()
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[STANDBY_READY])
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+@mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
+def test_reboot_standby_pass_args(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
+    device = asa_show([""])
+    device.reboot_standby(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+    mock_peer_redundancy_state.assert_not_called()
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+
+
+@mock.patch.object(ASADevice, "_wait_for_peer_reboot")
+def test_reboot_standby_error(mock_wait_for_peer_reboot, asa_show):
+    device = asa_show([""])
+    mock_wait_for_peer_reboot.side_effect = [asa_module.RebootTimeoutError(device.host, 1)]
+    with pytest.raises(asa_module.RebootTimeoutError):
+        device.reboot_standby(acceptable_states=[STANDBY_READY], timeout=1)
+
+    mock_wait_for_peer_reboot.assert_called()
 
 
 @pytest.mark.parametrize(
