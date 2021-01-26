@@ -395,7 +395,9 @@ class EOSDevice(BaseDevice):
             return response_list
         except EOSCommandError as e:
             if command_list.get("type") == "string":
+                print(f"This is the full exception:\n {e}")
                 raise CommandError(e.commands, e.message)
+            print(f"This is the full exception:\n {e}")
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def show_list(self, commands):
