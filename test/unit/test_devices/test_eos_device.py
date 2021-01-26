@@ -1,6 +1,7 @@
 import unittest
 import mock
 import os
+import pytest
 import time
 
 from .device_mocks.eos import enable, config
@@ -52,7 +53,7 @@ class TestEOSDevice(unittest.TestCase):
         with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
 
-    def test_show(self):
+    def test_show_pass_string(self):
         command = "show ip arp"
         result = self.device.show(command)
 
@@ -62,10 +63,36 @@ class TestEOSDevice(unittest.TestCase):
 
         self.device.native.enable.assert_called_with([command], encoding="json")
 
-    def test_bad_show(self):
+    def test_show_pass_list(self):
+        commands = ["show hostname", "show clock"]
+        result = self.device.show(commands)
+
+        self.assertIsInstance(result, list)
+
+        self.assertIn("hostname", result[0])
+        self.assertIn("fqdn", result[0])
+        self.assertIn("output", result[1])
+
+        self.device.native.enable.assert_called_with(commands, encoding="json")
+
+    def test_bad_show_pass_string(self):
         command = "show microsoft"
-        with self.assertRaises(CommandError):
+        response = "Error [1002]: show_microsoft failed [None]"
+        with pytest.raises(CommandError) as err:
             self.device.show(command)
+        assert err.value.command[0] == "show_microsoft"
+        assert err.value.cli_error_msg == response
+
+    def test_bad_show_pass_list(self):
+        commands = ["show badcommand", "show clock"]
+        response = [
+            "\nCommand show_badcommand failed with message: Error [1002]: show_badcommand failed [None]\nCommand List: \n\tshow badcommand\n\tshow clock\n",
+            "Valid",
+        ]
+        with pytest.raises(CommandListError) as err:
+            self.device.show(commands)
+        assert err.value.command == "show_badcommand"
+        assert err.value.message == response[0]
 
     def test_show_raw_text(self):
         command = "show hostname"
@@ -75,22 +102,11 @@ class TestEOSDevice(unittest.TestCase):
         self.assertEqual(result, "Hostname: spine1\nFQDN:     spine1.ntc.com\n")
         self.device.native.enable.assert_called_with([command], encoding="text")
 
-    def test_show_list(self):
+    @mock.patch.object(EOSDevice, "show")
+    def test_show_list(self, mock_config):
         commands = ["show hostname", "show clock"]
-
-        result = self.device.show_list(commands)
-        self.assertIsInstance(result, list)
-
-        self.assertIn("hostname", result[0])
-        self.assertIn("fqdn", result[0])
-        self.assertIn("output", result[1])
-
-        self.device.native.enable.assert_called_with(commands, encoding="json")
-
-    def test_bad_show_list(self):
-        commands = ["show badcommand", "show clock"]
-        with self.assertRaisesRegex(CommandListError, "show badcommand"):
-            self.device.show_list(commands)
+        self.device.show_list(commands)
+        self.device.show.assert_called_with(commands)
 
     def test_save(self):
         result = self.device.save()
