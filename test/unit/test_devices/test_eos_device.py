@@ -72,7 +72,6 @@ class TestEOSDevice(unittest.TestCase):
             }
         ]
         result = self.device.show(command)
-        self.assertIsInstance(result, dict)
         self.device._parse_response.assert_called_with([result], raw_text=False)
         self.device.native.enable.assert_called_with([command], encoding="json")
 
@@ -92,7 +91,6 @@ class TestEOSDevice(unittest.TestCase):
             },
         ]
         result = self.device.show(commands)
-        self.assertIsInstance(result, list)
         self.device._parse_response.assert_called_with(result, raw_text=False)
         self.device.native.enable.assert_called_with(commands, encoding="json")
 
@@ -115,7 +113,21 @@ class TestEOSDevice(unittest.TestCase):
         assert err.value.command == "show_badcommand"
         assert err.value.message == response[0]
 
-    def test_show_raw_text(self):
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_raw_text(self, mock_parse):
+        command = "show hostname"
+        mock_parse.return_value = [
+            {
+                "command": "show hostname",
+                "result": {"output": "Hostname: spine1\nFQDN:     spine1.ntc.com\n"},
+                "encoding": "text",
+            }
+        ]
+        result = self.device.show(command, raw_text=True)
+        self.device._parse_response.assert_called_with([result], raw_text=True)
+        self.device.native.enable.assert_called_with([command], encoding="text")
+
+    def test_show_raw_text_old(self):
         command = "show hostname"
         result = self.device.show(command, raw_text=True)
 
