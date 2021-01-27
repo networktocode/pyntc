@@ -56,7 +56,7 @@ class TestEOSDevice(unittest.TestCase):
     @mock.patch.object(EOSDevice, "_parse_response")
     def test_show_pass_string(self, mock_parse):
         command = "show ip arp"
-        mock_parse.return_value = [
+        return_value = [
             {
                 "command": "show ip arp",
                 "result": {
@@ -71,14 +71,16 @@ class TestEOSDevice(unittest.TestCase):
                 "encoding": "json",
             }
         ]
+        mock_parse.return_value = return_value
         result = self.device.show(command)
+        assert result == return_value[0]
         self.device._parse_response.assert_called_with([result], raw_text=False)
         self.device.native.enable.assert_called_with([command], encoding="json")
 
     @mock.patch.object(EOSDevice, "_parse_response")
     def test_show_pass_list(self, mock_parse):
         commands = ["show hostname", "show clock"]
-        mock_parse.return_value = [
+        return_value = [
             {
                 "command": "show hostname",
                 "result": {"hostname": "eos-spine1", "fqdn": "eos-spine1.ntc.com"},
@@ -90,7 +92,9 @@ class TestEOSDevice(unittest.TestCase):
                 "encoding": "text",
             },
         ]
+        mock_parse.return_value = return_value
         result = self.device.show(commands)
+        assert result == return_value
         self.device._parse_response.assert_called_with(result, raw_text=False)
         self.device.native.enable.assert_called_with(commands, encoding="json")
 
