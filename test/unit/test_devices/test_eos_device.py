@@ -53,26 +53,47 @@ class TestEOSDevice(unittest.TestCase):
         with self.assertRaisesRegex(CommandListError, commands[1]):
             self.device.config_list(commands)
 
-    def test_show_pass_string(self):
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_pass_string(self, mock_parse):
         command = "show ip arp"
+        mock_parse.return_value = [
+            {
+                "command": "show ip arp",
+                "result": {
+                    "ipV4Neighbors": [
+                        {"hwAddress": "2cc2.60ff.0011", "interface": "Management1", "age": 0, "address": "10.0.0.2"}
+                    ],
+                    "notLearnedEntries": 0,
+                    "totalEntries": 1,
+                    "dynamicEntries": 1,
+                    "staticEntries": 0,
+                },
+                "encoding": "json",
+            }
+        ]
         result = self.device.show(command)
-
         self.assertIsInstance(result, dict)
-        self.assertNotIn("command", result)
-        self.assertIn("dynamicEntries", result)
-
+        self.device._parse_response.assert_called_with([result], raw_text=False)
         self.device.native.enable.assert_called_with([command], encoding="json")
 
-    def test_show_pass_list(self):
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_pass_list(self, mock_parse):
         commands = ["show hostname", "show clock"]
+        mock_parse.return_value = [
+            {
+                "command": "show hostname",
+                "result": {"hostname": "eos-spine1", "fqdn": "eos-spine1.ntc.com"},
+                "encoding": "json",
+            },
+            {
+                "command": "show clock",
+                "result": {"output": "Fri Jan 22 23:29:21 2016\nTimezone: UTC\nClock source: local\n"},
+                "encoding": "text",
+            },
+        ]
         result = self.device.show(commands)
-
         self.assertIsInstance(result, list)
-
-        self.assertIn("hostname", result[0])
-        self.assertIn("fqdn", result[0])
-        self.assertIn("output", result[1])
-
+        self.device._parse_response.assert_called_with(result, raw_text=False)
         self.device.native.enable.assert_called_with(commands, encoding="json")
 
     def test_bad_show_pass_string(self):

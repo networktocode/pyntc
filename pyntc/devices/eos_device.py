@@ -382,11 +382,11 @@ class EOSDevice(BaseDevice):
             encoding = "text"
 
         original_commands_is_str = isinstance(commands, str)
-        if original_commands_is_str :
-            commands=[commands]
+        if original_commands_is_str:
+            commands = [commands]
         try:
             response = self.native.enable(commands, encoding=encoding)
-            response_list = self._parse_response(response, raw_text=raw_text )
+            response_list = self._parse_response(response, raw_text=raw_text)
             if original_commands_is_str:
                 return response_list[0]
             return response_list
