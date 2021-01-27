@@ -376,25 +376,22 @@ class EOSDevice(BaseDevice):
             CommandError: Issue with the command provided.
             CommandListError: Issue with a command in the list provided.
         """
-        if raw_text:
-            encoding = "text"
-        else:
+        if not raw_text:
             encoding = "json"
-
-        if isinstance(commands, str):
-            command_list = dict(type="string", commands=[commands])
         else:
-            command_list = dict(type="list", commands=commands)
+            encoding = "text"
 
+        original_commands_is_str = isinstance(commands, str)
+        if original_commands_is_str :
+            commands=[commands]
         try:
-            response_list = self._parse_response(
-                self.native.enable(command_list.get("commands"), encoding=encoding), raw_text=raw_text
-            )
-            if command_list.get("type") == "string":
+            response = self.native.enable(commands, encoding=encoding)
+            response_list = self._parse_response(response, raw_text=raw_text )
+            if original_commands_is_str:
                 return response_list[0]
             return response_list
         except EOSCommandError as e:
-            if command_list.get("type") == "string":
+            if original_commands_is_str:
                 raise CommandError(e.commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
