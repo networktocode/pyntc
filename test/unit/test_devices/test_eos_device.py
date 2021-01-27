@@ -127,14 +127,6 @@ class TestEOSDevice(unittest.TestCase):
         self.device._parse_response.assert_called_with([result], raw_text=True)
         self.device.native.enable.assert_called_with([command], encoding="text")
 
-    def test_show_raw_text_old(self):
-        command = "show hostname"
-        result = self.device.show(command, raw_text=True)
-
-        self.assertIsInstance(result, str)
-        self.assertEqual(result, "Hostname: spine1\nFQDN:     spine1.ntc.com\n")
-        self.device.native.enable.assert_called_with([command], encoding="text")
-
     @mock.patch.object(EOSDevice, "show")
     def test_show_list(self, mock_config):
         commands = ["show hostname", "show clock"]
