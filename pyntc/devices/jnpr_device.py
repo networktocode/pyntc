@@ -308,13 +308,9 @@ class JunosDevice(BaseDevice):
 
             response = self.native.cli(command, warning=False)
             responses.append(response)
-
+        if original_commands_is_str:
+            return responses[0]
         return responses
-
-    #         except EOSCommandError as e:
-    #             if original_commands_is_str:
-    #                 raise CommandError(e.commands, e.message)
-    #             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def show_list(self, commands, raw_text=True):
         """Send show commands in list format to a device.
