@@ -3,6 +3,7 @@ import re
 import time
 import hashlib
 from tempfile import NamedTemporaryFile
+import warnings
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.utils.config import Config as JunosNativeConfig
@@ -278,24 +279,51 @@ class JunosDevice(BaseDevice):
     def set_boot_options(self, sys):
         raise NotImplementedError
 
-    def show(self, command, raw_text=True):
+    def show(self, commands, raw_text=True):
+        """Send configuration commands to a device.
+
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
+            raw_text (bool, optional): True if encoding is text. False with raise ValueError. Defaults to True.
+
+        Raises:
+            ValueError: Juniper only supports raw text output.
+            CommandError: Issue with the command provided.
+            CommandListError: Issue with a command in the list provided.
+        """
         if not raw_text:
             raise ValueError(
                 'Juniper only supports raw text output. \
                 Append " | display xml" to your commands for a structured string.'
             )
-
-        if not command.startswith("show"):
-            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
-
-        return self.native.cli(command, warning=False)
-
-    def show_list(self, commands, raw_text=True):
+        original_commands_is_str = isinstance(commands, str)
+        if original_commands_is_str:
+            commands = [commands]
         responses = []
         for command in commands:
-            responses.append(self.show(command, raw_text=raw_text))
+            if not command.startswith("show"):
+                if original_commands_is_str:
+                    raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+                raise CommandListError(commands, command, 'Juniper "show" commands must begin with "show".')
+
+            response = self.native.cli(command, warning=False)
+            responses.append(response)
 
         return responses
+
+    #         except EOSCommandError as e:
+    #             if original_commands_is_str:
+    #                 raise CommandError(e.commands, e.message)
+    #             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+
+    def show_list(self, commands, raw_text=True):
+        """Send show commands in list format to a device.
+        DEPRECATED - Use the `show` method.
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        self.show(commands, raw_text=raw_text)
 
     @property
     def startup_config(self):
