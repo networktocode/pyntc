@@ -1607,6 +1607,54 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
 @mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
+def test_transfer_image_to_ap_transfer_fail_at_first_try(
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
+):
+    mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
+    mock_ap_image_matches_expected.side_effect = [False, False, False, False, True, True, True, True]
+    assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    mock_config.assert_has_calls([mock.call("ap image predownload backup all")])
+    mock_wait.assert_called()
+
+
+@mock.patch.object(AIREOSDevice, "config")
+@mock.patch.object(AIREOSDevice, "_wait_for_ap_image_download")
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
+@mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
+def test_transfer_image_to_ap_transfer_fail_at_first_try_fail(
+    mock_ap_boot_options,
+    mock_ap_image_matches_expected,
+    mock_boot_options,
+    mock_wait,
+    mock_config,
+    aireos_device,
+    aireos_mock_path,
+    aireos_boot_image,
+):
+    mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
+    mock_ap_image_matches_expected.side_effect = [False, False, False, False, False]
+    with pytest.raises(aireos_module.FileTransferError) as fte:
+        aireos_device.transfer_image_to_ap(aireos_boot_image)
+    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    mock_wait.assert_called()
+    mock_boot_options.assert_has_calls([mock.call(), mock.call()])
+    assert fte.value.message == f"Unable to set all APs to use {aireos_boot_image}"
+
+
+@mock.patch.object(AIREOSDevice, "config")
+@mock.patch.object(AIREOSDevice, "_wait_for_ap_image_download")
+@mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
+@mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
 def test_transfer_image_does_not_exist(
     mock_ap_boot_options,
     mock_ap_image_matches_expected,
