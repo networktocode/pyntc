@@ -323,7 +323,7 @@ class JunosDevice(BaseDevice):
             commands (list): List with multiple commands.
         """
         warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
-        self.show(commands, raw_text=raw_text)
+        return self.show(commands, raw_text=raw_text)
 
     @property
     def startup_config(self):
