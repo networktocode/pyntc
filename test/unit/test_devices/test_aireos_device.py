@@ -1495,9 +1495,9 @@ def test_transfer_image_to_ap_already_transferred_secondary(
     aireos_mock_path,
     aireos_boot_image,
 ):
-    mock_ap_image_matches_expected.side_effect = [False, False, True, True, True]
+    mock_ap_image_matches_expected.side_effect = [False, False, True, True, True, True, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
-    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image swap all")])
     mock_wait.assert_not_called()
     mock_boot_options.assert_not_called()
@@ -1518,10 +1518,10 @@ def test_transfer_image_to_ap_already_transferred_secondary_fail(
     aireos_mock_path,
     aireos_boot_image,
 ):
-    mock_ap_image_matches_expected.side_effect = [False, False, True, True, False]
+    mock_ap_image_matches_expected.side_effect = [False, False, True, True, True, True, False]
     with pytest.raises(aireos_module.FileTransferError) as fte:
         aireos_device.transfer_image_to_ap(aireos_boot_image)
-    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image swap all")])
     mock_wait.assert_not_called()
     mock_boot_options.assert_not_called()
@@ -1568,9 +1568,9 @@ def test_transfer_image_to_ap_transfer_secondary(
     aireos_boot_image,
 ):
     mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
-    mock_ap_image_matches_expected.side_effect = [False, False, False, True, True]
+    mock_ap_image_matches_expected.side_effect = [False, False, False, True, True, True, True]
     assert aireos_device.transfer_image_to_ap(aireos_boot_image) is True
-    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image predownload backup all"), mock.call("ap image swap all")])
     mock_wait.assert_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
@@ -1592,10 +1592,10 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
     aireos_boot_image,
 ):
     mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
-    mock_ap_image_matches_expected.side_effect = [False, False, False, True, False]
+    mock_ap_image_matches_expected.side_effect = [False, False, False, True, True, True, False]
     with pytest.raises(aireos_module.FileTransferError) as fte:
         aireos_device.transfer_image_to_ap(aireos_boot_image)
-    assert len(mock_ap_image_matches_expected.mock_calls) == 5
+    assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image predownload backup all"), mock.call("ap image swap all")])
     mock_wait.assert_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
