@@ -68,45 +68,89 @@ class TestEOSDevice(unittest.TestCase):
         assert err.value.command == commands[1]
         assert err.value.message == response[1]
 
-    def test_show(self):
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_pass_string(self, mock_parse):
         command = "show ip arp"
+        return_value = [
+            {
+                "command": "show ip arp",
+                "result": {
+                    "ipV4Neighbors": [
+                        {"hwAddress": "2cc2.60ff.0011", "interface": "Management1", "age": 0, "address": "10.0.0.2"}
+                    ],
+                    "notLearnedEntries": 0,
+                    "totalEntries": 1,
+                    "dynamicEntries": 1,
+                    "staticEntries": 0,
+                },
+                "encoding": "json",
+            }
+        ]
+        mock_parse.return_value = return_value
         result = self.device.show(command)
-
-        self.assertIsInstance(result, dict)
-        self.assertNotIn("command", result)
-        self.assertIn("dynamicEntries", result)
-
+        assert result == return_value[0]
+        self.device._parse_response.assert_called_with([result], raw_text=False)
         self.device.native.enable.assert_called_with([command], encoding="json")
 
-    def test_bad_show(self):
-        command = "show microsoft"
-        with self.assertRaises(CommandError):
-            self.device.show(command)
-
-    def test_show_raw_text(self):
-        command = "show hostname"
-        result = self.device.show(command, raw_text=True)
-
-        self.assertIsInstance(result, str)
-        self.assertEqual(result, "Hostname: spine1\nFQDN:     spine1.ntc.com\n")
-        self.device.native.enable.assert_called_with([command], encoding="text")
-
-    def test_show_list(self):
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_pass_list(self, mock_parse):
         commands = ["show hostname", "show clock"]
-
-        result = self.device.show_list(commands)
-        self.assertIsInstance(result, list)
-
-        self.assertIn("hostname", result[0])
-        self.assertIn("fqdn", result[0])
-        self.assertIn("output", result[1])
-
+        return_value = [
+            {
+                "command": "show hostname",
+                "result": {"hostname": "eos-spine1", "fqdn": "eos-spine1.ntc.com"},
+                "encoding": "json",
+            },
+            {
+                "command": "show clock",
+                "result": {"output": "Fri Jan 22 23:29:21 2016\nTimezone: UTC\nClock source: local\n"},
+                "encoding": "text",
+            },
+        ]
+        mock_parse.return_value = return_value
+        result = self.device.show(commands)
+        assert result == return_value
+        self.device._parse_response.assert_called_with(result, raw_text=False)
         self.device.native.enable.assert_called_with(commands, encoding="json")
 
-    def test_bad_show_list(self):
+    def test_bad_show_pass_string(self):
+        command = "show microsoft"
+        response = "Error [1002]: show_microsoft failed [None]"
+        with pytest.raises(CommandError) as err:
+            self.device.show(command)
+        assert err.value.command[0] == "show_microsoft"
+        assert err.value.cli_error_msg == response
+
+    def test_bad_show_pass_list(self):
         commands = ["show badcommand", "show clock"]
-        with self.assertRaisesRegex(CommandListError, "show badcommand"):
-            self.device.show_list(commands)
+        response = [
+            "\nCommand show_badcommand failed with message: Error [1002]: show_badcommand failed [None]\nCommand List: \n\tshow badcommand\n\tshow clock\n",
+            "Valid",
+        ]
+        with pytest.raises(CommandListError) as err:
+            self.device.show(commands)
+        assert err.value.command == "show_badcommand"
+        assert err.value.message == response[0]
+
+    @mock.patch.object(EOSDevice, "_parse_response")
+    def test_show_raw_text(self, mock_parse):
+        command = "show hostname"
+        mock_parse.return_value = [
+            {
+                "command": "show hostname",
+                "result": {"output": "Hostname: spine1\nFQDN:     spine1.ntc.com\n"},
+                "encoding": "text",
+            }
+        ]
+        result = self.device.show(command, raw_text=True)
+        self.device._parse_response.assert_called_with([result], raw_text=True)
+        self.device.native.enable.assert_called_with([command], encoding="text")
+
+    @mock.patch.object(EOSDevice, "show")
+    def test_show_list(self, mock_config):
+        commands = ["show hostname", "show clock"]
+        self.device.show_list(commands)
+        self.device.show.assert_called_with(commands)
 
     def test_save(self):
         result = self.device.save()
