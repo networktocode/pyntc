@@ -1319,7 +1319,7 @@ class AIREOSDevice(BaseDevice):
             self._wait_for_ap_image_download()
 
         counter = 0
-        while self._ap_images_match_expected("backup", image) and counter < 3:
+        while counter < 3 and self._ap_images_match_expected("backup", image):
             counter += 1
             changed = True
             self.config("ap image swap all")
