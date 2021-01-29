@@ -133,10 +133,18 @@ class IOSDevice(BaseDevice):
         raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     # Get the version of the image that is booted into on the device
-    def _image_booted(self, image_name, **vendor_specifics):
+    def _image_booted(self, image_name, image_pattern=r".*\.(\d+\.\d+\.\w+)\.SPA.+", **vendor_specifics):
         version_data = self.show("show version")
         if re.search(image_name, version_data):
             return True
+
+        # Test for version number in the text
+        try:
+            version_number = re.search(image_pattern, image_name).group(1)
+            if version_number and version_number in version_data:
+                return True
+        except AttributeError:
+            pass
 
         return False
 
@@ -277,8 +285,8 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
-            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+            str: When ``command`` is a str, the config session input and output from sending ``command``.
+            list: When ``command`` is a list, the config session input and output from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -350,7 +358,7 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            list: Each command's input and ouput from sending the command in ``commands``.
+            list: Each command's input and output from sending the command in ``commands``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -619,18 +627,19 @@ class IOSDevice(BaseDevice):
         """
         return self.redundancy_state in self.active_redundancy_states
 
-    def open(self, confirm_active=True):
+    def open(self, confirm_active=True, fast_cli=True):
         """
         Open a connection to the network device.
 
         This method will close the connection if ``confirm_active`` is True and the device is not active.
-        Devices that do not have high availibility are considred active.
+        Devices that do not have high availability are considered active.
 
         Args:
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
 
         Raises:
-            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availability state is not active.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -662,6 +671,7 @@ class IOSDevice(BaseDevice):
                 global_delay_factor=self.global_delay_factor,
                 secret=self.secret,
                 verbose=False,
+                fast_cli=fast_cli,
             )
             self._connected = True
 
