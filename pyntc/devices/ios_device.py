@@ -559,7 +559,7 @@ class IOSDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=10, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=20, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:

@@ -919,7 +919,7 @@ def test_install_os_install_mode(
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=10
+        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
     )
     mock_reboot.assert_not_called()
     mock_os_version.assert_called()
