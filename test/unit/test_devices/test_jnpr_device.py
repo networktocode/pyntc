@@ -159,7 +159,7 @@ class TestJnprDevice(unittest.TestCase):
         commands = ["show vlans", "show snmp v3"]
 
         self.device.show_list(commands)
-        self.device.show.assert_called_with(commands, raw_text=True)
+        self.device.show.assert_called_with(commands)
 
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
     def test_save(self, mock_scp):
