@@ -5,8 +5,6 @@ from ipaddress import ip_interface, ip_address
 
 from .device_mocks.asa import send_command
 from pyntc.devices import ASADevice
-from pyntc.devices.asa_device import FileTransferError
-from pyntc.errors import CommandError, CommandListError, NTCFileNotFoundError
 from pyntc.devices import asa_device as asa_module
 
 BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
@@ -85,7 +83,7 @@ class TestASADevice:
     def test_bad_config(self):
         command = "asdf poknw"
 
-        with pytest.raises(CommandError, match=command):
+        with pytest.raises(asa_module.CommandError, match=command):
             self.device.config(command)
 
     def test_config_list(self):
@@ -101,7 +99,7 @@ class TestASADevice:
 
         self.device.native.send_command_timing.side_effect = results
 
-        with pytest.raises(CommandListError, match=commands[1]):
+        with pytest.raises(asa_module.CommandListError, match=commands[1]):
             self.device.config_list(commands)
 
     def test_show(self):
@@ -115,7 +113,7 @@ class TestASADevice:
     def test_bad_show(self):
         command = "show linux"
         self.device.native.send_command_timing.return_value = "Error: linux"
-        with pytest.raises(CommandError):
+        with pytest.raises(asa_module.CommandError):
             self.device.show(command)
 
     def test_show_list(self):
@@ -135,7 +133,7 @@ class TestASADevice:
 
         self.device.native.send_command_timing.side_effect = results
 
-        with pytest.raises(CommandListError, match="show badcommand"):
+        with pytest.raises(asa_module.CommandListError, match="show badcommand"):
             self.device.show_list(commands)
 
     def test_save(self):
@@ -144,7 +142,7 @@ class TestASADevice:
         assert result
         self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
+    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command_timing.return_value = "disk0: /dev/null"
@@ -157,7 +155,7 @@ class TestASADevice:
 
         assert result
 
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
+    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
     def test_file_copy_remote_exists_bad_md5(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command_timing.return_value = "disk0: /dev/null"
@@ -170,7 +168,7 @@ class TestASADevice:
 
         assert not result
 
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
+    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
     def test_file_copy_remote_exists_not(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command_timing.return_value = "disk0: /dev/null"
@@ -182,45 +180,6 @@ class TestASADevice:
         result = self.device.file_copy_remote_exists("source_file")
 
         assert not result
-
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
-    def test_file_copy(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-
-        mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
-        self.device.file_copy("path/to/source_file")
-
-        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="disk0:")
-        mock_ft_instance.enable_scp.assert_any_call()
-        mock_ft_instance.establish_scp_conn.assert_any_call()
-        mock_ft_instance.transfer_file.assert_any_call()
-
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
-    def test_file_copy_different_dest(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-        mock_ft_instance = mock_ft.return_value
-
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
-        self.device.file_copy("source_file", "dest_file")
-
-        mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="disk0:")
-        mock_ft_instance.enable_scp.assert_any_call()
-        mock_ft_instance.establish_scp_conn.assert_any_call()
-        mock_ft_instance.transfer_file.assert_any_call()
-
-    @mock.patch("pyntc.devices.asa_device.FileTransfer", autospec=True)
-    def test_file_copy_fail(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-        mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.transfer_file.side_effect = Exception
-        mock_ft_instance.check_file_exists.return_value = False
-
-        with pytest.raises(FileTransferError):
-            self.device.file_copy("source_file")
 
     def test_reboot(self):
         self.device.reboot()
@@ -268,7 +227,7 @@ class TestASADevice:
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_set_boot_options_no_file(self, mock_fs):
-        with pytest.raises(NTCFileNotFoundError):
+        with pytest.raises(asa_module.NTCFileNotFoundError):
             self.device.set_boot_options("bad_image.bin")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
@@ -276,7 +235,7 @@ class TestASADevice:
     def test_set_boot_options_bad_boot(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": "bad_image.bin"}
-            with pytest.raises(CommandError):
+            with pytest.raises(asa_module.CommandError):
                 self.device.set_boot_options(BOOT_IMAGE)
                 mock_boot.assert_called_once()
 
@@ -311,8 +270,116 @@ class TestASADevice:
         assert self.count_teardown == 0
 
 
+@mock.patch.object(ASADevice, "enable")
+@mock.patch.object(ASADevice, "file_copy_remote_exists", return_value=True)
+def test__file_copy_already_exists(mock_file_copy_remote_exists, mock_enable, asa_device):
+    asa_device._file_copy("a.txt", "a.txt", "flash:")
+    mock_enable.assert_called()
+    mock_file_copy_remote_exists.assert_called_once()
+
+
+@mock.patch.object(ASADevice, "enable")
+@mock.patch.object(ASADevice, "file_copy_remote_exists", side_effect=[False, True])
+@mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
+@mock.patch.object(ASADevice, "_file_copy_instance")
+@mock.patch.object(ASADevice, "open")
+def test__file_copy_transfer_file(
+    mock_open,
+    mock_file_copy_instance,
+    mock_cisco_asa_file_transfer,
+    mock_file_copy_remote_exists,
+    mock_enable,
+    asa_device,
+):
+    args = ("a.txt", "a.txt", "flash:")
+    mock_file_copy_instance.return_value = mock_cisco_asa_file_transfer
+    asa_device._file_copy(*args)
+    mock_enable.assert_called()
+    mock_file_copy_remote_exists.assert_has_calls([mock.call(*args)] * 2)
+    mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
+    mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
+    mock_open.assert_not_called()
+    mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
+
+
+@mock.patch.object(ASADevice, "enable")
+@mock.patch.object(ASADevice, "file_copy_remote_exists", side_effect=[False, True])
+@mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
+@mock.patch.object(ASADevice, "_file_copy_instance")
+@mock.patch.object(ASADevice, "open")
+def test__file_copy_transfer_file_eof_error(
+    mock_open,
+    mock_file_copy_instance,
+    mock_cisco_asa_file_transfer,
+    mock_file_copy_remote_exists,
+    mock_enable,
+    asa_device,
+):
+    args = ("a.txt", "a.txt", "flash:")
+    mock_cisco_asa_file_transfer.transfer_file.side_effect = [EOFError]
+    mock_file_copy_instance.return_value = mock_cisco_asa_file_transfer
+    asa_device._file_copy(*args)
+    mock_enable.assert_called()
+    mock_file_copy_remote_exists.assert_has_calls([mock.call(*args)] * 2)
+    mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
+    mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
+    mock_open.assert_called()
+    mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
+
+
+@mock.patch.object(ASADevice, "enable")
+@mock.patch.object(ASADevice, "file_copy_remote_exists", side_effect=[False, True])
+@mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
+@mock.patch.object(ASADevice, "_file_copy_instance")
+@mock.patch.object(ASADevice, "open")
+def test__file_copy_transfer_file_error(
+    mock_open,
+    mock_file_copy_instance,
+    mock_cisco_asa_file_transfer,
+    mock_file_copy_remote_exists,
+    mock_enable,
+    asa_device,
+):
+    args = ("a.txt", "a.txt", "flash:")
+    mock_cisco_asa_file_transfer.establish_scp_conn.side_effect = [Exception]
+    mock_file_copy_instance.return_value = mock_cisco_asa_file_transfer
+    with pytest.raises(asa_module.FileTransferError):
+        asa_device._file_copy(*args)
+    mock_enable.assert_called()
+    mock_file_copy_remote_exists.assert_called_once()
+    mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
+    mock_cisco_asa_file_transfer.transfer_file.assert_not_called()
+    mock_open.assert_not_called()
+    mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
+
+
+@mock.patch.object(ASADevice, "enable")
+@mock.patch.object(ASADevice, "file_copy_remote_exists", return_value=False)
+@mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
+@mock.patch.object(ASADevice, "_file_copy_instance")
+@mock.patch.object(ASADevice, "open")
+def test__file_copy_transfer_file_does_not_transfer(
+    mock_open,
+    mock_file_copy_instance,
+    mock_cisco_asa_file_transfer,
+    mock_file_copy_remote_exists,
+    mock_enable,
+    asa_device,
+):
+    args = ("a.txt", "a.txt", "flash:")
+    mock_file_copy_instance.return_value = mock_cisco_asa_file_transfer
+    with pytest.raises(asa_module.FileTransferError) as err:
+        asa_device._file_copy(*args)
+    mock_enable.assert_called()
+    mock_file_copy_remote_exists.assert_has_calls([mock.call(*args)] * 2)
+    mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
+    mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
+    mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
+    assert err.value.message == "Attempted file copy, but could not validate file existed after transfer"
+
+
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
-def test_get_ipv4_addresses(host, command_prefix, asa_show):
+def test__get_ipv4_addresses(host, command_prefix, asa_show):
     command = "show ip address"
     device = asa_show([f"{command.replace(' ', '_')}.txt"])
     actual = device._get_ipv4_addresses(host)
@@ -322,7 +389,7 @@ def test_get_ipv4_addresses(host, command_prefix, asa_show):
 
 
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
-def test_get_ipv6_addresses(host, command_prefix, asa_show):
+def test__get_ipv6_addresses(host, command_prefix, asa_show):
     command = "show ipv6 interface"
     device = asa_show([f"{command.replace(' ', '_')}.txt"])
     actual = device._get_ipv6_addresses(host)
@@ -335,14 +402,14 @@ def test_get_ipv6_addresses(host, command_prefix, asa_show):
 
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
+def test__wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.side_effect = [STANDBY_READY, FAILED, FAILED, STANDBY_READY]
     asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
     assert mock_peer_redundancy_state.call_count == 4
 
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_device):
+def test__wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.return_value = STANDBY_READY
     with pytest.raises(asa_module.RebootTimeoutError):
         asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
@@ -351,7 +418,7 @@ def test_wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_d
 
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test_wait_for_peer_reboot_fail_state_error(mock_peer_redundancy_state, asa_device):
+def test__wait_for_peer_reboot_fail_state_error(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.side_effect = [FAILED, FAILED, COLD_STANDBY, COLD_STANDBY]
     with pytest.raises(asa_module.RebootTimeoutError):
         asa_device._wait_for_peer_reboot([STANDBY_READY], 1)
@@ -383,6 +450,105 @@ def test_connected_interface_ipv6(mock_ipv6_addresses, mock_ip_protocol, mock_ip
     actual = asa_device.connected_interface
     assert actual == "outside"
     mock_ipv6_addresses.assert_called_once()
+
+
+@mock.patch.object(ASADevice, "is_active", return_value=True)
+@mock.patch.object(ASADevice, "peer_device")
+@mock.patch.object(ASADevice, "config")
+@mock.patch.object(ASADevice, "save")
+def test_enable_scp_active_device(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+    asa_device.enable_scp()
+    mock_is_active.assert_has_calls([mock.call()] * 2)
+    mock_peer_device.assert_not_called()
+    mock_config.assert_called_with("ssh scopy enable")
+    mock_save.assert_called()
+
+
+@mock.patch.object(ASADevice, "is_active", side_effect=[False, True])
+@mock.patch.object(ASADevice, "peer_device", new_callable=mock.PropertyMock)
+@mock.patch.object(ASADevice, "config")
+@mock.patch.object(ASADevice, "save")
+def test_enable_scp_standby_device(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+    mock_peer_device.return_value = asa_device
+    asa_device.enable_scp()
+    mock_is_active.assert_has_calls([mock.call()] * 2)
+    mock_peer_device.assert_called()
+    mock_config.assert_called_with("ssh scopy enable")
+    mock_save.assert_called()
+
+
+@mock.patch.object(ASADevice, "is_active", return_value=False)
+@mock.patch.object(ASADevice, "peer_device", new_callable=mock.PropertyMock)
+@mock.patch.object(ASADevice, "config")
+@mock.patch.object(ASADevice, "save")
+def test_enable_scp_device_not_active(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+    mock_peer_device.return_value = asa_device
+    with pytest.raises(asa_module.FileTransferError) as err:
+        asa_device.enable_scp()
+    assert err.value.message == "Unable to establish a connection with the active device"
+    mock_is_active.assert_has_calls([mock.call()] * 2)
+    mock_peer_device.assert_called()
+    mock_config.assert_not_called()
+    mock_save.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "is_active", return_value=True)
+@mock.patch.object(ASADevice, "peer_device")
+@mock.patch.object(
+    ASADevice, "config", side_effect=[asa_module.CommandError(command="ssh scopy enable", message="Error")]
+)
+@mock.patch.object(ASADevice, "save")
+def test_enable_scp_enable_fail(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+    with pytest.raises(asa_module.FileTransferError) as err:
+        asa_device.enable_scp()
+    assert err.value.message == "Unable to enable scopy on the device"
+    mock_config.assert_called_with("ssh scopy enable")
+    mock_save.assert_not_called()
+
+
+@mock.patch.object(os.path, "basename", return_value="a.txt")
+@mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
+@mock.patch.object(ASADevice, "enable_scp")
+@mock.patch.object(ASADevice, "_file_copy")
+def test_file_copy_no_peer_no_args(mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device):
+    asa_device.file_copy("path/to/a.txt")
+    mock_basename.assert_called()
+    mock_get_file_system.assert_called()
+    mock_enable_scp.assert_called()
+    mock_file_copy.assert_called_once()
+    mock_file_copy.assert_called_with("path/to/a.txt", "a.txt", "flash:")
+
+
+@mock.patch.object(os.path, "basename")
+@mock.patch.object(ASADevice, "_get_file_system")
+@mock.patch.object(ASADevice, "enable_scp")
+@mock.patch.object(ASADevice, "_file_copy")
+def test_file_copy_no_peer_pass_args(mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device):
+    args = ("path/to/a.txt", "b.txt", "bootflash:")
+    asa_device.file_copy(*args)
+    mock_basename.assert_not_called()
+    mock_get_file_system.assert_not_called()
+    mock_enable_scp.assert_called()
+    mock_file_copy.assert_called_once()
+    mock_file_copy.assert_called_with(*args)
+
+
+@mock.patch.object(os.path, "basename")
+@mock.patch.object(ASADevice, "_get_file_system")
+@mock.patch.object(ASADevice, "enable_scp")
+@mock.patch.object(ASADevice, "_file_copy")
+@mock.patch.object(ASADevice, "peer_device")
+def test_file_copy_include_peer(
+    mock_peer_device, mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device
+):
+    mock_peer_device.return_value = asa_device
+    args = ("path/to/a.txt", "a.txt", "flash:")
+    asa_device.file_copy(*args, peer=True)
+    mock_basename.assert_not_called()
+    mock_get_file_system.assert_not_called()
+    mock_enable_scp.assert_called_once()
+    mock_file_copy.assert_called_with(*args)
+    mock_peer_device._file_copy.assert_called_with(*args)
 
 
 @mock.patch("pyntc.devices.asa_device.ConnectHandler")
@@ -649,6 +815,6 @@ def test_send_command_expect(asa_send_command):
 def test_send_command_error(asa_send_command_timing):
     command = "send_command_error"
     device = asa_send_command_timing([f"{command}.txt"])
-    with pytest.raises(CommandError):
+    with pytest.raises(asa_module.CommandError):
         device._send_command(command)
     device.native.send_command_timing.assert_called()

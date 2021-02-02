@@ -10,8 +10,8 @@ from collections import Counter
 from typing import List, Dict, Union, Optional, Iterable
 from ipaddress import ip_address, IPv4Address, IPv6Address, IPv4Interface, IPv6Interface
 
-from netmiko import ConnectHandler, FileTransfer
-from netmiko.cisco import CiscoAsaSSH
+from netmiko import ConnectHandler
+from netmiko.cisco import CiscoAsaSSH, CiscoAsaFileTransfer
 
 from pyntc.utils import get_structured_data
 from .base_device import BaseDevice, fix_docs
@@ -61,11 +61,35 @@ class ASADevice(BaseDevice):
         self.enable()
         self.native.config_mode()
 
-    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+    def _file_copy(self, src: str, dest: str, file_system: str) -> None:
+        self.enable()
+
+        if not self.file_copy_remote_exists(src, dest, file_system):
+            fc: CiscoAsaFileTransfer = self._file_copy_instance(src, dest, file_system)
+
+            try:
+                fc.establish_scp_conn()
+                fc.transfer_file()
+            # Allow EOFErrors to be caught and only raise an error if the file is not actually on the device
+            except EOFError:
+                self.open()
+            except Exception:
+                raise FileTransferError
+            finally:
+                fc.close_scp_chan()
+
+            if not self.file_copy_remote_exists(src, dest, file_system):
+                raise FileTransferError(
+                    message="Attempted file copy, but could not validate file existed after transfer"
+                )
+
+    def _file_copy_instance(
+        self, src: str, dest: Optional[str] = None, file_system: str = "flash:"
+    ) -> CiscoAsaFileTransfer:
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = FileTransfer(self.native, src, dest, file_system=file_system)
+        fc = CiscoAsaFileTransfer(self.native, src, dest, file_system=file_system)
         return fc
 
     def _get_file_system(self):
@@ -355,34 +379,86 @@ class ASADevice(BaseDevice):
         if self.native.check_config_mode():
             self.native.exit_config_mode()
 
+    def enable_scp(self) -> None:
+        """
+        Enable SCP on device by configuring "ssh scopy enable".
+
+        The command is ran on the active device; if the device is
+        currently standby, then a new connection is created to the
+        active device. The configuration is saved after to sync to peer.
+
+        Raises:
+            FileTransferError: When unable to configure scopy on the active device.
+
+        Example:
+            >>> device = ASADevice(**connection_args)
+            >>> device.show("show run ssh | i scopy")
+            ''
+            >>> device.enable_scp()
+            >>> device.show("show run ssh | i scopy")
+            'ssh scopy enable'
+            >>>
+        """
+        if self.is_active():
+            device: ASADevice = self
+        else:
+            device = self.peer_device
+
+        if not device.is_active():
+            raise FileTransferError("Unable to establish a connection with the active device")
+
+        try:
+            device.config("ssh scopy enable")
+        except CommandError:
+            raise FileTransferError("Unable to enable scopy on the device")
+        device.save()
+
     @property
     def facts(self):
         """Implement this once facts' re-factor is done. """
         return {}
 
-    def file_copy(self, src, dest=None, file_system=None):
-        self.enable()
+    def file_copy(
+        self,
+        src: str,
+        dest: Optional[str] = None,
+        file_system: Optional[str] = None,
+        peer: Optional[bool] = False,
+    ) -> None:
+        """
+        Copy ``src`` file to device.
+
+        The ``src`` file can be copied to both the device and its peer by
+        setting ``peer`` to True. If transferring to the peer device, the
+        transfer will use the address associated with the ``peer_interface``
+        from "show failover" output.
+
+        Args:
+            src (str): The path to the file to be copied to the device.
+            dest (str): The name to use for storing the file on the device.
+                Default is to use the name of the ``src`` file.
+            file_system (str): The directory to store the file on the device.
+                Default will use ``_get_file_system()`` to determine the default file_system.
+            peer (bool): Whether to transfer the ``src`` file to the peer device.
+
+        Raises:
+            FileTransferError: When the ``src`` file is unable to transfer the file to any device.
+
+        Example:
+            >>> dev = ASADevice(**connection_args)
+            >>> dev.file_copy("path/to/asa-image.bin", peer=True)
+        """
+        if dest is None:
+            dest = os.path.basename(src)
+
         if file_system is None:
             file_system = self._get_file_system()
 
-        if not self.file_copy_remote_exists(src, dest, file_system):
-            fc = self._file_copy_instance(src, dest, file_system=file_system)
-            #        if not self.fc.verify_space_available():
-            #            raise FileTransferError('Not enough space available.')
-
-            try:
-                fc.enable_scp()
-                fc.establish_scp_conn()
-                fc.transfer_file()
-            except:  # noqa E722
-                raise FileTransferError
-            finally:
-                fc.close_scp_chan()
-
-            if not self.file_copy_remote_exists(src, dest, file_system):
-                raise FileTransferError(
-                    message="Attempted file copy, but could not validate file existed after transfer"
-                )
+        # netmiko's enable_scp
+        self.enable_scp()
+        self._file_copy(src, dest, file_system)
+        if peer:
+            self.peer_device._file_copy(src, dest, file_system)
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):

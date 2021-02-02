@@ -19,7 +19,7 @@ slot 0: ASA-5545 hw/sw rev (1.0/7.0(0)79) status (Up Sys)
 admin Interface outside (10.132.8.5): Normal
 admin Interface folink (10.132.9.5/fe80::2a0:c9ff:fe03:101): Normal
 admin Interface inside (10.130.8.5/fe80::2a0:c9ff:fe01:101): Normal
-admin Interface fourth (10.130.9.5/fe80::3eff:fe11:6670): Normal
+admin Interface fourth (fe80::3eff:fe11:6670): Normal
 ctx1 Interface outside (10.1.1.1): Normal
 ctx1 Interface inside (10.2.2.1): Normal
 ctx2 Interface outside (10.3.3.2): Normal
@@ -35,7 +35,7 @@ slot 0: ASA-5545 hw/sw rev (1.0/7.0(0)79) status (Up Sys)
 admin Interface outside (10.132.8.6): Normal
 admin Interface folink (10.132.9.6/fe80::2a0:c9ff:fe03:102): Normal
 admin Interface inside (10.130.8.6/fe80::2a0:c9ff:fe01:102): Normal
-admin Interface fourth (10.130.9.6/fe80::3eff:fe11:6671): Normal
+admin Interface fourth (fe80::3eff:fe11:6671): Normal
 ctx1 Interface outside (10.1.1.2): Normal
 ctx1 Interface inside (10.2.2.2): Normal
 ctx2 Interface outside (10.3.3.1): Normal
