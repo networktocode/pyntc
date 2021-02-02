@@ -66,8 +66,6 @@ class ASADevice(BaseDevice):
 
         if not self.file_copy_remote_exists(src, dest, file_system):
             fc: CiscoAsaFileTransfer = self._file_copy_instance(src, dest, file_system)
-            #        if not self.fc.verify_space_available():
-            #            raise FileTransferError('Not enough space available.')
 
             try:
                 fc.establish_scp_conn()
