@@ -154,17 +154,6 @@ class TestJnprDevice(unittest.TestCase):
         assert err.value.command == commands[1]
         assert err.value.message == response[1]
 
-    def test_show_non_raw_text(self):
-        command = "show configuration snmp"
-
-        with pytest.raises(ValueError) as err:
-            self.device.show(command, raw_text=False)
-        assert (
-            err.exconly(tryshort=True)
-            == 'ValueError: Juniper only supports raw text output. \
-                Append " | display xml" to your commands for a structured string.'
-        )
-
     @mock.patch.object(JunosDevice, "show")
     def test_show_list(self, mock_show):
         commands = ["show vlans", "show snmp v3"]

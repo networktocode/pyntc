@@ -279,23 +279,16 @@ class JunosDevice(BaseDevice):
     def set_boot_options(self, sys):
         raise NotImplementedError
 
-    def show(self, commands, raw_text=True):
+    def show(self, commands):
         """Send configuration commands to a device.
 
         Args:
             commands (str, list): String with single command, or list with multiple commands.
-            raw_text (bool, optional): True if encoding is text. False with raise ValueError. Defaults to True.
 
         Raises:
-            ValueError: Juniper only supports raw text output.
             CommandError: Issue with the command provided.
             CommandListError: Issue with a command in the list provided.
         """
-        if not raw_text:
-            raise ValueError(
-                'Juniper only supports raw text output. \
-                Append " | display xml" to your commands for a structured string.'
-            )
         original_commands_is_str = isinstance(commands, str)
         if original_commands_is_str:
             commands = [commands]
@@ -319,7 +312,7 @@ class JunosDevice(BaseDevice):
             commands (list): List with multiple commands.
         """
         warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
-        return self.show(commands, raw_text=raw_text)
+        return self.show(commands)
 
     @property
     def startup_config(self):
