@@ -1,5 +1,4 @@
-"""Module for using a Cisco ASA device over SSH.
-"""
+"""Module for using a Cisco ASA device over SSH."""
 
 import os
 import re
@@ -41,6 +40,16 @@ class ASADevice(BaseDevice):
     active_redundancy_states = {None, "active"}
 
     def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
+        """
+        PyNTC Device implemenation for Cisco ASA
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate to the device.
+            password (str): The password to authenticate to the device.
+            secret (str, optional): The password to escalate privlege on the device. Defaults to "".
+            port (int, optional): Port used to establish connection. Defaults to 22.
+        """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
         self.native: Optional[CiscoAsaSSH] = None
@@ -93,7 +102,7 @@ class ASADevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
-        """Determines the default file system or directory for device.
+        """Determine the default file system or directory for device.
 
         Returns:
             str: The name of the default file system or directory for the device.
@@ -301,11 +310,23 @@ class ASADevice(BaseDevice):
         raise RebootTimeoutError(hostname=f"{self.host}-peer", wait_time=timeout)
 
     def backup_running_config(self, filename):
+        """
+        Backups running config
+
+        Args:
+            filename (str): Name of backup file.
+        """
         with open(filename, "w") as f:
             f.write(self.running_config)
 
     @property
     def boot_options(self):
+        """
+        Determine boot image
+
+        Returns:
+            dict: Key: 'sys' Value: Current boot image.
+        """
         show_boot_out = self.show("show boot | i BOOT variable")
         # Improve regex to get only the first boot $var in the sequence!
         boot_path_regex = r"Current BOOT variable = (\S+):\/(\S+)"
@@ -319,19 +340,42 @@ class ASADevice(BaseDevice):
         return dict(sys=boot_image)
 
     def checkpoint(self, checkpoint_file):
+        """[summary]
+
+        Args:
+            checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
+        """
         self.save(filename=checkpoint_file)
 
     def close(self):
+        """
+        Disconnect from device.
+        """
         if self._connected:
             self.native.disconnect()
             self._connected = False
 
     def config(self, command):
+        """
+        Send single command to device.
+
+        Args:
+            command (str): command to be sent to device.
+        """
         self._enter_config()
         self._send_command(command)
         self.native.exit_config_mode()
 
     def config_list(self, commands):
+        """
+        Send list of commands to device.
+
+        Args:
+            commands (list): [description]
+
+        Raises:
+            CommandListError: [description]
+        """
         self._enter_config()
         entered_commands = []
         for command in commands:
@@ -345,7 +389,7 @@ class ASADevice(BaseDevice):
     @property
     def connected_interface(self) -> str:
         """
-        The interface that is assigned an IP Address of ``self.ip_address``.
+        Interface that is assigned an IP Address of ``self.ip_address``.
 
         Returns:
             str: The name of the interfaces associated to ``self.ip_address``.
@@ -415,7 +459,7 @@ class ASADevice(BaseDevice):
 
     @property
     def facts(self):
-        """Implement this once facts' re-factor is done. """
+        """Implement this once facts re-factor is done."""
         return {}
 
     def file_copy(
@@ -462,6 +506,17 @@ class ASADevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        """
+        Copy``src`` file to device.
+
+        Args:
+            src (str): [description]
+            dest (str, optional): [description]. Defaults to None.
+            file_system (str, optional): [description]. Defaults to None.
+
+        Returns:
+            bool: True if the file exists on the device and the md5 hashes match. Otherwise, false.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -472,6 +527,18 @@ class ASADevice(BaseDevice):
         return False
 
     def install_os(self, image_name, **vendor_specifics):
+        """
+        Install OS on device.
+
+        Args:
+            image_name (str): Name of the image to be installed.
+
+        Raises:
+            OSInstallError: Message stating the end device could not boot into the new image.
+
+        Returns:
+            bool: True if new image is installed correctly. False if device is already running image_name.
+        """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
@@ -487,7 +554,7 @@ class ASADevice(BaseDevice):
     @property
     def ip_address(self) -> Union[IPv4Address, IPv6Address]:
         """
-        The IP Address used to establish the connection to the device.
+        IP Address used to establish the connection to the device.
 
         Returns:
             IPv4Address/IPv6Address: The IP address used by the paramiko connection.
@@ -515,7 +582,7 @@ class ASADevice(BaseDevice):
     @property
     def ipv4_addresses(self) -> Dict[str, List[IPv4Address]]:
         """
-        The IPv4 addresses of the device's interfaces.
+        IPv4 addresses of the device's interfaces.
 
         Returns:
             dict: The ipv4 addresses mapped to their interfaces.
@@ -531,7 +598,7 @@ class ASADevice(BaseDevice):
     @property
     def ipv6_addresses(self) -> Dict[str, List[IPv6Address]]:
         """
-        The IPv6 addresses of the device's interfaces.
+        IPv6 addresses of the device's interfaces.
 
         Returns:
             dict: The ipv6 addresses mapped to their interfaces.
@@ -547,7 +614,7 @@ class ASADevice(BaseDevice):
     @property
     def ip_protocol(self) -> str:
         """
-        The IP Protocol of the IP Addressed used by the underlying paramiko connection.
+        IP Protocol of the IP Addressed used by the underlying paramiko connection.
 
         Returns:
             str: "ipv4" for IPv4 Addresses and "ipv6" for IPv6 Addresses.
@@ -584,6 +651,9 @@ class ASADevice(BaseDevice):
         return self.redundancy_state in self.active_redundancy_states
 
     def open(self):
+        """
+        Attempt to find device prompt. If not found, create Connecthandler object to device.
+        """
         if self._connected:
             try:
                 self.native.find_prompt()
@@ -605,6 +675,12 @@ class ASADevice(BaseDevice):
 
     @property
     def peer_device(self) -> "ASADevice":
+        """
+        Create instance of ASADevice for peer device.
+
+        Returns:
+            CiscoASA: Instance of CiscoASA class.
+        """
         if self._peer_device is None:
             self._peer_device = self.__class__(
                 str(self.peer_ip_address), self.username, self.password, self.secret, self.port, **self.kwargs
@@ -617,7 +693,7 @@ class ASADevice(BaseDevice):
     @property
     def peer_ip_address(self) -> Union[IPv4Address, IPv6Address]:
         """
-        The IP Address associated with ``self.ip_address`` on the peer device.
+        IP Address associated with ``self.ip_address`` on the peer device.
 
         Returns:
             IPv4Address/IPv6Address: The IP address used by the paramiko connection.
@@ -644,7 +720,7 @@ class ASADevice(BaseDevice):
     @property
     def peer_ipv4_addresses(self) -> Dict[str, List[IPv4Address]]:
         """
-        The IPv4 addresses of the peer device's interfaces.
+        IPv4 addresses of the peer device's interfaces.
 
         Returns:
             dict: The ipv4 addresses mapped to their interfaces.
@@ -660,7 +736,7 @@ class ASADevice(BaseDevice):
     @property
     def peer_ipv6_addresses(self) -> Dict[str, List[IPv6Address]]:
         """
-        The IPv6 addresses of the peer device's interfaces.
+        IPv6 addresses of the peer device's interfaces.
 
         Returns:
             dict: The ipv6 addresses mapped to their interfaces.
@@ -789,7 +865,7 @@ class ASADevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        The operating redundancy mode of the device.
+        Operating redundancy mode of the device.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -852,13 +928,37 @@ class ASADevice(BaseDevice):
         return redundancy_state.lower()
 
     def rollback(self, rollback_to):
+        """
+        Rollback the device configuration
+
+        Args:
+            rollback_to (str): Name of checkpoint file to rollback to
+
+        Raises:
+            NotImplementedError: Function not implemented yet.
+        """
         raise NotImplementedError
 
     @property
     def running_config(self):
+        """
+        Get current running config on device.
+
+        Returns:
+            str: Running configuration on device.
+        """
         return self.show("show running-config")
 
     def save(self, filename="startup-config"):
+        """
+        Save changes to startup config.
+
+        Args:
+            filename (str, optional): Name of startup configuration file. Defaults to "startup-config".
+
+        Returns:
+            bool: True if configuration saved succesfully.
+        """
         command = "copy running-config %s" % filename
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
@@ -871,6 +971,19 @@ class ASADevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        """
+        Set new image as boot option on device.
+
+        Args:
+            image_name (str): AName of image.
+
+        Raises:
+            NTCFileNotFoundError: File not found on device.
+            CommandError: Unable to issue command on device.
+
+        Yields:
+            bool: True if new command is succesfully saved to startup config device.
+        """
         current_boot = self.show("show running-config | inc ^boot system ")
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
@@ -898,10 +1011,32 @@ class ASADevice(BaseDevice):
             )
 
     def show(self, command, expect_string=None):
+        """
+        Send command to device.
+
+        Args:
+            command (str): Command to be ran on device.
+            expect_string (str, optional): Expected string from running command on device. Defaults to None.
+
+        Returns:
+            str: Output from running command on device.
+        """
         self.enable()
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
+        """
+        Send list of commands to device.
+
+        Args:
+            commands (list): Commands to be sent to device.
+
+        Raises:
+            CommandListError: Failure running command on device.
+
+        Returns:
+            list: Output from each command sent.
+        """
         self.enable()
 
         responses = []
