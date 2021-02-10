@@ -41,7 +41,7 @@ class ASADevice(BaseDevice):
 
     def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
         """
-        PyNTC Device implemenation for Cisco ASA
+        PyNTC Device constructor for Cisco ASA
 
         Args:
             host (str): The address of the network device.
@@ -340,7 +340,8 @@ class ASADevice(BaseDevice):
         return dict(sys=boot_image)
 
     def checkpoint(self, checkpoint_file):
-        """[summary]
+        """
+        Creates a checkpoint file of the current config.
 
         Args:
             checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
@@ -371,10 +372,10 @@ class ASADevice(BaseDevice):
         Send list of commands to device.
 
         Args:
-            commands (list): [description]
+            commands (list): list of commands to be set to device.
 
         Raises:
-            CommandListError: [description]
+            CommandListError: Message stating which commadn failed and the response from the device.
         """
         self._enter_config()
         entered_commands = []
@@ -510,12 +511,19 @@ class ASADevice(BaseDevice):
         Copy``src`` file to device.
 
         Args:
-            src (str): [description]
-            dest (str, optional): [description]. Defaults to None.
+            src (str): The path to the file to be copied to the device.
+            dest (str, optional): The name to use for storing the file on the device.
+                Defaults to use the name of the ``src`` file..
             file_system (str, optional): [description]. Defaults to None.
 
         Returns:
             bool: True if the file exists on the device and the md5 hashes match. Otherwise, false.
+
+        Example:
+        >>> status = file_copy_remote_exists("path/to/asa-image.bin")
+        >>> print(status)
+        True
+        >>>
         """
         self.enable()
         if file_system is None:
@@ -679,7 +687,7 @@ class ASADevice(BaseDevice):
         Create instance of ASADevice for peer device.
 
         Returns:
-            CiscoASA: Instance of CiscoASA class.
+            :class`~devices.ASADevice`: Cisco ASA device instance.
         """
         if self._peer_device is None:
             self._peer_device = self.__class__(
