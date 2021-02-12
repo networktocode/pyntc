@@ -41,7 +41,7 @@ class ASADevice(BaseDevice):
 
     def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
         """
-        PyNTC Device constructor for Cisco ASA
+        Pyntc Device constructor for Cisco ASA.
 
         Args:
             host (str): The address of the network device.
@@ -311,7 +311,7 @@ class ASADevice(BaseDevice):
 
     def backup_running_config(self, filename):
         """
-        Backups running config
+        Backups running config.
 
         Args:
             filename (str): Name of backup file.
@@ -322,7 +322,7 @@ class ASADevice(BaseDevice):
     @property
     def boot_options(self):
         """
-        Determine boot image
+        Determine boot image.
 
         Returns:
             dict: Key: 'sys' Value: Current boot image.
@@ -341,7 +341,7 @@ class ASADevice(BaseDevice):
 
     def checkpoint(self, checkpoint_file):
         """
-        Creates a checkpoint file of the current config.
+        Create a checkpoint file of the current config.
 
         Args:
             checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
@@ -349,9 +349,7 @@ class ASADevice(BaseDevice):
         self.save(filename=checkpoint_file)
 
     def close(self):
-        """
-        Disconnect from device.
-        """
+        """Disconnect from device."""
         if self._connected:
             self.native.disconnect()
             self._connected = False
@@ -659,9 +657,7 @@ class ASADevice(BaseDevice):
         return self.redundancy_state in self.active_redundancy_states
 
     def open(self):
-        """
-        Attempt to find device prompt. If not found, create Connecthandler object to device.
-        """
+        """Attempt to find device prompt. If not found, create Connecthandler object to device."""
         if self._connected:
             try:
                 self.native.find_prompt()
@@ -937,7 +933,7 @@ class ASADevice(BaseDevice):
 
     def rollback(self, rollback_to):
         """
-        Rollback the device configuration
+        Rollback the device configuration.
 
         Args:
             rollback_to (str): Name of checkpoint file to rollback to
@@ -1060,8 +1056,15 @@ class ASADevice(BaseDevice):
 
     @property
     def startup_config(self):
+        """
+        Show startup config.
+
+        :return: Output of command 'show startup-config'.
+        """
         return self.show("show startup-config")
 
 
 class RebootSignal(NTCError):
+    """Not implemented."""
+
     pass
