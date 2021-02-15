@@ -912,6 +912,7 @@ def test_install_os_install_mode(
     mock_get_file_system.return_value = file_system
     mock_os_version.return_value = "16.12.03a"
     mock_image_booted.side_effect = [False, True]
+    pre_fast_cli = ios_device.fast_cli
     mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
     # Call the install os function
     actual = ios_device.install_os(image_name, install_mode=True)
@@ -926,6 +927,7 @@ def test_install_os_install_mode(
     mock_image_booted.assert_called()
     mock_wait_for_reboot.assert_called()
     assert actual is True
+    assert pre_fast_cli == ios_device.fast_cli
 
 
 # Test install mode upgrade fail
@@ -1172,3 +1174,35 @@ def test_boot_options_show_boot(mock_boot, show_boot_out, ios_send_command):
     boot_options = device.boot_options
     assert boot_options == {"sys": BOOT_IMAGE}
     device.native.send_command.assert_called_with(command_string="show boot")
+
+
+def test_connected_with_fast_cli():
+    with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
+        with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
+            device = IOSDevice("host", "user", "password")
+            device.native = ch
+    assert device.fast_cli
+
+
+def test_connected_with_fast_cli_false():
+    with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
+        with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
+            device = IOSDevice("host", "user", "password", fast_cli=False)
+            device.native = ch
+    assert not device.fast_cli
+
+
+@pytest.mark.parametrize("expected", ((True,), (False,)))
+def test_fast_cli(expected, ios_device):
+    ios_device._fast_cli = expected
+    assert ios_device.fast_cli is expected
+
+
+@pytest.mark.parametrize("expected", ((True,), (False,)))
+def test_fast_cli_setter(expected, ios_device):
+    ios_device._fast_cli = not expected
+    assert ios_device._fast_cli is not expected
+    ios_device.fast_cli = expected
+    assert ios_device._fast_cli is expected

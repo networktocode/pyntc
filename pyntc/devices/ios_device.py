@@ -46,7 +46,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs):
         """
         PyNTC Device implementation for Cisco IOS.
 
@@ -65,6 +65,7 @@ class IOSDevice(BaseDevice):
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
+        self._fast_cli = fast_cli
         self._connected = False
         self.open(confirm_active=confirm_active)
 
@@ -517,6 +518,15 @@ class IOSDevice(BaseDevice):
 
         return self._config_register
 
+    @property
+    def fast_cli(self):
+        return self._fast_cli
+
+    @fast_cli.setter
+    def fast_cli(self, value):
+        self._fast_cli = value
+        self.native.fast_cli = value
+
     def file_copy(self, src, dest=None, file_system=None):
         self.enable()
         if file_system is None:
@@ -574,9 +584,14 @@ class IOSDevice(BaseDevice):
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
+            # Get the current fast_cli to set it back later to whatever it is
+            current_fast_cli = self.fast_cli
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
+
+                # Set fast_cli to False to handle install mode, 10+ minute installation
+                self.fast_cli = False
 
                 # Check for OS Version specific upgrade path
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
@@ -597,12 +612,16 @@ class IOSDevice(BaseDevice):
                         self.show(command, delay_factor=install_mode_delay_factor)
                     except IOError:
                         pass
+
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot()
 
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
+
+            # Set FastCLI back to originally set
+            self.fast_cli = current_fast_cli
 
             # Verify the OS level
             if not self._image_booted(image_name):
@@ -627,7 +646,7 @@ class IOSDevice(BaseDevice):
         """
         return self.redundancy_state in self.active_redundancy_states
 
-    def open(self, confirm_active=True, fast_cli=True):
+    def open(self, confirm_active=True):
         """
         Open a connection to the network device.
 
@@ -671,7 +690,7 @@ class IOSDevice(BaseDevice):
                 global_delay_factor=self.global_delay_factor,
                 secret=self.secret,
                 verbose=False,
-                fast_cli=fast_cli,
+                fast_cli=self.fast_cli,
             )
             self._connected = True
 
