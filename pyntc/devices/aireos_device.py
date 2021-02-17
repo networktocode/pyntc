@@ -619,7 +619,7 @@ class AIREOSDevice(BaseDevice):
         return True
 
     @property
-    def connected(self):  #noqa: D401
+    def connected(self):  # noqa: D401
         """
         Connection status of the device.
 
@@ -676,7 +676,7 @@ class AIREOSDevice(BaseDevice):
                 raise WLANDisableError(self.host, desired_wlans, post_disabled_wlans)
 
     @property
-    def disabled_wlans(self):   #noqa:  D403
+    def disabled_wlans(self):  # noqa:  D403
         """
         IDs for all disabled WLANs.
 
@@ -760,7 +760,7 @@ class AIREOSDevice(BaseDevice):
                 raise WLANEnableError(self.host, desired_wlans, post_enabled_wlans)
 
     @property
-    def enabled_wlans(self):   #noqa:   D403
+    def enabled_wlans(self):  # noqa:   D403
         """
         IDs for all enabled WLANs.
 
@@ -1270,7 +1270,7 @@ class AIREOSDevice(BaseDevice):
 
         return command_responses
 
-    def show_list(self, commands, **netmiko_args):   # noqa:  D401
+    def show_list(self, commands, **netmiko_args):  # noqa:  D401
         """
         DEPRECATED - Use the `show` method.
 
