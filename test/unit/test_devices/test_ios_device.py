@@ -1206,3 +1206,29 @@ def test_fast_cli_setter(expected, ios_device):
     assert ios_device._fast_cli is not expected
     ios_device.fast_cli = expected
     assert ios_device._fast_cli is expected
+
+
+def test_image_booted_bundle_version(ios_show):
+    device = ios_show(["show_version.txt"])
+    assert device._image_booted(image_name="c3750-ipservicesk9-mz.150-2.SE11.bin")
+
+
+def test_image_booted_bundle_version_false(ios_show):
+    device = ios_show(["show_version.txt"])
+    assert not device._image_booted(image_name="c3750-ipservicesk9-mz.150-2.SE12.bin")
+
+
+@mock.patch.object(IOSDevice, "show")
+def test_image_booted_install_mode(mock_show, ios_device):
+    with open("test/unit/test_devices/device_mocks/ios/show_version_install_mode.txt") as fh:
+        mock_show.side_effect = [fh.read()]
+
+    assert ios_device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.03.SPA.bin")
+
+
+@mock.patch.object(IOSDevice, "show")
+def test_image_booted_install_mode_fail(mock_show, ios_device):
+    with open("test/unit/test_devices/device_mocks/ios/show_version_install_mode.txt") as fh:
+        mock_show.side_effect = [fh.read()]
+
+    assert not ios_device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.04.SPA.bin")

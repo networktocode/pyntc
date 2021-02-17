@@ -139,14 +139,16 @@ class IOSDevice(BaseDevice):
         if re.search(image_name, version_data):
             return True
 
-        # Test for version number in the text
+        # Test for version number in the text, used on install mode devices that use packages.conf
         try:
             version_number = re.search(image_pattern, image_name).group(1)
             if version_number and version_number in version_data:
                 return True
+        # Continue on if regex is unable to find the result, which raises an attribute error
         except AttributeError:
             pass
 
+        # Unable to find the version number in output, the image is not booted.
         return False
 
     def _interfaces_detailed_list(self):
