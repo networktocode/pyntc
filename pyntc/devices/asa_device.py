@@ -373,7 +373,7 @@ class ASADevice(BaseDevice):
             commands (list): list of commands to be set to device.
 
         Raises:
-            CommandListError: Message stating which commadn failed and the response from the device.
+            CommandListError: Message stating which command failed and the response from the device.
         """
         self._enter_config()
         entered_commands = []
@@ -506,13 +506,14 @@ class ASADevice(BaseDevice):
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
         """
-        Copy``src`` file to device.
+        Copy ``src`` file to device.
 
         Args:
             src (str): The path to the file to be copied to the device.
             dest (str, optional): The name to use for storing the file on the device.
                 Defaults to use the name of the ``src`` file..
-            file_system (str, optional): [description]. Defaults to None.
+            file_system (str, optional): The directory name to store files on the device.
+                Defaults to discover the default directory of the device.
 
         Returns:
             bool: True if the file exists on the device and the md5 hashes match. Otherwise, false.
@@ -984,9 +985,6 @@ class ASADevice(BaseDevice):
         Raises:
             NTCFileNotFoundError: File not found on device.
             CommandError: Unable to issue command on device.
-
-        Yields:
-            bool: True if new command is succesfully saved to startup config device.
         """
         current_boot = self.show("show running-config | inc ^boot system ")
         file_system = vendor_specifics.get("file_system")
@@ -1020,7 +1018,7 @@ class ASADevice(BaseDevice):
 
         Args:
             command (str): Command to be ran on device.
-            expect_string (str, optional): Expected string from running command on device. Defaults to None.
+            expect_string (str, optional): Expected response from running command on device. Defaults to None.
 
         Returns:
             str: Output from running command on device.
