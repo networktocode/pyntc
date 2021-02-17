@@ -8,11 +8,13 @@ python:
 
 install:
   # XXX: Migrate this to Poetry fully
-  # Install Tox, which is currently our testrunner and helper
-  - pip install pip --upgrade
-  - pip install tox
+  - pip install virtualenv
 
 script:
-  # Run all our tests
+  # Activate virtualenv, install tox and run all tests.
+  - virtualenv ./venv
+  - source ./venv/bin/activate
+  - python -m pip install -U pip
+  - pip install tox
   - tox
   - tox -e coveralls
