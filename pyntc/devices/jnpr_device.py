@@ -311,24 +311,40 @@ class JunosDevice(BaseDevice):
     def set_boot_options(self, sys):
         raise NotImplementedError
 
-    def show(self, command, raw_text=True):
-        if not raw_text:
-            raise ValueError(
-                'Juniper only supports raw text output. \
-                Append " | display xml" to your commands for a structured string.'
-            )
+    def show(self, commands):
+        """Send configuration commands to a device.
 
-        if not command.startswith("show"):
-            raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
 
-        return self.native.cli(command, warning=False)
-
-    def show_list(self, commands, raw_text=True):
+        Raises:
+            CommandError: Issue with the command provided.
+            CommandListError: Issue with a command in the list provided.
+        """
+        original_commands_is_str = isinstance(commands, str)
+        if original_commands_is_str:
+            commands = [commands]
         responses = []
         for command in commands:
-            responses.append(self.show(command, raw_text=raw_text))
+            if not command.startswith("show"):
+                if original_commands_is_str:
+                    raise CommandError(command, 'Juniper "show" commands must begin with "show".')
+                raise CommandListError(commands, command, 'Juniper "show" commands must begin with "show".')
 
+            response = self.native.cli(command, warning=False)
+            responses.append(response)
+        if original_commands_is_str:
+            return responses[0]
         return responses
+
+    def show_list(self, commands, raw_text=True):
+        """Send show commands in list format to a device.
+        DEPRECATED - Use the `show` method.
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        return self.show(commands)
 
     @property
     def startup_config(self):

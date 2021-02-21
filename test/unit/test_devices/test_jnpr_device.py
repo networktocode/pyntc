@@ -102,7 +102,7 @@ class TestJnprDevice(unittest.TestCase):
             self.device.config(commands)
         assert err.value.command == commands[1]
 
-    def test_show(self):
+    def test_show_pass_string(self):
         command = "show configuration snmp"
 
         expected = """
@@ -120,18 +120,7 @@ class TestJnprDevice(unittest.TestCase):
         self.assertEqual(result, expected)
         self.device.native.cli.assert_called_with(command, warning=False)
 
-    def test_bad_show_non_show(self):
-        command = "configure something"
-        with self.assertRaises(CommandError):
-            self.device.show(command)
-
-    def test_show_non_raw_text(self):
-        command = "show configuration snmp"
-
-        with self.assertRaises(ValueError):
-            self.device.show(command, raw_text=False)
-
-    def test_show_list(self):
+    def test_show_pass_list(self):
         commands = ["show vlans", "show snmp v3"]
 
         def cli_side_effect(*args, **kwargs):
@@ -143,7 +132,7 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device.native.cli.side_effect = cli_side_effect
 
-        result = self.device.show_list(commands)
+        result = self.device.show(commands)
         self.assertIsInstance(result, list)
 
         self.assertEqual("a", result[0])
@@ -151,6 +140,32 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device.native.cli.assert_any_call(commands[0], warning=False)
         self.device.native.cli.assert_any_call(commands[1], warning=False)
+
+    def test_bad_show_non_show_pass_string(self):
+        command = "configure something"
+        response = 'Juniper "show" commands must begin with "show".'
+        with pytest.raises(CommandError) as err:
+            self.device.show(command)
+        assert err.value.command == "configure something"
+        assert err.value.cli_error_msg == response
+
+    def test_bad_show_non_show_pass_list(self):
+        commands = ["show version", "configure something"]
+        response = [
+            "valid",
+            '\nCommand configure something failed with message: Juniper "show" commands must begin with "show".\nCommand List: \n\tshow version\n\tconfigure something\n',
+        ]
+        with pytest.raises(CommandListError) as err:
+            self.device.show(commands)
+        assert err.value.command == commands[1]
+        assert err.value.message == response[1]
+
+    @mock.patch.object(JunosDevice, "show")
+    def test_show_list(self, mock_show):
+        commands = ["show vlans", "show snmp v3"]
+
+        self.device.show_list(commands)
+        self.device.show.assert_called_with(commands)
 
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
     def test_save(self, mock_scp):
