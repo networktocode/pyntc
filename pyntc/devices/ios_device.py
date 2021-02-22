@@ -586,11 +586,12 @@ class IOSDevice(BaseDevice):
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            # Get the current fast_cli to set it back later to whatever it is
-            current_fast_cli = self.fast_cli
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
+
+                # Get the current fast_cli to set it back later to whatever it is
+                current_fast_cli = self.fast_cli
 
                 # Set fast_cli to False to handle install mode, 10+ minute installation
                 self.fast_cli = False
@@ -622,8 +623,9 @@ class IOSDevice(BaseDevice):
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
 
-            # Set FastCLI back to originally set
-            self.fast_cli = current_fast_cli
+            # Set FastCLI back to originally set when using install mode
+            if install_mode:
+                self.fast_cli = current_fast_cli
 
             # Verify the OS level
             if not self._image_booted(image_name):
