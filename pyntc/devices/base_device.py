@@ -170,7 +170,7 @@ class BaseDevice(object):
 
     @property
     @abc.abstractmethod
-    def fqdn(self):      # noqa:  D403
+    def fqdn(self):  # noqa:  D403
         """fqdn name string property, part of device facts.
 
         Raises:
@@ -190,7 +190,7 @@ class BaseDevice(object):
 
     @property
     @abc.abstractmethod
-    def serial_number(self):   # noqa:  D401
+    def serial_number(self):  # noqa:  D401
         """Serial number string property, part of device facts.
 
         Raises:
