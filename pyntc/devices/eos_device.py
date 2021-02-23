@@ -42,7 +42,7 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):   # noqa: D403
+    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):  # noqa: D403
         """PyNTC Device implementation for Arista EOS.
 
         Args:
