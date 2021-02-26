@@ -19,7 +19,7 @@ class F5Device(BaseDevice):
 
     vendor = "f5"
 
-    def __init__(self, host, username, password, **kwargs):   # noqa:  D403
+    def __init__(self, host, username, password, **kwargs):  # noqa:  D403
         """PyNTC implementation for F5 device.
 
         Args:
