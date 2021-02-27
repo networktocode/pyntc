@@ -1,5 +1,5 @@
 """
-Logging utilities for Versa
+Logging utilities for Pyntc 
 ===========================
 
 This module contains helpers and wrappers for making logging more consistent
@@ -8,16 +8,16 @@ How to use me:
 
     >>> from . import log
     >>> log.init()
-    2020-07-21 10:35:40,860 [INFO] bluecat: Logging initialized.
+    2020-07-21 10:35:40,860 [INFO] pyntc: Logging initialized.
     >>> log.info("NTC")
-    2020-07-21 10:39:40,463 [INFO] bluecat: NTC
+    2020-07-21 10:39:40,463 [INFO] pyntc: NTC
 
 """
 import os
 import logging
 
 
-APP = "versa"
+APP = "pyntc"
 """ Application name, used as the logging root. """
 
 FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -30,13 +30,13 @@ DEBUG_FORMAT = (
 
 
 def get_log(name=None):
-    """Return a logger instance in the :data:`APP` namespace.
-
-    If *name* is supplied, it will be appended to the default name.
+    """Gets log namespace and creates logger.
 
     Args:
-        name (str): Sublogger name
+        name (str, optional): Sublogger name. Defaults to None.
 
+    Returns:
+        logger: Return a logger instance in the :data:`APP` namespace.
     """
     name = f"{APP}.{name}" if name else APP
     return logging.getLogger(name)
@@ -49,12 +49,15 @@ def init(**kwargs):
     directly to the :func:`logging.basicConfig` call in turn.
 
     Args:
-        **kwargs: Arguments to pass to logging configuration
+        **kwargs: Arguments to pass for logging configuration
+
 
     """
     debug = os.environ.get("DEBUG", None)
     log_format = DEBUG_FORMAT if debug else FORMAT
 
+    # TODO(drx): change this to a log_level variable that can be taken from configuration 
+    # if not set in the env var
     log_level = getattr(logging, os.environ.get("LOG_LEVEL", "info").upper())
     log_level = logging.DEBUG if debug else log_level
 
@@ -66,7 +69,14 @@ def init(**kwargs):
 
 
 def logger(level):
-    """Thin wrapper around app logger methods."""
+    """Wrapper around logger methods.
+
+    Args:
+        level (str): defines the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+    Returns:
+        string: Returns logger.<level> type of string.
+    """
     return getattr(get_log(), level)
 
 
