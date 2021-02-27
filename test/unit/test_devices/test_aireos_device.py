@@ -245,7 +245,8 @@ def test_config_pass_string(mock_enter_config, mock_check_for_errors, aireos_con
     device = aireos_config([""])
     result = device.config(command)
 
-    assert isinstance(result, str)  # TODO: Change to list when deprecating config_list
+    # TODO: Change to list when deprecating config_list
+    assert isinstance(result, str)
     mock_enter_config.assert_called_once()
     mock_check_for_errors.assert_called_with(command, result)
     mock_check_for_errors.assert_called_once()
@@ -1508,7 +1509,9 @@ def test_transfer_image_to_ap_already_transferred_secondary(
 @mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
+@mock.patch("pyntc.devices.aireos_device.log.error")
 def test_transfer_image_to_ap_already_transferred_secondary_fail(
+    mock_log,
     mock_ap_boot_options,
     mock_ap_image_matches_expected,
     mock_boot_options,
@@ -1525,7 +1528,7 @@ def test_transfer_image_to_ap_already_transferred_secondary_fail(
     mock_config.assert_has_calls([mock.call("ap image swap all")] * 3)
     mock_wait.assert_not_called()
     mock_boot_options.assert_not_called()
-    assert fte.value.message == f"Unable to set all APs to use {aireos_boot_image}"
+    mock_log.assert_called_once_with(f"Unable to set all APs to use {aireos_boot_image}")
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -1581,7 +1584,9 @@ def test_transfer_image_to_ap_transfer_secondary(
 @mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
+@mock.patch("pyntc.devices.aireos_device.log.error")
 def test_transfer_image_to_ap_transfer_secondary_fail(
+    mock_log,
     mock_ap_boot_options,
     mock_ap_image_matches_expected,
     mock_boot_options,
@@ -1599,7 +1604,8 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
     mock_config.assert_has_calls([mock.call("ap image predownload backup all")] + [mock.call("ap image swap all")] * 3)
     mock_wait.assert_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
-    assert fte.value.message == f"Unable to set all APs to use {aireos_boot_image}"
+
+    mock_log.assert_called_once_with(f"Unable to set all APs to use {aireos_boot_image}")
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -1629,7 +1635,9 @@ def test_transfer_image_to_ap_transfer_fail_swap_at_first_try(
 @mock.patch.object(AIREOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(AIREOSDevice, "_ap_images_match_expected")
 @mock.patch.object(AIREOSDevice, "ap_boot_options", new_callable=mock.PropertyMock)
+@mock.patch("pyntc.devices.aireos_device.log.error")
 def test_transfer_image_does_not_exist(
+    mock_log,
     mock_ap_boot_options,
     mock_ap_image_matches_expected,
     mock_boot_options,
@@ -1647,7 +1655,7 @@ def test_transfer_image_does_not_exist(
     mock_config.assert_not_called()
     mock_wait.assert_not_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
-    assert fte.value.message == f"Unable to find {aireos_boot_image} on {aireos_device.host}"
+    mock_log.assert_called_once_with(f"Unable to find {aireos_boot_image} on {aireos_device.host}")
 
 
 @mock.patch.object(AIREOSDevice, "_uptime_components")

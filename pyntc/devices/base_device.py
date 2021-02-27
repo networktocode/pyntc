@@ -6,6 +6,7 @@ import warnings
 
 
 from pyntc.errors import NTCError, FeatureNotFoundError
+from pyntc import log
 
 
 def fix_docs(cls):
@@ -25,12 +26,11 @@ class BaseDevice(object):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, username, password, device_type=None, log, **kwargs):
+    def __init__(self, host, username, password, device_type=None, **kwargs):
         self.host = host
         self.username = username
         self.password = password
         self.device_type = device_type
-        self.log = log
         self._uptime = None
         self._os_version = None
         self._interfaces = None

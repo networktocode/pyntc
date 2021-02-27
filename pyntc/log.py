@@ -23,9 +23,7 @@ APP = "pyntc"
 FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 """ Logging format to use. """
 
-DEBUG_FORMAT = (
-    "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s: %(message)s"
-)
+DEBUG_FORMAT = "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s: %(message)s"
 """ Logging format used when debug output is enabled. """
 
 
@@ -56,7 +54,7 @@ def init(**kwargs):
     debug = os.environ.get("DEBUG", None)
     log_format = DEBUG_FORMAT if debug else FORMAT
 
-    # TODO(drx): change this to a log_level variable that can be taken from configuration 
+    # TODO(drx): change this to a log_level variable that can be taken from configuration
     # if not set in the env var
     log_level = getattr(logging, os.environ.get("LOG_LEVEL", "info").upper())
     log_level = logging.DEBUG if debug else log_level
