@@ -343,11 +343,13 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "set_boot_options")
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
-    def test_install_os(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
+    @mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
+    def test_install_os(self, mock_fast_cli, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
         state = self.device.install_os(BOOT_IMAGE)
         mock_set_boot.assert_called()
         mock_reboot.assert_called()
         mock_wait.assert_called()
+        mock_fast_cli.fast_cli.assert_not_called()
         self.assertEqual(state, True)
 
     @mock.patch.object(IOSDevice, "_image_booted", side_effect=[True])
@@ -897,7 +899,9 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
 @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(IOSDevice, "_get_file_system")
 @mock.patch.object(IOSDevice, "reboot")
+@mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
 def test_install_os_install_mode(
+    mock_fast_cli,
     mock_reboot,
     mock_get_file_system,
     mock_wait_for_reboot,
@@ -912,7 +916,6 @@ def test_install_os_install_mode(
     mock_get_file_system.return_value = file_system
     mock_os_version.return_value = "16.12.03a"
     mock_image_booted.side_effect = [False, True]
-    pre_fast_cli = ios_device.fast_cli
     mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
     # Call the install os function
     actual = ios_device.install_os(image_name, install_mode=True)
@@ -927,7 +930,8 @@ def test_install_os_install_mode(
     mock_image_booted.assert_called()
     mock_wait_for_reboot.assert_called()
     assert actual is True
-    assert pre_fast_cli == ios_device.fast_cli
+    # Assert that fast_cli value was retrieved, set to Fals, and set back to original value
+    assert mock_fast_cli.call_count == 3
 
 
 # Test install mode upgrade fail
@@ -1139,6 +1143,48 @@ def test_install_os_install_mode_from_everest_to_everest(
     assert actual is False
 
 
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+@pytest.mark.parametrize("fast_cli_setting", [True, False], ids=["true", "false"])
+def test_install_os_install_mode_fast_cli_state(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    ios_device,
+    fast_cli_setting,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_image_booted.side_effect = [False, True]
+    ios_device.fast_cli = fast_cli_setting
+    mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
+    # Call the install os function
+    actual = ios_device.install_os(image_name, install_mode=True)
+
+    # Check the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+    )
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+    assert actual is True
+    assert ios_device.fast_cli == fast_cli_setting
+
+
 def test_show(ios_send_command):
     command = "show_ip_arp"
     device = ios_send_command([f"{command}.txt"])
@@ -1204,8 +1250,10 @@ def test_fast_cli(expected, ios_device):
 def test_fast_cli_setter(expected, ios_device):
     ios_device._fast_cli = not expected
     assert ios_device._fast_cli is not expected
+    assert ios_device.native.fast_cli is not expected
     ios_device.fast_cli = expected
     assert ios_device._fast_cli is expected
+    assert ios_device.native.fast_cli is expected
 
 
 def test_image_booted_bundle_version(ios_show):
@@ -1218,17 +1266,11 @@ def test_image_booted_bundle_version_false(ios_show):
     assert not device._image_booted(image_name="c3750-ipservicesk9-mz.150-2.SE12.bin")
 
 
-@mock.patch.object(IOSDevice, "show")
-def test_image_booted_install_mode(mock_show, ios_device):
-    with open("test/unit/test_devices/device_mocks/ios/show_version_install_mode.txt") as fh:
-        mock_show.side_effect = [fh.read()]
-
-    assert ios_device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.03.SPA.bin")
+def test_image_booted_install_mode(ios_show):
+    device = ios_show(["show_version_install_mode.txt"])
+    assert device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.03.SPA.bin")
 
 
-@mock.patch.object(IOSDevice, "show")
-def test_image_booted_install_mode_fail(mock_show, ios_device):
-    with open("test/unit/test_devices/device_mocks/ios/show_version_install_mode.txt") as fh:
-        mock_show.side_effect = [fh.read()]
-
-    assert not ios_device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.04.SPA.bin")
+def test_image_booted_install_mode_fail(ios_show):
+    device = ios_show(["show_version_install_mode.txt"])
+    assert not device._image_booted(image_name="c3750-ipservicesk9-mz.16.09.04.SPA.bin")
