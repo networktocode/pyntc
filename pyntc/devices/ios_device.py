@@ -46,7 +46,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs):
         """
         PyNTC Device implementation for Cisco IOS.
 
@@ -57,6 +57,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -65,6 +66,7 @@ class IOSDevice(BaseDevice):
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
+        self._fast_cli = fast_cli
         self._connected = False
         self.open(confirm_active=confirm_active)
 
@@ -133,11 +135,21 @@ class IOSDevice(BaseDevice):
         raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     # Get the version of the image that is booted into on the device
-    def _image_booted(self, image_name, **vendor_specifics):
+    def _image_booted(self, image_name, image_pattern=r".*\.(\d+\.\d+\.\w+)\.SPA.+", **vendor_specifics):
         version_data = self.show("show version")
         if re.search(image_name, version_data):
             return True
 
+        # Test for version number in the text, used on install mode devices that use packages.conf
+        try:
+            version_number = re.search(image_pattern, image_name).group(1)
+            if version_number and version_number in version_data:
+                return True
+        # Continue on if regex is unable to find the result, which raises an attribute error
+        except AttributeError:
+            pass
+
+        # Unable to find the version number in output, the image is not booted.
         return False
 
     def _interfaces_detailed_list(self):
@@ -277,8 +289,8 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
-            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+            str: When ``command`` is a str, the config session input and output from sending ``command``.
+            list: When ``command`` is a list, the config session input and output from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -350,7 +362,7 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            list: Each command's input and ouput from sending the command in ``commands``.
+            list: Each command's input and output from sending the command in ``commands``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -509,6 +521,15 @@ class IOSDevice(BaseDevice):
 
         return self._config_register
 
+    @property
+    def fast_cli(self):
+        return self._fast_cli
+
+    @fast_cli.setter
+    def fast_cli(self, value):
+        self._fast_cli = value
+        self.native.fast_cli = value
+
     def file_copy(self, src, dest=None, file_system=None):
         self.enable()
         if file_system is None:
@@ -551,7 +572,7 @@ class IOSDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=10, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=20, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
@@ -569,6 +590,12 @@ class IOSDevice(BaseDevice):
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
+
+                # Get the current fast_cli to set it back later to whatever it is
+                current_fast_cli = self.fast_cli
+
+                # Set fast_cli to False to handle install mode, 10+ minute installation
+                self.fast_cli = False
 
                 # Check for OS Version specific upgrade path
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
@@ -589,12 +616,17 @@ class IOSDevice(BaseDevice):
                         self.show(command, delay_factor=install_mode_delay_factor)
                     except IOError:
                         pass
+
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot()
 
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
+
+            # Set FastCLI back to originally set when using install mode
+            if install_mode:
+                self.fast_cli = current_fast_cli
 
             # Verify the OS level
             if not self._image_booted(image_name):
@@ -624,13 +656,13 @@ class IOSDevice(BaseDevice):
         Open a connection to the network device.
 
         This method will close the connection if ``confirm_active`` is True and the device is not active.
-        Devices that do not have high availibility are considred active.
+        Devices that do not have high availability are considered active.
 
         Args:
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
 
         Raises:
-            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availability state is not active.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -662,6 +694,7 @@ class IOSDevice(BaseDevice):
                 global_delay_factor=self.global_delay_factor,
                 secret=self.secret,
                 verbose=False,
+                fast_cli=self.fast_cli,
             )
             self._connected = True
 
