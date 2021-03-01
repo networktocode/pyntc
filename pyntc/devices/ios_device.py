@@ -57,6 +57,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -659,7 +660,6 @@ class IOSDevice(BaseDevice):
 
         Args:
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
-            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
 
         Raises:
             DeviceNotActiveError: When ``confirm_active`` is True, and the device high availability state is not active.
