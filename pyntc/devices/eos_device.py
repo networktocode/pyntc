@@ -378,7 +378,7 @@ class EOSDevice(BaseDevice):
             file_system (string, optional): Describes device file system. Defaults to None.
 
         Returns:
-            [type]: [description]
+            bool: True if remote file exists.
         """
         self.enable()
         if file_system is None:
