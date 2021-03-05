@@ -29,6 +29,13 @@ class UnsupportedDeviceError(NTCError):
         super().__init__(message)
 
 
+class InstallModeRequired(NTCError):
+    def __init__(self):
+        """Error class for not having install mode set. """
+        message = "Only install mode is supported on IOSXE WLC devices."
+        super().__init__(message)
+
+
 class DeviceNameNotFoundError(NTCError):
     def __init__(self, name, filename):
         """
