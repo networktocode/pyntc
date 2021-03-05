@@ -45,7 +45,9 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs):  # noqa: D403
+    def __init__(
+        self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs
+    ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco IOS.
 
