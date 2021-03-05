@@ -585,6 +585,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def fast_cli(self):
+        """Get current fast_cli value.
+
+        Returns:
+            bool: True if fast_cli is set to true. Otherwise, false.
+        """
         return self._fast_cli
 
     @fast_cli.setter
