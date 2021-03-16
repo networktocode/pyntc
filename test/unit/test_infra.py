@@ -13,6 +13,7 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 
 
 class TestInfra(unittest.TestCase):
+    @mock.patch("pyntc.devices.iosxewlc_device.IOSXEWLCDevice.open")
     @mock.patch("pyntc.devices.aireos_device.AIREOSDevice.open")
     @mock.patch("pyntc.devices.f5_device.F5Device._open_soap")
     @mock.patch("pyntc.devices.f5_device.ManagementRoot")

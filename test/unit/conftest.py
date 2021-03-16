@@ -355,7 +355,9 @@ def iosxewlc_send_command(iosxewlc_device, iosxewlc_mock_path):
     def _mock(side_effects, existing_device=None, device=iosxewlc_device):
         if existing_device is not None:
             device = existing_device
-        device.native.send_command.side_effect = get_side_effects(iosxewlc_mock_path, side_effects)
+        with mock.patch.object(IOSXEWLCDevice, "_send_command") as mock_send_command:
+            mock_send_command.side_effect = get_side_effects(iosxewlc_mock_path, side_effects)
+        device._send_command = mock_send_command
         return device
 
     return _mock
