@@ -2,7 +2,11 @@
 import time
 
 from .ios_device import IOSDevice
-from pyntc.errors import RebootTimeoutError, OSInstallError, InstallModeRequired, CommandError, WaitingRebootTimeoutError
+from pyntc.errors import (
+    RebootTimeoutError,
+    OSInstallError,
+    WaitingRebootTimeoutError,
+)
 
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
@@ -16,7 +20,7 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.open()
                 self.show("show version")
-            except:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec
                 return
 
         raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -28,7 +32,7 @@ class IOSXEWLCDevice(IOSDevice):
                 self.open()
                 self.show("show version")
                 return
-            except:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -63,6 +67,7 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.show(command, delay_factor=install_mode_delay_factor)
             except IOError:
+                # Expected error IOError is raised from previous show command.
                 pass
 
             # Wait for device to start reboot

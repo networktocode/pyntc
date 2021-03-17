@@ -211,3 +211,13 @@ def test_wlan_disable_error():
         raise error
 
     assert err.value.message == error_message
+
+
+def test_waiting_reboot_timeout_error():
+    error_message = "host1 has not rebooted in 10 seconds after issuing install mode upgrade command"
+    error_class = ntc_errors.WaitingRebootTimeoutError
+    error = error_class("host1", 10)
+    with pytest.raises(error_class) as err:
+        raise error
+
+    assert err.value.message == error_message

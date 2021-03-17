@@ -29,13 +29,6 @@ class UnsupportedDeviceError(NTCError):
         super().__init__(message)
 
 
-class InstallModeRequired(NTCError):
-    def __init__(self):
-        """Error class for not having install mode set. """
-        message = "Only install mode is supported on IOSXE WLC devices."
-        super().__init__(message)
-
-
 class DeviceNameNotFoundError(NTCError):
     def __init__(self, name, filename):
         """
@@ -163,6 +156,7 @@ class RebootTimeoutError(NTCError):
         message = "Unable to reconnect to {0} after {1} seconds".format(hostname, wait_time)
         super().__init__(message)
 
+
 class WaitingRebootTimeoutError(NTCError):
     def __init__(self, hostname, wait_time):
         """
@@ -172,7 +166,9 @@ class WaitingRebootTimeoutError(NTCError):
             hostname (str): The hostname of the device that did not boot back up.
             wait_time (int): The amount of time waiting before considering the reboot failed.
         """
-        message = "{0} has not rebooted in {1} seconds after issuing install mode upgrade command".format(hostname, wait_time)
+        message = "{0} has not rebooted in {1} seconds after issuing install mode upgrade command".format(
+            hostname, wait_time
+        )
         super().__init__(message)
 
 

@@ -3,7 +3,8 @@ import pytest
 
 from pyntc.devices import IOSXEWLCDevice
 from pyntc.devices import iosxewlc_device as iosxewlc_module
-from pyntc.errors import RebootTimeoutError, DeviceNotActiveError, CommandError, WaitingRebootTimeoutError
+from pyntc.errors import CommandError
+
 
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
@@ -13,18 +14,29 @@ def test_wait_for_device_reboot_returns(mock_show, mock_open, iosxewlc_device):
     mock_open.assert_called()
     mock_show.assert_called()
 
+
+@mock.patch.object(IOSXEWLCDevice, "open")
+@mock.patch.object(IOSXEWLCDevice, "show")
+def test_wait_for_device_reboot_multiple_iterations(mock_show, mock_open, iosxewlc_device):
+    timeout = 3
+    mock_open.side_effect = [Exception("Cannot connect"), Exception("Cannot connect"), None]
+    iosxewlc_device._wait_for_device_reboot(timeout=timeout)
+    assert 3 == mock_open.call_count
+
+
 @mock.patch.object(IOSXEWLCDevice, "hostname", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
 def test_wait_for_device_reboot_timeout(mock_show, mock_open, mock_hostname, iosxewlc_device):
     timeout = 3
     mock_hostname.return_value = "ntc-iosxewlc-01"
-    mock_open.side_effect = [Exception("Can't connect")]
-    mock_show.side_effect = [CommandError("show version", "Error in performing command")]
+    mock_open.side_effect = [Exception("Cannot connect")]
     with pytest.raises(iosxewlc_module.RebootTimeoutError) as err:
         iosxewlc_device._wait_for_device_reboot(timeout=timeout)
 
     assert err.value.message == "Unable to reconnect to ntc-iosxewlc-01 after 3 seconds"
+    assert mock_open.call_count > 3
+
 
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
@@ -33,6 +45,16 @@ def test_wait_for_device_start_reboot_returns(mock_show, mock_open, iosxewlc_dev
     mock_open.side_effect = [Exception("Can't connect")]
     mock_show.side_effect = [CommandError("show version", "Error in performing command")]
     iosxewlc_device._wait_for_device_start_reboot(timeout=timeout)
+
+
+@mock.patch.object(IOSXEWLCDevice, "open")
+@mock.patch.object(IOSXEWLCDevice, "show")
+def test_wait_for_device_start_reboot_multiple_iterations(mock_show, mock_open, iosxewlc_device):
+    timeout = 3
+    mock_open.side_effect = [None, None, Exception("Can't connect")]
+    iosxewlc_device._wait_for_device_start_reboot(timeout=timeout)
+    assert 3 == mock_open.call_count
+
 
 @mock.patch.object(IOSXEWLCDevice, "hostname", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSXEWLCDevice, "open")
@@ -43,7 +65,12 @@ def test_wait_for_device_start_reboot_timeout(mock_show, mock_open, mock_hostnam
     with pytest.raises(iosxewlc_module.WaitingRebootTimeoutError) as err:
         iosxewlc_device._wait_for_device_start_reboot(timeout=timeout)
 
-    assert err.value.message == "ntc-iosxewlc-01 has not rebooted in 3 seconds after issuing install mode upgrade command"
+    assert (
+        err.value.message == "ntc-iosxewlc-01 has not rebooted in 3 seconds after issuing install mode upgrade command"
+    )
+    assert mock_open.call_count > 3
+    assert mock_show.call_count > 3
+
 
 def test_show(iosxewlc_send_command):
     command = "show_ip_arp"
@@ -142,6 +169,7 @@ def test_install_os_install_mode_failed(
     mock_wait_for_reboot.assert_called()
     mock_wait_for_reboot_start.assert_called()
 
+
 # Test install mode upgrade not needed
 @mock.patch.object(IOSXEWLCDevice, "_image_booted")
 @mock.patch.object(IOSXEWLCDevice, "set_boot_options")
@@ -177,4 +205,3 @@ def test_install_os_already_installed(
     mock_show.assert_not_called()
     mock_image_booted.assert_called()
     assert actual is False
-
