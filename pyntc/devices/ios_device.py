@@ -846,13 +846,22 @@ class IOSDevice(BaseDevice):
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
-        try:
+        # Obtaining current boot system configuration command
+        # Example. Should be either boot system flash:/cat3k_caa-universalk9.16.12.01.SPA.bin
+        # or boot system flash cat3k_caa-universalk9.16.12.01.SPA.bin
+        boot_sys_syntax = self.show("show run | in boot system")
+        if re.search(r'boot\ssystem\s\S+\:\/+\S+', boot_sys_syntax): # Will match boot system flash:/cat3k_caa-universalk9.16.12.01.SPA.bin
             command = "boot system {0}/{1}".format(file_system, image_name)
             self.config(["no boot system", command])
-        except CommandListError:  # TODO: Update to CommandError when deprecating config_list
+        elif re.search(r'boot\ssystem\s\S+\s\S+', boot_sys_syntax): # Will match boot system flash cat3k_caa-universalk9.16.12.01.SPA.bin
             file_system = file_system.replace(":", "")
             command = "boot system {0} {1}".format(file_system, image_name)
             self.config(["no boot system", command])
+        else:
+            raise CommandError(
+                command=command,
+                message="Unable to determine the proper boot system syntax. Current configuration is {0}".format(boot_sys_syntax)
+            )
 
         self.save()
         new_boot_options = self.boot_options["sys"]
