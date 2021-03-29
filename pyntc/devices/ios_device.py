@@ -1,5 +1,4 @@
-"""Module for using a Cisco IOS device over SSH.
-"""
+"""Module for using a Cisco IOS device over SSH."""
 
 import signal
 import os
@@ -46,7 +45,9 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs):
+    def __init__(
+        self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs
+    ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco IOS.
 
@@ -110,7 +111,7 @@ class IOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
-        """Determines the default file system or directory for device.
+        """Determine the default file system or directory for device.
 
         Returns:
             str: The name of the default file system or directory for the device.
@@ -231,11 +232,21 @@ class IOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
+        """Backup running configuration to filename specified.
+
+        Args:
+            filename (str): Filename to save running configuration to.
+        """
         with open(filename, "w") as f:
             f.write(self.running_config)
 
     @property
     def boot_options(self):
+        """Get current boot image.
+
+        Returns:
+            dict: Key ``sys`` with value being the current boot image.
+        """
         boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
         try:
             # Try show bootvar command first
@@ -268,15 +279,21 @@ class IOSDevice(BaseDevice):
         return {"sys": boot_image}
 
     def checkpoint(self, checkpoint_file):
+        """Create checkpoint file.
+
+        Args:
+            checkpoint_file (str): Name of checkpoint file.
+        """
         self.save(filename=checkpoint_file)
 
     def close(self):
+        """Disconnect from device."""
         if self.connected:
             self.native.disconnect()
             self._connected = False
 
     def config(self, command, **netmiko_args):
-        """
+        r"""
         Send config commands to device.
 
         By default, entering and exiting config mode is handled automatically.
@@ -347,8 +364,8 @@ class IOSDevice(BaseDevice):
 
         return command_responses
 
-    def config_list(self, commands, **netmiko_args):
-        """
+    def config_list(self, commands, **netmiko_args):  # noqa: D401
+        r"""
         DEPRECATED - Use the `config` method.
 
         Send config commands to device.
@@ -413,9 +430,9 @@ class IOSDevice(BaseDevice):
         return True
 
     @property
-    def connected(self):
+    def connected(self):  # noqa: D401
         """
-        The connection status of the device.
+        Get connection status of the device.
 
         Returns:
             bool: True if the device is connected, else False.
@@ -441,6 +458,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime(self):
+        """Get uptime from device.
+
+        Returns:
+            int: Uptime in seconds.
+        """
         if self._uptime is None:
             version_data = self._raw_version_data()
             uptime_full_string = version_data["uptime"]
@@ -450,6 +472,9 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
+        """
+        Get uptime in format dd:hh:mm.
+        """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
             uptime_full_string = version_data["uptime"]
@@ -459,6 +484,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def hostname(self):
+        """Get hostname of device.
+
+        Returns:
+            str: Hostname of device.
+        """
         version_data = self._raw_version_data()
         if self._hostname is None:
             self._hostname = version_data["hostname"]
@@ -467,6 +497,12 @@ class IOSDevice(BaseDevice):
 
     @property
     def interfaces(self):
+        """
+        Get list of interfaces on device.
+
+        Returns:
+            list: List of interfaces on device.
+        """
         if self._interfaces is None:
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
 
@@ -474,6 +510,12 @@ class IOSDevice(BaseDevice):
 
     @property
     def vlans(self):
+        """
+        Get list of VLANs on device.
+
+        Returns:
+            list: List of VLANs on device.
+        """
         if self._vlans is None:
             if self.model.startswith("WS"):
                 self._vlans = list(str(x["vlan_id"]) for x in self._show_vlan())
@@ -484,6 +526,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def fqdn(self):
+        """Get fully qualified domain name.
+
+        Returns:
+            str: Fully qualified domain name or ``N/A`` if not defined.
+        """
         if self._fqdn is None:
             self._fqdn = "N/A"
 
@@ -491,6 +538,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def model(self):
+        """Get the device model.
+
+        Returns:
+            str: Device model.
+        """
         version_data = self._raw_version_data()
         if self._model is None:
             self._model = version_data["hardware"]
@@ -499,6 +551,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def os_version(self):
+        """Get os version on device.
+
+        Returns:
+            str: OS version on device.
+        """
         version_data = self._raw_version_data()
         if self._os_version is None:
             self._os_version = version_data["version"]
@@ -507,6 +564,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def serial_number(self):
+        """Get serial number of device.
+
+        Returns:
+            str: Serial number of device.
+        """
         version_data = self._raw_version_data()
         if self._serial_number is None:
             self._serial_number = version_data["serial"]
@@ -515,6 +577,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def config_register(self):
+        """Get config register of device.
+
+        Returns:
+            str: Config register.
+        """
         # ios-specific facts
         version_data = self._raw_version_data()
         self._config_register = version_data["config_register"]
@@ -523,6 +590,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def fast_cli(self):
+        """Get current fast_cli value.
+
+        Returns:
+            bool: True if fast_cli is set to true. Otherwise, false.
+        """
         return self._fast_cli
 
     @fast_cli.setter
@@ -531,6 +603,18 @@ class IOSDevice(BaseDevice):
         self.native.fast_cli = value
 
     def file_copy(self, src, dest=None, file_system=None):
+        """Copy file to device.
+
+        Args:
+            src (str): Source of file.
+            dest (str, optional): Destination name for file. Defaults to None.
+            file_system (str, optional): File system to copy file to. Defaults to None.
+
+        Raises:
+            SocketClosedError: Error raised if connection to device is closed.
+            FileTransferError: Error in transferring file.
+            FileTransferError: Error if unable to verify file was transferred successfully.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -563,6 +647,16 @@ class IOSDevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        """Copy file to device.
+
+        Args:
+            src (str): Source of file.
+            dest (str, optional): Destination name for file. Defaults to None.
+            file_system (str, optional): File system to copy file to. Defaults to None.
+
+        Returns:
+            bool: True if file copied succesfully and md5 hashes match. Otherwise, false.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -731,6 +825,7 @@ class IOSDevice(BaseDevice):
 
     def reboot(self, timer=0, **kwargs):
         """Reboot device.
+
         Reload the controller or controller pair.
 
         Args:
@@ -768,7 +863,7 @@ class IOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        The operating redundancy mode of the device.
+        Get operating redundancy mode of the device.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -816,6 +911,14 @@ class IOSDevice(BaseDevice):
         return processor_redundancy_state
 
     def rollback(self, rollback_to):
+        """Rollback configuration to file on flash.
+
+        Args:
+            rollback_to (sEtr): Name of the file to rollback to.
+
+        Raises:
+            RollbackError: Error if unable to rollback to configuration.
+        """
         try:
             self.show("configure replace flash:%s force" % rollback_to)
         except CommandError:
@@ -823,9 +926,22 @@ class IOSDevice(BaseDevice):
 
     @property
     def running_config(self):
+        """Get running configuration.
+
+        Returns:
+            str: Output of ``show running-config``.
+        """
         return self.show("show running-config")
 
     def save(self, filename="startup-config"):
+        """Save running configuration.
+
+        Args:
+            filename (str, optional): Name of file to save running configuration. Defaults to "startup-config".
+
+        Returns:
+            bool: True if save is succesfull.
+        """
         command = "copy running-config %s" % filename
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
@@ -838,6 +954,15 @@ class IOSDevice(BaseDevice):
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        """Set specified image as boot image.
+
+        Args:
+            image_name (str): Name of image to set as boot variable.
+
+        Raises:
+            NTCFileNotFoundError: Error if file is not found on device.
+            CommandError: Error if setting new image as boot variable fails.
+        """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
@@ -863,10 +988,30 @@ class IOSDevice(BaseDevice):
             )
 
     def show(self, command, expect_string=None):
+        """Run command on device.
+
+        Args:
+            command (str): Command to be ran.
+            expect_string (str, optional): Expected string from command output. Defaults to None.
+
+        Returns:
+            str: Output of command.
+        """
         self.enable()
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
+        """Run a list of commands on device.
+
+        Args:
+            commands (list): List of commands to run on device.
+
+        Raises:
+            CommandListError: Error if one of the commands is not able to be ran on the device.
+
+        Returns:
+            list: Responses from each command ran on device.
+        """
         self.enable()
 
         responses = []
@@ -882,8 +1027,13 @@ class IOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
+        """Get startup configuration.
+
+        Returns:
+            str: Startup configuration from device.
+        """
         return self.show("show startup-config")
 
 
-class RebootSignal(NTCError):
+class RebootSignal(NTCError):  # noqa: D101
     pass
