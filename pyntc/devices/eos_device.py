@@ -42,7 +42,17 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):
+    def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):  # noqa: D403
+        """PyNTC Device implementation for Arista EOS.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            transport (str): The protocol to communicate with the device. Defaults to http.
+            port (int): The port to use to establish the connection. Defaults to None.
+            timeout(int): Timeout value used for connection with the device. Defaults to None.
+        """
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
         self.port = port
@@ -71,7 +81,7 @@ class EOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
-        """Determines the default file system or directory for device.
+        """Determine the default file system or directory for device.
 
         Returns:
             str: The name of the default file system or directory for the device.
@@ -136,19 +146,36 @@ class EOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
+        """
+        Create backup file of running configuration.
+
+        Args:
+            filename (str): The name of the file that will be saved.
+        """
         with open(filename, "w") as f:
             f.write(self.running_config)
 
     @property
     def boot_options(self):
+        """Get current running software.
+
+        Returns:
+            dict: Key is ``sys`` with value being the image on the device.
+        """
         image = self.show("show boot-config")["softwareImage"]
         image = image.replace("flash:", "")
         return dict(sys=image)
 
     def checkpoint(self, checkpoint_file):
+        """Create a checkpoint file of the running config.
+
+        Args:
+            checkpoint_file (str): Name of the checkpoint file.
+        """
         self.show("copy running-config %s" % checkpoint_file)
 
     def close(self):
+        """Not implemented. Just ``passes``."""
         pass
 
     def config(self, commands):
@@ -181,6 +208,7 @@ class EOSDevice(BaseDevice):
 
     def enable(self):
         """Ensure device is in enable mode.
+
         Returns:
             None: Device prompt is set to enable mode.
         """
@@ -193,6 +221,12 @@ class EOSDevice(BaseDevice):
 
     @property
     def uptime(self):
+        """
+        Get uptime of the device in seconds.
+
+        Returns:
+            int: Uptime of the device.
+        """
         if self._uptime is None:
             sh_version_output = self.show("show version")
             self._uptime = int(time.time() - sh_version_output["bootupTimestamp"])
@@ -201,6 +235,12 @@ class EOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
+        """
+        Get uptime of the device in the format of dd::hh::mm.
+
+        Returns:
+            str: Uptime in string format.
+        """
         if self._uptime_string is None:
             self._uptime_string = self._uptime_to_string(self.uptime)
 
@@ -208,6 +248,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def hostname(self):
+        """Get hostname from device.
+
+        Returns:
+            str: Hostname of the device.
+        """
         if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
             self._hostname = sh_hostname_output["hostname"]
@@ -216,6 +261,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def interfaces(self):
+        """Get list of interfaces on device.
+
+        Returns:
+            list: List of interfaces
+        """
         if self._interfaces is None:
             iface_detailed_list = self._interfaces_status_list()
             self._interfaces = sorted(list(x["interface"] for x in iface_detailed_list))
@@ -224,6 +274,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def vlans(self):
+        """Get list of VLANS on device.
+
+        Returns:
+            list: List of VLANS on device.
+        """
         if self._vlans is None:
             vlans = EOSVlans(self)
             self._vlans = vlans.get_list()
@@ -232,6 +287,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def fqdn(self):
+        """Get fully-qualified domain name of device.
+
+        Returns:
+            str: Fully-qualified domain name of device.
+        """
         if self._fqdn is None:
             sh_hostname_output = self.show("show hostname")
             self._fqdn = sh_hostname_output["fqdn"]
@@ -240,6 +300,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def model(self):
+        """Get model of device.
+
+        Returns:
+            str: Model of device.
+        """
         if self._model is None:
             sh_version_output = self.show("show version")
             self._model = sh_version_output["modelName"]
@@ -248,6 +313,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def os_version(self):
+        """Get OS version on device.
+
+        Returns:
+            str: OS version of device.
+        """
         if self._os_version is None:
             sh_version_output = self.show("show version")
             self._os_version = sh_version_output["internalVersion"]
@@ -256,6 +326,11 @@ class EOSDevice(BaseDevice):
 
     @property
     def serial_number(self):
+        """Get serial number of device.
+
+        Returns:
+            str: Serial number of device.
+        """
         if self._serial_number is None:
             sh_version_output = self.show("show version")
             self._serial_number = sh_version_output["serialNumber"]
@@ -263,7 +338,7 @@ class EOSDevice(BaseDevice):
         return self._serial_number
 
     def file_copy(self, src, dest=None, file_system=None):
-        """[summary]
+        """Copy file to device.
 
         Args:
             src (string): source file
@@ -298,6 +373,16 @@ class EOSDevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        """Copy file to remote device if it exists.
+
+        Args:
+            src (string): source file
+            dest (string, optional): Destintion file. Defaults to None.
+            file_system (string, optional): Describes device file system. Defaults to None.
+
+        Returns:
+            bool: True if remote file exists.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -309,6 +394,17 @@ class EOSDevice(BaseDevice):
         return False
 
     def install_os(self, image_name, **vendor_specifics):
+        """Install new OS on device.
+
+        Args:
+            image_name (str): Name of the image name to be installed.
+
+        Raises:
+            OSInstallError: Error in installing new OS.
+
+        Returns:
+            bool: True if device OS is succesfully installed.
+        """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
@@ -322,7 +418,7 @@ class EOSDevice(BaseDevice):
         return False
 
     def open(self):
-        """Opens ssh connection with Netmiko ConnectHandler to be used with FileTransfer"""
+        """Open ssh connection with Netmiko ConnectHandler to be used with FileTransfer."""
         if self._connected:
             try:
                 self.native_ssh.find_prompt()
@@ -367,6 +463,14 @@ class EOSDevice(BaseDevice):
         self.show("reload now")
 
     def rollback(self, rollback_to):
+        """Rollback device configuration.
+
+        Args:
+            rollback_to (str): Name of file to revert configuration to.
+
+        Raises:
+            RollbackError: When rollback is unsuccesful.
+        """
         try:
             self.show("configure replace %s force" % rollback_to)
         except (CommandError, CommandListError):
@@ -374,13 +478,35 @@ class EOSDevice(BaseDevice):
 
     @property
     def running_config(self):
+        """Show running configuration.
+
+        Returns:
+            str: Running configuration.
+        """
         return self.show("show running-config", raw_text=True)
 
     def save(self, filename="startup-config"):
+        """Copy running configuration to startup configuration.
+
+        Args:
+            filename (str, optional): Name where you want running configuration to save. Defaults to "startup-config".
+
+        Returns:
+            bool: True when succesfull.
+        """
         self.show("copy running-config %s" % filename)
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        """Set boot option to specified image.
+
+        Args:
+            image_name (str): Name of the image file.
+
+        Raises:
+            NTCFileNotFoundError: File not found on device.
+            CommandError: Error in trying to set image as boot option.
+        """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
@@ -428,6 +554,7 @@ class EOSDevice(BaseDevice):
 
     def show_list(self, commands):
         """Send show commands in list format to a device.
+
         DEPRECATED - Use the `show` method.
 
         Args:
@@ -438,8 +565,15 @@ class EOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
+        """Get startup configuration.
+
+        Returns:
+            str: Startup configuration.
+        """
         return self.show("show startup-config", raw_text=True)
 
 
 class RebootSignal(NTCError):
+    """Error for sending reboot signal."""
+
     pass
