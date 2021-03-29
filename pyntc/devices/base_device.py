@@ -222,8 +222,8 @@ class BaseDevice(object):
 
     def facts(self):  # noqa: D403
         """
-        DEPRECATED - Use individual properties to get facts."
-        ""
+        DEPRECATED - Use individual properties to get facts.
+        """
         warnings.warn("facts() is deprecated; use individual fact properties.", DeprecationWarning)
         facts = {
             fact: getattr(self, fact, None)
