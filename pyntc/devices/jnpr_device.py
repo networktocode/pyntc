@@ -1,4 +1,4 @@
-"""MOdule for using a Juniper junOS device."""
+"""Module for using a Juniper junOS device."""
 import os
 import re
 import time
@@ -27,7 +27,7 @@ class JunosDevice(BaseDevice):
     vendor = "juniper"
 
     def __init__(self, host, username, password, *args, **kwargs):  # noqa: D403
-        """PyNTC device implementation for Juniper junOS.
+        """PyNTC device implementation for Juniper JunOS.
 
         Args:
             host (str): The address of the network device.
@@ -207,7 +207,8 @@ class JunosDevice(BaseDevice):
 
     @property
     def uptime_string(self):
-        """Device uptime in string format ``days:hours:mins:secs``.
+        """
+        Get device uptime in format dd:hh:mm:ss.
 
         Returns:
             str: Device uptime.
@@ -251,7 +252,7 @@ class JunosDevice(BaseDevice):
         """Get fully qualified domain name.
 
         Returns:
-            str: Fully qualified domain na,e
+            str: Fully qualified domain name.
         """
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
@@ -263,7 +264,7 @@ class JunosDevice(BaseDevice):
         """Get device model.
 
         Returns:
-            str: Get device model.
+            str: Device model.
         """
         if self._model is None:
             self._model = self.native.facts.get("model")
@@ -400,7 +401,10 @@ class JunosDevice(BaseDevice):
         return self.show("show config")
 
     def save(self, filename=None):
-        """Save current configuration to device. If filename is provided, save current configuration to file.
+        """
+        Save current configuration to device.
+        
+        If filename is provided, save current configuration to file.
 
         Args:
             filename (str, optional): Filename to save current configuration. Defaults to None.
