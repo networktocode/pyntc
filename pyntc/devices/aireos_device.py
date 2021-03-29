@@ -619,9 +619,9 @@ class AIREOSDevice(BaseDevice):
         return True
 
     @property
-    def connected(self):  # noqa: D401
+    def connected(self):
         """
-        Connection status of the device.
+        Get connection status of the device.
 
         Returns:
             bool: True if the device is connected, else False.
@@ -676,7 +676,7 @@ class AIREOSDevice(BaseDevice):
                 raise WLANDisableError(self.host, desired_wlans, post_disabled_wlans)
 
     @property
-    def disabled_wlans(self):  # noqa:  D403
+    def disabled_wlans(self):  # noqa: D403
         """
         IDs for all disabled WLANs.
 
@@ -760,7 +760,7 @@ class AIREOSDevice(BaseDevice):
                 raise WLANEnableError(self.host, desired_wlans, post_enabled_wlans)
 
     @property
-    def enabled_wlans(self):  # noqa:   D403
+    def enabled_wlans(self):  # noqa: D403
         """
         IDs for all enabled WLANs.
 
@@ -1092,7 +1092,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        Operating redundancy mode of the controller.
+        Get operating redundancy mode of the controller.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -1270,7 +1270,7 @@ class AIREOSDevice(BaseDevice):
 
         return command_responses
 
-    def show_list(self, commands, **netmiko_args):  # noqa:  D401
+    def show_list(self, commands, **netmiko_args):  # noqa: D401
         """
         DEPRECATED - Use the `show` method.
 
@@ -1305,7 +1305,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def startup_config(self):
         """
-        Show startup config.
+        Get startup config.
 
         Raises:
             NotImplementedError: Function currently not implemented.
@@ -1389,7 +1389,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def uptime(self):
         """
-        Uptime of the device in seconds.
+        Get uptime of the device in seconds.
 
         Returns:
             int: The number of seconds the device has been up.
@@ -1409,7 +1409,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def uptime_string(self):
         """
-        Uptime of the device as a string in the format is dd::hh::mm.
+        Get uptime of the device as a string in the format is dd::hh::mm.
 
         Returns:
             str: The uptime of the device.
