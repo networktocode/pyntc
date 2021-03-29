@@ -1,4 +1,4 @@
-"""Module for using an NXOX device over NX-API."""
+"""Module for using an NXOS device over NX-API."""
 import os
 import re
 import time
@@ -81,7 +81,7 @@ class NXOSDevice(BaseDevice):
         """Save a checkpoint of the running configuration to the device.
 
         Args:
-            filename (str): The filename to save the checkpoint as on the remote device.
+            filename (str): The filename to save the checkpoint on the remote device.
         """
         return self.native.checkpoint(filename)
 
@@ -243,7 +243,7 @@ class NXOSDevice(BaseDevice):
 
         Args:
             src (str): Path to the local file to send.
-            dest (str, optional): The destination file path to be saved on remote the remote device. Defaults to basename of source path.
+            dest (str, optional): The destination file path to be saved on remote device. Defaults to basename of source path.
             file_system (str, optional): The file system for the remote file. Defaults to "bootflash:".
 
         Returns:
@@ -259,7 +259,7 @@ class NXOSDevice(BaseDevice):
             image_name (str): Name of the image file to upgrade the device to.
 
         Raises:
-            OSInstallError: error if boot option is not set to new image.
+            OSInstallError: Error if boot option is not set to new image.
 
         Returns:
             bool: True if new image is boot option on device. Otherwise, false.
@@ -307,7 +307,7 @@ class NXOSDevice(BaseDevice):
         """Rollback configuration to specified file.
 
         Args:
-            filename (str): Name of the file toi rollback to.
+            filename (str): Name of the file to rollback to.
 
         Raises:
             RollbackError: Error if rollback command is unsuccesfull.
@@ -333,7 +333,7 @@ class NXOSDevice(BaseDevice):
             filename (str, optional): Filename to save running configuration to. Defaults to "startup-config".
 
         Returns:
-            [type]: [description]
+            bool: True if configuration is saved.
         """
         return self.native.save(filename=filename)
 
