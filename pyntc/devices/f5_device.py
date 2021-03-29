@@ -94,7 +94,7 @@ class F5Device(BaseDevice):
         """Get name of active volume on the device.
 
         Returns:
-            str: Name of active volume
+            str: Name of active volume.
         """
         volumes = self._get_volumes()
         for _volume in volumes:
@@ -110,7 +110,7 @@ class F5Device(BaseDevice):
             >>> "vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]
 
         Returns:
-            int: number of gigabytes of free space
+            int: Number of gigabytes of free space.
         """
         free_space = None
         free_space_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "vgdisplay -s --units G"')
@@ -434,7 +434,8 @@ class F5Device(BaseDevice):
 
     @property
     def uptime_string(self):
-        """Get uptime of device in string format ``days:hours:mins:seconds``.
+        """
+        Get uptime of device in format dd:hh:mm:ss.
 
         Returns:
             str: Uptime of device.
