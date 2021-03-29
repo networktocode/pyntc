@@ -146,7 +146,8 @@ class EOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
-        """Create backup file of running configurtation.
+        """
+        Create backup file of running configuration.
 
         Args:
             filename (str): The name of the file that will be saved.
@@ -220,7 +221,8 @@ class EOSDevice(BaseDevice):
 
     @property
     def uptime(self):
-        """Get uptime from device.
+        """
+        Get uptime of the device in seconds.
 
         Returns:
             int: Uptime of the device.
@@ -233,7 +235,8 @@ class EOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
-        """Create a string of the uptime of the device.
+        """
+        Get uptime of the device in the format of dd::hh::mm.
 
         Returns:
             str: Uptime in string format.
