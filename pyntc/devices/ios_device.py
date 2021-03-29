@@ -431,7 +431,8 @@ class IOSDevice(BaseDevice):
 
     @property
     def connected(self):  # noqa: D401
-        """Connection status of the device.
+        """
+        Get connection status of the device.
 
         Returns:
             bool: True if the device is connected, else False.
@@ -471,7 +472,9 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
-        """Get uptime in string format ``days:hours:minutes``."""
+        """
+        Get uptime in format dd:hh:mm.
+        """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
             uptime_full_string = version_data["uptime"]
@@ -494,7 +497,8 @@ class IOSDevice(BaseDevice):
 
     @property
     def interfaces(self):
-        """List of interfaces on device.
+        """
+        Get list of interfaces on device.
 
         Returns:
             list: List of interfaces on device.
@@ -506,7 +510,8 @@ class IOSDevice(BaseDevice):
 
     @property
     def vlans(self):
-        """List of VLANs on device.
+        """
+        Get list of VLANs on device.
 
         Returns:
             list: List of VLANs on device.
@@ -602,7 +607,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             src (str): Source of file.
-            dest (str, optional): Destination name for file. . Defaults to None.
+            dest (str, optional): Destination name for file. Defaults to None.
             file_system (str, optional): File system to copy file to. Defaults to None.
 
         Raises:
@@ -646,7 +651,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             src (str): Source of file.
-            dest (str, optional): Destination name for file. . Defaults to None.
+            dest (str, optional): Destination name for file. Defaults to None.
             file_system (str, optional): File system to copy file to. Defaults to None.
 
         Returns:
@@ -858,7 +863,7 @@ class IOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        Operating redundancy mode of the device.
+        Get operating redundancy mode of the device.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -952,7 +957,7 @@ class IOSDevice(BaseDevice):
         """Set specified image as boot image.
 
         Args:
-            image_name (str): NAme of image to set as boot variable.
+            image_name (str): Name of image to set as boot variable.
 
         Raises:
             NTCFileNotFoundError: Error if file is not found on device.
@@ -1002,7 +1007,7 @@ class IOSDevice(BaseDevice):
             commands (list): List of commands to run on device.
 
         Raises:
-            CommandListError: error if one of the commands is not able to be ran on the device.
+            CommandListError: Error if one of the commands is not able to be ran on the device.
 
         Returns:
             list: Responses from each command ran on device.
