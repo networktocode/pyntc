@@ -170,8 +170,9 @@ class BaseDevice(object):
 
     @property
     @abc.abstractmethod
-    def fqdn(self):  # noqa:  D403
-        """fqdn name string property, part of device facts.
+    def fqdn(self):
+        """
+        Get FQDN of the device.
 
         Raises:
             NotImplementedError: returns not implemented if not included in facts.
@@ -190,8 +191,9 @@ class BaseDevice(object):
 
     @property
     @abc.abstractmethod
-    def serial_number(self):  # noqa:  D401
-        """Serial number string property, part of device facts.
+    def serial_number(self):
+        """
+        Get serial number of the device.
 
         Raises:
             NotImplementedError: returns not implemented if not included in facts.
@@ -218,8 +220,10 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    def facts(self):
-        """Gather facts about device."""
+    def facts(self):  # noqa: D403
+        """
+        DEPRECATED - Use individual properties to get facts."
+        ""
         warnings.warn("facts() is deprecated; use individual fact properties.", DeprecationWarning)
         facts = {
             fact: getattr(self, fact, None)
