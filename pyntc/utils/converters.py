@@ -42,7 +42,21 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
 
 
 def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
-    """Apply a dictionary conversion for all dictionaries in original_list."""
+    """Apply a list conversion for all items in original_list.
+
+    Args:
+        original_list (list): Original list to be converted.
+        key_map (dict): Key map to use to convert list.
+        fill_in (dict): Whether the returned list should contain
+            keys and values from the original dictionary if not specified in the key map.
+        whitelist: If fill_in is True, and whitelist isn't empty, only fill in the keys
+            in the whitelist in the returned dictionary.
+        blacklist: If fill_in is True, and blacklist isn't empty, fill in with all keys from
+            the original dictionary besides those in the blacklist.
+
+    Returns:
+        list: A conveted list.
+    """
     converted_list = []
     for original in list(original_list):
         converted_list.append(
@@ -52,9 +66,10 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
     return converted_list
 
 
-def recursive_key_lookup(keys, obj):
-    """Return obj[keys] if keys is actually a single key.
-    Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list."""
+def recursive_key_lookup(keys, obj):   # noqa D205, D200
+    """
+    Return obj[keys] if keys is actually a single key. Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
+    """
     if not isinstance(keys, list):
         return obj.get(keys)
 

@@ -402,8 +402,7 @@ class JunosDevice(BaseDevice):
 
     def save(self, filename=None):
         """
-        Save current configuration to device.
-        If filename is provided, save current configuration to file.
+        Save current configuration to device. If filename is provided, save current configuration to file.
 
         Args:
             filename (str, optional): Filename to save current configuration. Defaults to None.

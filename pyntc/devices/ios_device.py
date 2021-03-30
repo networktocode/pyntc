@@ -472,8 +472,10 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
-        """
-        Get uptime in format dd:hh:mm.
+        """Get uptime in format dd:hh:mm.
+
+        Returns:
+            str: Uptime of device.
         """
         if self._uptime_string is None:
             version_data = self._raw_version_data()

@@ -220,7 +220,7 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    def facts(self):  # noqa: D403
+    def facts(self):  # noqa: D403, D401, D200
         """
         DEPRECATED - Use individual properties to get facts.
         """

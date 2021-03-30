@@ -1,5 +1,4 @@
-"""Kickoff functions for getting instancs of device objects.
-"""
+"""Kickoff functions for getting instancs of device objects."""
 
 import os
 import warnings
@@ -21,7 +20,7 @@ LIB_PATH_DEFAULT = "~/.ntc.conf"
 warnings.simplefilter("default")
 
 
-def ntc_device(device_type, *args, **kwargs):
+def ntc_device(device_type, *args, **kwargs):   # noqa: D205, D400
     """Instantiate and return an instance of a device subclassed
     from ``pyntc.devices.BaseDevice``. ``*args`` and ``*kwargs`` are passed
     directly to the device initializer.
@@ -36,7 +35,6 @@ def ntc_device(device_type, *args, **kwargs):
     Raises:
         UnsupportedDeviceError: if the device_type is unsupported.
     """
-
     try:
         device_class = supported_devices[device_type]
         return device_class(*args, **kwargs)
@@ -44,7 +42,7 @@ def ntc_device(device_type, *args, **kwargs):
         raise UnsupportedDeviceError(device_type)
 
 
-def ntc_device_by_name(name, filename=None):
+def ntc_device_by_name(name, filename=None):   # noqa: D205, D400
     """Instantiate and return an instance of a device subclassed
     from ``pyntc.devices.BaseDevice`` based on its name in an
     NTC configuration file.

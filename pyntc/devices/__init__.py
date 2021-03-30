@@ -1,6 +1,4 @@
-"""Supported devices are stored here. Every supported device needs a
-device_type stored as a string, and a class subclassed from BaseDevice.
-"""
+"""Supported devices are stored here. Every supported device needs adevice_type stored as a string, and a class subclassed from BaseDevice."""
 
 from .eos_device import EOSDevice
 from .nxos_device import NXOSDevice
