@@ -11,6 +11,7 @@ import requests
 from f5.bigip import ManagementRoot
 
 from pyntc.errors import OSInstallError, FileTransferError, NTCFileNotFoundError, NotEnoughFreeSpaceError
+from pyntc import log
 from .base_device import BaseDevice
 
 
@@ -24,6 +25,7 @@ class F5Device(BaseDevice):
 
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
         self._open_soap()
+        log.init(host=host)
 
     def _check_free_space(self, min_space=0):
         """Checks for minimum space on the device
@@ -41,7 +43,10 @@ class F5Device(BaseDevice):
         elif free_space >= min_space:
             return
         elif free_space < min_space:
+            log.error(f"Host {self.host}: Not enough free space for min space requirement {min_space}.")
             raise NotEnoughFreeSpaceError(hostname=self.host, min_space=min_space)
+
+        log.debug(f"Host {self.host}: Free space {free_space} is sufficient.")
 
     def _check_md5sum(self, filename, checksum):
         """Checks if md5sum is correct
@@ -52,8 +57,10 @@ class F5Device(BaseDevice):
         md5sum = self._file_copy_remote_md5(filename)
 
         if checksum == md5sum:
+            log.debug(f"Host {self.host}: Checksums match.")
             return True
         else:
+            log.debug(f"Host {self.host}: Checksums do not match.")
             return False
 
     @staticmethod
@@ -105,6 +112,7 @@ class F5Device(BaseDevice):
         for _volume in volumes:
             if hasattr(_volume, "active") and _volume.active is True:
                 current_volume = _volume.name
+                log.debug(f"Host {self.host}: Active volume name is {current_volume}.")
                 return current_volume
 
     def _get_free_space(self):
@@ -128,6 +136,7 @@ class F5Device(BaseDevice):
             if match:
                 free_space = float(match.group(1))
 
+        log.debug(f"Host {self.host}: Free space is {free_space} GB.")
         return free_space
 
     def _get_hostname(self):
@@ -141,31 +150,41 @@ class F5Device(BaseDevice):
         """
         images = self.api_handler.tm.sys.software.images.get_collection()
 
+        log.debug(f"Host {self.host}: List of images {images}.")
         return images
 
     def _get_interfaces_list(self):
         interfaces = self.soap_handler.Networking.Interfaces.get_list()
+        log.debug(f"Host {self.host}: List of interfaces {interfaces}.")
         return interfaces
 
     def _get_model(self):
-        return self.soap_handler.System.SystemInfo.get_marketing_name()
+        model = self.soap_handler.System.SystemInfo.get_marketing_name()
+        log.debug(f"Host {self.host}: Model name {model}.")
+        return model
 
     def _get_serial_number(self):
         system_information = self.soap_handler.System.SystemInfo.get_system_information()
         chassis_serial = system_information.get("chassis_serial")
 
+        log.debug(f"Host {self.host}: Serial number {chassis_serial}.")
         return chassis_serial
 
     def _get_uptime(self):
-        return self.soap_handler.System.SystemInfo.get_uptime()
+        uptime = self.soap_handler.System.SystemInfo.get_uptime()
+        log.debug(f"Host {self.host}: Uptime {uptime}.")
+        return uptime
 
     def _get_version(self):
-        return self.soap_handler.System.SystemInfo.get_version()
+        version = self.soap_handler.System.SystemInfo.get_version()
+        log.debug(f"Host {self.host}: Version {version}.")
+        return version
 
     def _get_vlans(self):
         rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()
         rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(rd_list)
 
+        log.debug(f"Host {self.host}: List of vlans {rd_vlan_list}.")
         return rd_vlan_list
 
     def _get_volumes(self):
@@ -176,6 +195,7 @@ class F5Device(BaseDevice):
         """
         volumes = self.api_handler.tm.sys.software.volumes.get_collection()
 
+        log.debug(f"Host {self.host}: List of volumes {volumes}.")
         return volumes
 
     def _image_booted(self, image_name, **vendor_specifics):
@@ -186,6 +206,7 @@ class F5Device(BaseDevice):
         volume parameter.
         """
         volume = vendor_specifics.get("volume")
+        log.debug(f"Host {self.host}: Checking if image {image_name} has been booted.")
         return True if self._get_active_volume() == volume else False
 
     def _image_exists(self, image_name):
@@ -202,8 +223,10 @@ class F5Device(BaseDevice):
             return None
 
         if image_name in all_images:
+            log.debug(f"Host {self.host}: Image {image_name} exists.")
             return True
         else:
+            log.debug(f"Host {self.host}: Image {image_name} does not exist.")
             return False
 
     def _image_install(self, image_name, volume):
@@ -221,6 +244,8 @@ class F5Device(BaseDevice):
 
         self.api_handler.tm.sys.software.images.exec_cmd("install", name=image_name, volume=volume, options=options)
 
+        log.info(f"Host {self.host}: Image {image_name} is installed.")
+
     def _image_match(self, image_name, checksum):
         """Checks if image name matches the checksum
 
@@ -230,16 +255,20 @@ class F5Device(BaseDevice):
         if self._image_exists(image_name):
             image = os.path.join("/shared/images", image_name)
             if self._check_md5sum(image, checksum):
+                log.debug(f"Host {self.host}: Image {image_name} matches the checksum.")
                 return True
 
+        log.debug(f"Host {self.host}: Image {image_name} does not match the checksum.")
         return False
 
     def _open_soap(self):
         try:
             self.soap_handler = bigsuds.BIGIP(hostname=self.host, username=self.username, password=self.password)
             self.devices = self.soap_handler.Management.Device.get_list()
+            log.debug(f"Host {self.host}: SOAP connection opened.")
         except bigsuds.OperationFailed as err:
-            raise RuntimeError("ConfigSync API Error ({})".format(err))
+            log.error(f"Host {self.host}: ConfigSync API Error {err}.")
+            raise RuntimeError
 
     def _reboot_to_volume(self, volume_name=None):
         """Requests the reboot (activiation) to a specified volume
@@ -254,9 +283,12 @@ class F5Device(BaseDevice):
             # This is a workaround by issuing reboot command from bash directly.
             self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "reboot"')
 
+        log.debug(f"Host {self.host}: Activation to volume {volume_name}.")
+
     def _reconnect(self):
         """Reconnects to the device"""
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
+        log.debug(f"Host {self.host}: Reconnect to device.")
 
     def _upload_image(self, image_filepath):
         """Uploads an iso image to the device
@@ -291,6 +323,8 @@ class F5Device(BaseDevice):
 
                 start += len(payload)
 
+        log.info(f"Host {self.host}: Image {image_filename} uploaded to {image_filepath}.")
+
     @staticmethod
     def _uptime_to_string(uptime):
         days = uptime / (24 * 60 * 60)
@@ -311,6 +345,7 @@ class F5Device(BaseDevice):
         """
         result = self.api_handler.tm.sys.software.volumes.volume.exists(name=volume_name)
 
+        log.debug(f"Host {self.host}: Checking if volume exists.")
         return result
 
     def _wait_for_device_reboot(self, volume_name, timeout=600):
@@ -329,8 +364,11 @@ class F5Device(BaseDevice):
                 volume = self.api_handler.tm.sys.software.volumes.volume.load(name=volume_name)
                 if hasattr(volume, "active") and volume.active is True:
                     return True
+                log.debug(f"Host {self.host}: Reboot successfull.")
             except Exception:  # noqa E722 # nosec
+                log.error(f"Host {self.host}: Error while rebooting.")
                 pass
+        log.debug(f"Host {self.host}: Reboot not successfull.")
         return False
 
     def _wait_for_image_installed(self, image_name, volume, timeout=1800):
@@ -352,10 +390,12 @@ class F5Device(BaseDevice):
             # of .version attribute in first seconds of their live.
             try:
                 if self.image_installed(image_name=image_name, volume=volume):
+                    log.info(f"Host {self.host}: Image {image_name} installed on volume {volume}.")
                     return
             except:  # noqa E722 # nosec
                 pass
 
+        log.error(f"Host {self.host}: OS install error with image {image_name} and volume {volume}.")
         raise OSInstallError(hostname=self.hostname, desired_boot=volume)
 
     def backup_running_config(self, filename):
@@ -365,6 +405,7 @@ class F5Device(BaseDevice):
     def boot_options(self):
         active_volume = self._get_active_volume()
 
+        log.debug(f"Host {self.host}: Active volume name {active_volume}.")
         return {"active_volume": active_volume}
 
     def checkpoint(self, filename):
@@ -381,6 +422,7 @@ class F5Device(BaseDevice):
         if self._uptime is None:
             self._uptime = self._get_uptime()
 
+        log.debug(f"Host {self.host}: Uptime {self._uptime}.")
         return self._uptime
 
     @property
@@ -444,21 +486,27 @@ class F5Device(BaseDevice):
             self._check_free_space(min_space=6)
             self._upload_image(image_filepath=src)
             if not self.file_copy_remote_exists(src, dest, **kwargs):
-                raise FileTransferError(
-                    message="Attempted file copy, but could not validate file existed after transfer"
+                log.error(
+                    f"Host {self.host}: Attempted file copy, but could not validate file existed after transfer for file {src}."
                 )
+                raise FileTransferError
+
+        log.info(f"Host {self.host}: File {src} copied successfully.")
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         if dest and not dest.startswith("/shared/images"):
+            log.error(f"Host {self.host}: Support only for images - destination is always /shared/images.")
             raise NotImplementedError("Support only for images - destination is always /shared/images")
 
         local_md5sum = self._file_copy_local_md5(filepath=src)
         file_basename = os.path.basename(src)
 
         if not self._image_match(image_name=file_basename, checksum=local_md5sum):
+            log.debug(f"Host {self.host}: File {src} does not already exist on remote.")
             return False
         else:
+            log.debug(f"Host {self.host}: File {src} already exists on remote.")
             return True
 
     def image_installed(self, image_name, volume):
@@ -488,8 +536,10 @@ class F5Device(BaseDevice):
                     and _volume.basebuild == image.build  # noqa W503
                     and _volume.status == "complete"  # noqa W503
                 ):
+                    log.debug(f"Host {self.host}: Image {image_name} installed on volume {volume}.")
                     return True
 
+        log.debug(f"Host {self.host}: Image {image_name} not installed on volume {volume}.")
         return False
 
     def install_os(self, image_name, **vendor_specifics):
@@ -497,12 +547,15 @@ class F5Device(BaseDevice):
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
+                log.error(f"Host {self.host}: File not found for image {image_name} and volume {volume}.")
                 raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
+            log.info(f"Host {self.host}: Image {image_name} installed on volume {volume}.")
             return True
 
+        log.info(f"Host {self.host}: Image {image_name} not installed on volume {volume}.")
         return False
 
     def open(self):
@@ -535,7 +588,9 @@ class F5Device(BaseDevice):
         self._reboot_to_volume(volume_name=volume_name)
 
         if not self._wait_for_device_reboot(volume_name=volume):
-            raise RuntimeError("Reboot to volume {} failed".format(volume))
+            log.error(f"Host {self.host}: Reboot to volume {volume} failed.")
+            raise RuntimeError
+        log.debug(f"Host {self.host}: Reboot to volume {volume} succeeded.")
 
     def rollback(self, checkpoint_file):
         raise NotImplementedError
@@ -550,9 +605,11 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get("volume")
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
+            log.error(f"Host {self.host}: File not found for image {image_name} and volume {volume}.")
             raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
+        log.info(f"Host {self.host}: Image {image_name} installed to volume {volume}.")
 
     def show(self, command, raw_text=False):
         raise NotImplementedError

@@ -16,6 +16,8 @@ How to use me:
 import os
 import logging
 
+from logging.handlers import RotatingFileHandler
+
 
 APP = "pyntc"
 """ Application name, used as the logging root. """
@@ -28,7 +30,7 @@ DEBUG_FORMAT = "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s
 
 
 def get_log(name=None):
-    """Gets log namespace and creates logger.
+    """Gets log namespace and creates logger and rotating file handler.
 
     Args:
         name (str, optional): Sublogger name. Defaults to None.
@@ -37,7 +39,10 @@ def get_log(name=None):
         logger: Return a logger instance in the :data:`APP` namespace.
     """
     name = f"{APP}.{name}" if name else APP
-    return logging.getLogger(name)
+    handler = RotatingFileHandler(f"{name}.log", maxBytes=2000)
+    logger = logging.getLogger(name)
+    logger.addHandler(handler)
+    return logger
 
 
 def init(**kwargs):
@@ -63,7 +68,7 @@ def init(**kwargs):
     kwargs.setdefault("level", log_level)
 
     logging.basicConfig(**kwargs)
-    info("Logging initialized.")
+    info("Logging initialized for host {kwargs.get('host')}.")
 
 
 def logger(level):

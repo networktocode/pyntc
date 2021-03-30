@@ -358,7 +358,9 @@ def test__file_copy_transfer_file_error(
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
+@mock.patch("pyntc.devices.asa_device.log.error")
 def test__file_copy_transfer_file_does_not_transfer(
+    mock_log,
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -375,7 +377,9 @@ def test__file_copy_transfer_file_does_not_transfer(
     mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
     mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
     mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
-    assert err.value.message == "Attempted file copy, but could not validate file existed after transfer"
+    mock_log.assert_called_with(
+        f"Host {asa_device.host}: Attempted file copy, but could not validate file a.txt existed after transfer."
+    )
 
 
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
@@ -481,11 +485,12 @@ def test_enable_scp_standby_device(mock_save, mock_config, mock_peer_device, moc
 @mock.patch.object(ASADevice, "peer_device", new_callable=mock.PropertyMock)
 @mock.patch.object(ASADevice, "config")
 @mock.patch.object(ASADevice, "save")
-def test_enable_scp_device_not_active(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+@mock.patch("pyntc.devices.asa_device.log.error")
+def test_enable_scp_device_not_active(mock_log, mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
     mock_peer_device.return_value = asa_device
     with pytest.raises(asa_module.FileTransferError) as err:
         asa_device.enable_scp()
-    assert err.value.message == "Unable to establish a connection with the active device"
+    mock_log.assert_called_once_with(f"Host {asa_device.host}: Unable to establish a connection with the active device")
     mock_is_active.assert_has_calls([mock.call()] * 2)
     mock_peer_device.assert_called()
     mock_config.assert_not_called()
@@ -498,10 +503,11 @@ def test_enable_scp_device_not_active(mock_save, mock_config, mock_peer_device, 
     ASADevice, "config", side_effect=[asa_module.CommandError(command="ssh scopy enable", message="Error")]
 )
 @mock.patch.object(ASADevice, "save")
-def test_enable_scp_enable_fail(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+@mock.patch("pyntc.devices.asa_device.log.error")
+def test_enable_scp_enable_fail(mock_log, mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
     with pytest.raises(asa_module.FileTransferError) as err:
         asa_device.enable_scp()
-    assert err.value.message == "Unable to enable scopy on the device"
+    mock_log.assert_called_once_with(f"Host {asa_device.host}: Unable to enable scopy on the device")
     mock_config.assert_called_with("ssh scopy enable")
     mock_save.assert_not_called()
 

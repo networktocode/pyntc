@@ -4,7 +4,6 @@ import os
 import re
 import time
 import signal
-import warnings
 import json
 
 from netmiko import ConnectHandler
@@ -91,7 +90,7 @@ class AIREOSDevice(BaseDevice):
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
         self.open(confirm_active=confirm_active)
-        log.init()
+        log.init(host=host)
 
     def _ap_images_match_expected(self, image_option, image, ap_boot_options=None):
         """
@@ -143,13 +142,14 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         if "Incorrect usage" in command_response or "Error:" in command_response:
-            log.error(f"Error in {command} with response: {command_response}")
+            log.error(f"Host {self.host}: Error in {command} with response: {command_response}")
             raise CommandError(command, command_response)
 
     def _enter_config(self):
         """Enter into config mode."""
         self.enable()
         self.native.config_mode()
+        log.debug(f"Host {self.host}: Device entered config mode.")
 
     def _image_booted(self, image_name, **vendor_specifics):
         """
@@ -171,10 +171,10 @@ class AIREOSDevice(BaseDevice):
         sysinfo = self.show("show sysinfo")
         booted_image = re.search(re_version, sysinfo, re.M)
         if booted_image.group(1) == image_name:
-            log.debug(f"Image {image_name} booted successfully.")
+            log.info(f"Host {self.host}: Image {image_name} booted successfully.")
             return True
 
-        log.warning(f"Image {image_name} not booted successfully.")
+        log.warning(f"Host {self.host}: Image {image_name} not booted successfully.")
         return False
 
     def _send_command(self, command, expect_string=None, **kwargs):
@@ -209,10 +209,10 @@ class AIREOSDevice(BaseDevice):
             response = self.native.send_command(command, expect_string=expect_string, **kwargs)
 
         if "Incorrect usage" in response or "Error:" in response:
-            log.error(f"Error in {command} with response: {response}")
+            log.error(f"Host {self.host}: Error in {command} with response: {response}")
             raise CommandError(command, response)
 
-        log.info(f"Command {command} was executed successfully with response: {response}")
+        log.info(f"Host {self.host}: Command {command} was executed successfully with response: {response}")
         return response
 
     def _uptime_components(self):
@@ -242,7 +242,7 @@ class AIREOSDevice(BaseDevice):
         hours = int(match_hours.group(1)) if match_hours else 0
         minutes = int(match_minutes.group(1)) if match_minutes else 0
 
-        log.debug(f"The device has been up for {days} days, {hours} hours, and {minutes} minutes")
+        log.debug(f"Host {self.host}: The device has been up for {days} days, {hours} hours, and {minutes} minutes")
         return days, hours, minutes
 
     def _wait_for_ap_image_download(self, timeout=3600):
@@ -288,13 +288,19 @@ class AIREOSDevice(BaseDevice):
             failed = ap_image_stats["failed"]
             # TODO: When adding logging, send log message of current stats
             if unsupported or failed:
-                log.error("Failed transferring image to AP\n" f"Unsupported: {unsupported}\n" f"Failed: {failed}\n")
+                log.error(
+                    f"Host {self.host}:"
+                    "Failed transferring image to AP\n"
+                    f"Unsupported: {unsupported}\n"
+                    f"Failed: {failed}\n"
+                )
                 raise FileTransferError(
                     "Failed transferring image to AP\n" f"Unsupported: {unsupported}\n" f"Failed: {failed}\n"
                 )
             elapsed_time = time.time() - start
             if elapsed_time > timeout:
                 log.error(
+                    f"Host {self.host}:"
                     "Failed waiting for AP image to be transferred to all devices:\n"
                     f"Total: {ap_count}\nDownloaded: {downloaded}"
                 )
@@ -304,6 +310,7 @@ class AIREOSDevice(BaseDevice):
                 )
 
             log.debug(
+                f"Host {self.host}:"
                 f"End of waiting time for AP image to be transferred to all devices:\n"
                 f"Total: {ap_count}\nDownloaded: {downloaded}"
             )
@@ -330,13 +337,13 @@ class AIREOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.open()
-                log.debug("Device rebooted.")
+                log.debug(f"Host {self.host}: Device rebooted.")
                 return
             except:  # noqa E722 # nosec
                 pass
 
         # TODO: Get proper hostname parameter
-        log.error(f"Device {self.host} timed out while rebooting.")
+        log.error(f"Host {self.host}: Device timed out while rebooting.")
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
     def _wait_for_peer_to_form(self, redundancy_state, timeout=300):
@@ -365,11 +372,11 @@ class AIREOSDevice(BaseDevice):
         while time.time() - start < timeout:
             current_state = self.peer_redundancy_state
             if current_state == redundancy_state:
-                log.debug(f"Redundancy state {redundancy_state} formed properly.")
+                log.debug(f"Host {self.host}: Redundancy state {redundancy_state} formed properly.")
                 return
 
         log.error(
-            f"Redundancy state for device {self.host} did not form properly to desired state: {redundancy_state} from current state: {current_state}"
+            f"Host {self.host}: Redundancy state did not form properly to desired state: {redundancy_state} from current state: {current_state}"
         )
         raise PeerFailedToFormError(hostname=self.host, desired_state=redundancy_state, current_state=current_state)
 
@@ -408,7 +415,7 @@ class AIREOSDevice(BaseDevice):
             }
             for ap in ap_boot_options
         }
-        log.debug(f"Boot options: {boot_options_by_ap}")
+        log.debug(f"Host {self.host}: Boot options: {boot_options_by_ap}")
         return boot_options_by_ap
 
     @property
@@ -441,7 +448,7 @@ class AIREOSDevice(BaseDevice):
             "unsupported": int(unsupported),
             "failed": int(failed),
         }
-        log.debug(f"Image stats: {json.dumps(stats, indent=4)}")
+        log.debug(f"Host {self.host}: Image stats {json.dumps(stats, indent=4)}")
         return stats
 
     def backup_running_config(self, filename):
@@ -484,7 +491,7 @@ class AIREOSDevice(BaseDevice):
         else:
             result = {"sys": None}
 
-        log.debug(f"Boot options: {result}")
+        log.debug(f"Host {self.host}: Boot options {result}")
         return result
 
     def checkpoint(self, filename):
@@ -495,7 +502,7 @@ class AIREOSDevice(BaseDevice):
         if self.connected:
             self.native.disconnect()
             self._connected = False
-            log.debug("Connection closed.")
+            log.debug("Host {self.host}: Connection closed.")
 
     def config(self, command, **netmiko_args):
         """
@@ -548,15 +555,15 @@ class AIREOSDevice(BaseDevice):
                 command_responses.append(command_response)
                 self._check_command_output_for_errors(cmd, command_response)
         except TypeError as err:
-            log.error(f"Netmiko Driver's {err.args[0]}")
+            log.error(f"Host {self.host}: Netmiko Driver's {err.args[0]}")
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
-                log.error(f"Commands {entered_commands} returned the error {err.cli_error_msg}")
+                log.error(f"Host {self.host}: Commands {entered_commands} returned the error {err.cli_error_msg}")
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
-                log.error(f"Commands {entered_commands} returned the error {err}")
+                log.error(f"Host {self.host}: Commands {entered_commands} returned the error {err}")
                 raise err
         # Don't let exception prevent exiting config mode
         finally:
@@ -568,7 +575,7 @@ class AIREOSDevice(BaseDevice):
         if original_command_is_str:
             return command_responses[0]
 
-        log.info(f"List of config commands {command} received responses {command_response}.")
+        log.info(f"Host {self.host}: List of config commands {command} received responses {command_response}.")
         return command_responses
 
     def config_list(self, commands, **netmiko_args):
@@ -597,8 +604,7 @@ class AIREOSDevice(BaseDevice):
             >>> device.config_list(["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"])
             >>>
         """
-        warnings.warn("config_list() is deprecated; use config.", DeprecationWarning)
-        log.info(f"Device configured with commands: {commands}")
+        log.warning("config_list() is deprecated; use config.", DeprecationWarning)
         return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
@@ -633,7 +639,7 @@ class AIREOSDevice(BaseDevice):
             peer_redundancy_state = self.peer_redundancy_state
             self.close()
             log.error(
-                f"Device not active error for host {self.host} with redundancy state {redundancy_state} and peer redundancy state {peer_redundancy_state}"
+                f"Host {self.host}: Device not active error where redundancy state {redundancy_state} and peer redundancy state {peer_redundancy_state}"
             )
             raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
 
@@ -647,11 +653,12 @@ class AIREOSDevice(BaseDevice):
         Returns:
             bool: True if the device is connected, else False.
         """
+        log.debug(f"Host {self.host}: Connection status {self._connected}.")
         return self._connected
 
     @connected.setter
     def connected(self, value):
-        log.debug("Device connected.")
+        log.debug(f"Host {self.host}: Device connected is {value}.")
         self._connected = value
 
     def disable_wlans(self, wlan_ids):
@@ -696,11 +703,11 @@ class AIREOSDevice(BaseDevice):
             if not wlans_to_validate.issubset(post_disabled_wlans):
                 desired_wlans = wlans_to_validate.union(disabled_wlans)
                 log.error(
-                    f"WLANS for host {self.host} not disabled, with desired WLANs {desired_wlans} and post disabled WLANs {post_disabled_wlans}"
+                    f"Host {self.host}: WLANS not disabled, with desired WLANs {desired_wlans} and post disabled WLANs {post_disabled_wlans}"
                 )
                 raise WLANDisableError(self.host, desired_wlans, post_disabled_wlans)
 
-        log.info(f"All WLANs with IDs {disabled_wlans} were disabled.")
+        log.info(f"Host {self.host}: All WLANs with IDs {disabled_wlans} were disabled.")
 
     @property
     def disabled_wlans(self):
@@ -726,7 +733,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         disabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Disabled"]
-        log.info(f"Disabled WLAN IDs: {disabled_wlans}")
+        log.info(f"Host {self.host}: Disabled WLAN IDs: {disabled_wlans}")
         return disabled_wlans
 
     def enable(self):
@@ -743,7 +750,7 @@ class AIREOSDevice(BaseDevice):
         if self.native.check_config_mode():
             self.native.exit_config_mode()
 
-        log.debug("Device enabled.")
+        log.debug("Host {self.host}: Device enabled.")
 
     def enable_wlans(self, wlan_ids):
         """
@@ -788,7 +795,7 @@ class AIREOSDevice(BaseDevice):
             if not wlans_to_validate.issubset(post_enabled_wlans):
                 desired_wlans = wlans_to_validate.union(enabled_wlans)
                 log.error(
-                    f"WLANS for host {self.host} not enabled,\n"
+                    f"Host {self.host}: WLANS not enabled,\n"
                     f"with desired WLANs {desired_wlans} and post enabled WLANs {post_enabled_wlans}"
                 )
                 raise WLANEnableError(self.host, desired_wlans, post_enabled_wlans)
@@ -817,7 +824,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         enabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Enabled"]
-        log.info(f"List of enabled WLAN IDs: {enabled_wlans}")
+        log.info(f"Host {self.host}: List of enabled WLAN IDs: {enabled_wlans}")
         return enabled_wlans
 
     @property
@@ -888,6 +895,7 @@ class AIREOSDevice(BaseDevice):
                 ]
             )
         except CommandListError as error:
+            log.error(f"Host {self.host}: File transfer error {FileTransferError.default_message}\n\n{error.message}")
             raise FileTransferError(error.message)
 
         try:
@@ -895,17 +903,17 @@ class AIREOSDevice(BaseDevice):
             if "Are you sure you want to start? (y/N)" in response:
                 response = self.show("y", auto_find_prompt=False, delay_factor=delay_factor)
         except CommandError as error:
-            log.error(f"File transfer error {FileTransferError.default_message}\n\n{error.message}")
+            log.error(f"Host {self.host}: File transfer error {FileTransferError.default_message}\n\n{error.message}")
             raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
         except:  # noqa E722
-            log.error(f"File transfer error {FileTransferError}")
+            log.error(f"Host {self.host}: File transfer error {FileTransferError}")
             raise FileTransferError
 
         if "File transfer is successful" not in response:
-            log.error(f"Did not find expected success message in response, found:\n{response}")
+            log.error(f"Host {self.host}: Did not find expected success message in response, found:\n{response}")
             raise FileTransferError
 
-        log.info("File transferred successfully.")
+        log.info(f"Host {self.host}: File transferred successfully.")
         return True
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
@@ -960,19 +968,22 @@ class AIREOSDevice(BaseDevice):
             if disable_wlans is not None:
                 self.enable_wlans(disable_wlans)
             if not self._image_booted(image_name):
-                log.error(f"OS install error for host {self.host} and image {image_name}")
+                log.error(f"Host {self.host}: OS install error for image {image_name}")
                 raise OSInstallError(hostname=self.host, desired_boot=image_name)
             try:
                 self._wait_for_peer_to_form(peer_redundancy)
             except PeerFailedToFormError:
                 log.error(
-                    f"Peer failed to form error for host {self.host} and image {image_name} and peer redundancy {peer_redundancy}"
+                    f"Host {self.host}: Peer failed to form error for image {image_name} and peer redundancy {peer_redundancy}"
                 )
-                raise OSInstallError(hostname=f"{self.host}-standby", desired_boot=f"{image_name}-{peer_redundancy}")
+                raise OSInstallError(
+                    hostname=f"Host {self.host}: {self.host}-standby", desired_boot=f"{image_name}-{peer_redundancy}"
+                )
 
-            log.info(f"OS image {image_name} installed successfully for host {self.host}.")
+            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
             return True
 
+        log.info(f"Host {self.host}: OS image {image_name} not installed.")
         return False
 
     def is_active(self):
@@ -1040,7 +1051,7 @@ class AIREOSDevice(BaseDevice):
         if confirm_active:
             self.confirm_is_active()
 
-        log.debug("Connection to controller was opened successfully.")
+        log.debug("Host {self.host}: Connection to controller was opened successfully.")
 
     @property
     def peer_redundancy_state(self):
@@ -1060,13 +1071,14 @@ class AIREOSDevice(BaseDevice):
         try:
             show_redundancy = self.show("show redundancy summary")
         except CommandError:
+            log.error(f"Host {self.host}: Peer redundancy state command error.")
             return None
         re_peer_redundancy_state = RE_PEER_REDUNDANCY_STATE.search(show_redundancy)
         peer_redundancy_state = re_peer_redundancy_state.group(1).lower()
         if peer_redundancy_state == "n/a":
             peer_redundancy_state = "disabled"
 
-        log.debug(f"Peer redundancy state: {peer_redundancy_state}.")
+        log.debug(f"Host {self.host}: Peer redundancy state: {peer_redundancy_state}.")
         return peer_redundancy_state
 
     def reboot(self, timer=0, controller="self", save_config=True, **kwargs):
@@ -1087,11 +1099,11 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         if kwargs.get("confirm"):
-            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
-            log.error("Interrupting after reload.")
-            raise RebootSignal("Interrupting after reload")
+            log.error(f"Host {self.host}: Interrupting after reload.")
+            raise RebootSignal
 
         signal.signal(signal.SIGALRM, handler)
 
@@ -1121,7 +1133,7 @@ class AIREOSDevice(BaseDevice):
 
         signal.alarm(0)
 
-        log.debug("Device rebooted.")
+        log.info(f"Host {self.host}: Device rebooted.")
 
     @property
     def redundancy_mode(self):
@@ -1139,7 +1151,7 @@ class AIREOSDevice(BaseDevice):
         """
         ha = self.show("show redundancy summary")
         ha_mode = re.search(r"^\s*Redundancy\s+Mode\s*=\s*(.+?)\s*$", ha, re.M)
-        log.debug(f"Redundancy mode: {ha_mode.group(1).lower()}")
+        log.debug(f"Host {self.host}: Redundancy mode: {ha_mode.group(1).lower()}")
         return ha_mode.group(1).lower()
 
     @property
@@ -1160,12 +1172,13 @@ class AIREOSDevice(BaseDevice):
         try:
             show_redundancy = self.show("show redundancy summary")
         except CommandError:
+            log.error(f"Host {self.host}: Redundancy state command error.")
             return None
         re_redundancy_state = RE_REDUNDANCY_STATE.search(show_redundancy)
         redundancy_state = re_redundancy_state.group(1).lower()
         if redundancy_state == "n/a":
             redundancy_state = "disabled"
-        log.debug(f"Redundancy state {redundancy_state}.")
+        log.debug(f"Host {self.host}: Redundancy state {redundancy_state}.")
         return redundancy_state
 
     def rollback(self):
@@ -1188,7 +1201,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         self.native.save_config()
-        log.debug("Configuration saved.")
+        log.debug(f"Host {self.host}: Configuration saved.")
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
@@ -1222,15 +1235,15 @@ class AIREOSDevice(BaseDevice):
         elif self.boot_options["backup"] == image_name:
             boot_command = "boot backup"
         else:
-            log.error(f"File not found error for image {image_name} and host {self.host}.")
+            log.error(f"Host {self.host}: File not found error for image {image_name}.")
             raise NTCFileNotFoundError(image_name, "'show boot'", self.host)
         self.config(boot_command)
         self.save()
         if not self.boot_options["sys"] == image_name:
-            log.error("Setting boot command did not yield expected results")
+            log.error(f"Host {self.host}: Setting boot command did not yield expected results")
             raise CommandError(
                 command=boot_command,
-                message="Setting boot command did not yield expected results",
+                message="Host {self.host}: Setting boot command did not yield expected results",
             )
 
     def show(self, command, expect_string=None, **netmiko_args):
@@ -1284,22 +1297,24 @@ class AIREOSDevice(BaseDevice):
                 command_responses.append(command_response)
                 self._check_command_output_for_errors(cmd, command_response)
         except TypeError as err:
-            log.error(f"Netmiko Driver's {err.args[0]}")
+            log.error(f"Host {self.host}: Netmiko Driver's {err.args[0]}")
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
-                log.error(f"Command error for commands {entered_commands} with message {err.cli_error_msg}.")
+                log.error(
+                    f"Host {self.host}: Command error for commands {entered_commands} with message {err.cli_error_msg}."
+                )
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
-                log.error(f"Command error for commands {entered_commands} with message {err}.")
+                log.error(f"Host {self.host}: Command error for commands {entered_commands} with message {err}.")
                 raise err
 
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
             return command_responses[0]
 
-        log.info(f"Successfully executed command show with responses {command_responses}.")
+        log.debug(f"Host {self.host}: Successfully executed command 'show' with responses {command_responses}.")
         return command_responses
 
     def show_list(self, commands, **netmiko_args):
@@ -1330,7 +1345,7 @@ class AIREOSDevice(BaseDevice):
             Backup Boot Image................................ 8.5.110.0
             >>>
         """
-        warnings.warn("show_list() is deprecated; use show.", DeprecationWarning)
+        log.warning("show_list() is deprecated; use show.", DeprecationWarning)
         return self.show(commands, **netmiko_args)
 
     @property
@@ -1393,7 +1408,7 @@ class AIREOSDevice(BaseDevice):
                     download_image = option
                     break
             if download_image is None:
-                log.error(f"Unable to find {image} on {self.host}")
+                log.error(f"Host {self.host}: Unable to find {image} on host.")
                 raise FileTransferError
 
             self.config(f"ap image predownload {option} all")
@@ -1408,10 +1423,10 @@ class AIREOSDevice(BaseDevice):
             time.sleep(1)
 
         if not self._ap_images_match_expected("primary", image):
-            log.error(f"Unable to set all APs to use {image}")
+            log.error(f"Host {self.host}: Unable to set all APs to use {image}")
             raise FileTransferError
 
-        log.info("All images transferred to AP connected to WLC.")
+        log.info("Host {self.host}: All images transferred to AP connected to WLC.")
         return changed
 
     @property
@@ -1432,7 +1447,7 @@ class AIREOSDevice(BaseDevice):
         hours += days * 24
         minutes += hours * 60
         seconds = minutes * 60
-        log.debug(f"Device has been up for {seconds} seconds")
+        log.debug(f"Host {self.host}: Device has been up for {seconds} seconds")
         return seconds
 
     @property
@@ -1479,7 +1494,7 @@ class AIREOSDevice(BaseDevice):
         show_wlan_summary_out = self.show("show wlan summary")
         re_wlans = RE_WLANS.finditer(show_wlan_summary_out)
         wlans = {int(wlan.group("wlan_id")): dict(zip(wlan_keys, wlan.groups()[1:])) for wlan in re_wlans}
-        log.debug(f"Device WLANs: {json.dumps(wlans, indent=4)}.")
+        log.debug(f"Host {self.host}: Device WLANs {json.dumps(wlans, indent=4)}.")
         return wlans
 
 

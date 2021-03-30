@@ -24,6 +24,7 @@ from pyntc.errors import (
     NTCFileNotFoundError,
     FileSystemNotFoundError,
 )
+from pyntc import log
 
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
@@ -62,12 +63,14 @@ class EOSDevice(BaseDevice):
         self.native = EOSNative(self.connection)
         # _connected indicates Netmiko ssh connection
         self._connected = False
+        log.init(host=host)
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
         if dest is None:
             dest = os.path.basename(src)
 
         fc = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
+        log.debug(f"Host {self.host}: File copy instance {fc}.")
         return fc
 
     def _get_file_system(self):
@@ -83,13 +86,16 @@ class EOSDevice(BaseDevice):
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
+            log.error(f"Host {self.host}: Attribute error with command 'dir'.")
             raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
+        log.debug(f"Host {self.host}: File system {file_system}.")
         return file_system
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show boot", raw_text=True)
         if re.search(image_name, version_data):
+            log.info(f"Host {self.host}: Image {image_name} booted successfully.")
             return True
 
         return False
@@ -102,7 +108,11 @@ class EOSDevice(BaseDevice):
             interface_dictionary["interface"] = key
             interfaces_list.append(interface_dictionary)
 
-        return convert_list_by_key(interfaces_list, INTERFACES_KM, fill_in=True, whitelist=["interface"])
+        interface_status_list = convert_list_by_key(
+            interfaces_list, INTERFACES_KM, fill_in=True, whitelist=["interface"]
+        )
+        log.debug(f"Host {self.host}: interfaces detailed list {interface_status_list}.")
+        return interface_status_list
 
     def _parse_response(self, response, raw_text):
         if raw_text:
@@ -129,26 +139,33 @@ class EOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.show("show hostname")
+                log.debug(f"Host {self.host}: Device rebooted.")
                 return
             except:  # noqa E722 # nosec
                 pass
 
+        log.error(f"Host {self.host}: Device timed out while rebooting.")
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
+        log.debug(f"Host {self.host}: Running config backed up to {self.running_config}.")
+
     @property
     def boot_options(self):
         image = self.show("show boot-config")["softwareImage"]
         image = image.replace("flash:", "")
+        log.debug(f"Host {self.host}: the boot options are {dict(sys=image)}")
         return dict(sys=image)
 
     def checkpoint(self, checkpoint_file):
+        log.debug(f"Host {self.host}: checkpoint is {checkpoint_file}.")
         self.show("copy running-config %s" % checkpoint_file)
 
     def close(self):
+        log.info(f"Host {self.host}: Device configured with command {command}.")
         pass
 
     def config(self, commands):
@@ -163,8 +180,10 @@ class EOSDevice(BaseDevice):
         """
         try:
             self.native.config(commands)
+            log.info(f"Host {self.host}: Device configured with commands {commands}.")
         except EOSCommandError as e:
             if isinstance(commands, str):
+                log.error(f"Host {self.host}: Command error with commands: {commands} and error message {e.message}")
                 raise CommandError(commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
@@ -176,7 +195,7 @@ class EOSDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config().", DeprecationWarning)
         self.config(commands)
 
     def enable(self):
@@ -191,12 +210,15 @@ class EOSDevice(BaseDevice):
         if self.native_ssh.check_config_mode():
             self.native_ssh.exit_config_mode()
 
+        log.debug(f"Host {self.host}: Device enabled")
+
     @property
     def uptime(self):
         if self._uptime is None:
             sh_version_output = self.show("show version")
             self._uptime = int(time.time() - sh_version_output["bootupTimestamp"])
 
+        log.debug(f"Host {self.host}: Uptime {self._uptime}")
         return self._uptime
 
     @property
@@ -212,6 +234,7 @@ class EOSDevice(BaseDevice):
             sh_hostname_output = self.show("show hostname")
             self._hostname = sh_hostname_output["hostname"]
 
+        log.debug(f"Host {self.host}: Hostname {self._hostname}")
         return self._hostname
 
     @property
@@ -220,6 +243,7 @@ class EOSDevice(BaseDevice):
             iface_detailed_list = self._interfaces_status_list()
             self._interfaces = sorted(list(x["interface"] for x in iface_detailed_list))
 
+        log.debug(f"Host {self.host}: Interfaces {self._interfaces}")
         return self._interfaces
 
     @property
@@ -228,6 +252,7 @@ class EOSDevice(BaseDevice):
             vlans = EOSVlans(self)
             self._vlans = vlans.get_list()
 
+        log.debug(f"Host {self.host}: Vlans {self._vlans}")
         return self._vlans
 
     @property
@@ -236,6 +261,7 @@ class EOSDevice(BaseDevice):
             sh_hostname_output = self.show("show hostname")
             self._fqdn = sh_hostname_output["fqdn"]
 
+        log.debug(f"Host {self.host}: FQDN {self._fqdn}")
         return self._fqdn
 
     @property
@@ -244,6 +270,7 @@ class EOSDevice(BaseDevice):
             sh_version_output = self.show("show version")
             self._model = sh_version_output["modelName"]
 
+        log.debug(f"Host {self.host}: Model {self._model}")
         return self._model
 
     @property
@@ -252,6 +279,7 @@ class EOSDevice(BaseDevice):
             sh_version_output = self.show("show version")
             self._os_version = sh_version_output["internalVersion"]
 
+        log.debug(f"Host {self.host}: OS version {self._os_version}")
         return self._os_version
 
     @property
@@ -260,6 +288,7 @@ class EOSDevice(BaseDevice):
             sh_version_output = self.show("show version")
             self._serial_number = sh_version_output["serialNumber"]
 
+        log.debug(f"Host {self.host}: Serial number {self._serial_number}")
         return self._serial_number
 
     def file_copy(self, src, dest=None, file_system=None):
@@ -286,15 +315,18 @@ class EOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
+                log.info(f"Host {self.host}: File {src} transferred successfully.")
             except:  # noqa E722
+                log.error(f"Host {self.host}: File transfer error {FileTransferError.default_message}")
                 raise FileTransferError
             finally:
                 fc.close_scp_chan()
 
             if not self.file_copy_remote_exists(src, dest, file_system):
-                raise FileTransferError(
-                    message="Attempted file copy, but could not validate file existed after transfer"
+                log.error(
+                    f"Host {self.host}: Attempted file copy, but could not validate file existed after transfer {FileTransferError.default_message}"
                 )
+                raise FileTransferError
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
@@ -304,8 +336,10 @@ class EOSDevice(BaseDevice):
 
         fc = self._file_copy_instance(src, dest, file_system=file_system)
         if fc.check_file_exists() and fc.compare_md5():
+            log.debug(f"Host {self.host}: File {src} already exists on remote.")
             return True
 
+        log.debug(f"Host {self.host}: File {src} does not already exist on remote.")
         return False
 
     def install_os(self, image_name, **vendor_specifics):
@@ -315,10 +349,13 @@ class EOSDevice(BaseDevice):
             self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
+                log.error(f"Host {self.host}: OS install error for image {image_name}")
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
+            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
             return True
 
+        log.info(f"Host {self.host}: OS image {image_name} not installed.")
         return False
 
     def open(self):
@@ -342,6 +379,8 @@ class EOSDevice(BaseDevice):
             )
             self._connected = True
 
+        log.debug(f"Host {self.host}: Connection to controller was opened successfully.")
+
     def reboot(self, timer=0, **kwargs):
         """
         Reload the controller or controller pair.
@@ -359,24 +398,30 @@ class EOSDevice(BaseDevice):
 
         """
         if kwargs.get("confirm"):
-            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         if timer != 0:
+            log.error(f"Host {self.host}: Reboot time error.")
             raise RebootTimerError(self.device_type)
 
         self.show("reload now")
+        log.info(f"Host {self.host}: Device rebooted.")
 
     def rollback(self, rollback_to):
         try:
             self.show("configure replace %s force" % rollback_to)
+            log.info(f"Host {self.host}: Rollback to {rollback_to}.")
         except (CommandError, CommandListError):
+            log.error(f"Host {self.host}: Rollback unsuccessful. {rollback_to} may not exist.")
             raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
 
     @property
     def running_config(self):
+        log.debug(f"Host {self.host}: Show running config.")
         return self.show("show running-config", raw_text=True)
 
     def save(self, filename="startup-config"):
+        log.debug(f"Host {self.host}: Copy running config with name {filename}.")
         self.show("copy running-config %s" % filename)
         return True
 
@@ -387,14 +432,18 @@ class EOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
+            log.error(f"Host {self.host}: File not found error for image {image_name}.")
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         self.show("install source {0}{1}".format(file_system, image_name))
         if self.boot_options["sys"] != image_name:
+            log.error(f"Host {self.host}: Setting boot command did not yield expected results")
             raise CommandError(
                 command="install source {0}".format(image_name),
                 message="Setting install source did not yield expected results",
             )
+
+        log.info(f"Host {self.host}: boot options have been set to {image_name}")
 
     def show(self, commands, raw_text=False):
         """Send configuration commands to a device.
@@ -420,10 +469,13 @@ class EOSDevice(BaseDevice):
             response_list = self._parse_response(response, raw_text=raw_text)
             if original_commands_is_str:
                 return response_list[0]
+            log.debug(f"Host {self.host}: Successfully executed command 'show' with responses {response_list}.")
             return response_list
         except EOSCommandError as e:
             if original_commands_is_str:
+                log.error(f"Host {self.host}: Command error for command {commands} with message {e.message}.")
                 raise CommandError(e.commands, e.message)
+            log.error(f"Host {self.host}: Command list error for commands {commands} with message {e.message}.")
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
     def show_list(self, commands):
@@ -433,11 +485,12 @@ class EOSDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
         self.show(commands)
 
     @property
     def startup_config(self):
+        log.debug(f"Host {self.host}: show startup-config")
         return self.show("show startup-config", raw_text=True)
 
 

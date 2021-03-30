@@ -2,6 +2,7 @@ import json
 
 import pytest
 from unittest import mock
+import unittest
 
 from pyntc.devices import AIREOSDevice
 from pyntc.devices import aireos_device as aireos_module
@@ -910,7 +911,10 @@ def test_install_os_error_peer(
     device = aireos_image_booted([False, True])
     with pytest.raises(aireos_module.OSInstallError) as boot_error:
         device.install_os(aireos_boot_image)
-    assert boot_error.value.message == f"{device.host}-standby was unable to boot into {aireos_boot_image}-standby hot"
+    assert (
+        boot_error.value.message
+        == f"Host {device.host}: {device.host}-standby was unable to boot into {aireos_boot_image}-standby hot"
+    )
     device._image_booted.assert_has_calls([mock.call(aireos_boot_image)] * 2)
 
 
@@ -1528,7 +1532,8 @@ def test_transfer_image_to_ap_already_transferred_secondary_fail(
     mock_config.assert_has_calls([mock.call("ap image swap all")] * 3)
     mock_wait.assert_not_called()
     mock_boot_options.assert_not_called()
-    mock_log.assert_called_once_with(f"Unable to set all APs to use {aireos_boot_image}")
+
+    mock_log.assert_called_once_with(f"Host {aireos_device.host}: Unable to set all APs to use {aireos_boot_image}")
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -1605,7 +1610,7 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
     mock_wait.assert_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
 
-    mock_log.assert_called_once_with(f"Unable to set all APs to use {aireos_boot_image}")
+    mock_log.assert_called_once_with(f"Host {aireos_device.host}: Unable to set all APs to use {aireos_boot_image}")
 
 
 @mock.patch.object(AIREOSDevice, "config")
@@ -1655,7 +1660,9 @@ def test_transfer_image_does_not_exist(
     mock_config.assert_not_called()
     mock_wait.assert_not_called()
     mock_boot_options.assert_has_calls([mock.call(), mock.call()])
-    mock_log.assert_called_once_with(f"Unable to find {aireos_boot_image} on {aireos_device.host}")
+    mock_log.assert_called_once_with(
+        f"Host {aireos_device.host}: Unable to find {aireos_boot_image} on {aireos_device.host}."
+    )
 
 
 @mock.patch.object(AIREOSDevice, "_uptime_components")
