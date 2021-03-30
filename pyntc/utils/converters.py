@@ -66,7 +66,7 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
     return converted_list
 
 
-def recursive_key_lookup(keys, obj):   # noqa D205, D200
+def recursive_key_lookup(keys, obj):  # noqa D205, D200
     """
     Return obj[keys] if keys is actually a single key. Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
     """

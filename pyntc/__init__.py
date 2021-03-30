@@ -20,7 +20,7 @@ LIB_PATH_DEFAULT = "~/.ntc.conf"
 warnings.simplefilter("default")
 
 
-def ntc_device(device_type, *args, **kwargs):   # noqa: D205, D400
+def ntc_device(device_type, *args, **kwargs):  # noqa: D205, D400
     """Instantiate and return an instance of a device subclassed
     from ``pyntc.devices.BaseDevice``. ``*args`` and ``*kwargs`` are passed
     directly to the device initializer.
@@ -42,7 +42,7 @@ def ntc_device(device_type, *args, **kwargs):   # noqa: D205, D400
         raise UnsupportedDeviceError(device_type)
 
 
-def ntc_device_by_name(name, filename=None):   # noqa: D205, D400
+def ntc_device_by_name(name, filename=None):  # noqa: D205, D400
     """Instantiate and return an instance of a device subclassed
     from ``pyntc.devices.BaseDevice`` based on its name in an
     NTC configuration file.
