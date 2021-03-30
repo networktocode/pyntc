@@ -70,7 +70,7 @@ class AIREOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):  # noqa: D403
         """
         PyNTC Device implementation for Cisco WLC.
 
@@ -421,7 +421,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def ap_image_stats(self):
         """
-        The stats of downloading the the image to all APs.
+        Stats of downloading the the image to all APs.
 
         Returns:
             dict: The AP count, and the downloaded, unsupported, and failed APs.
@@ -452,12 +452,21 @@ class AIREOSDevice(BaseDevice):
         return stats
 
     def backup_running_config(self, filename):
+        """
+        Create backup of running config.
+
+        Args:
+            filename (str): Name of backup file.
+
+        Raises:
+            NotImplementedError: Function currently not implemented
+        """
         raise NotImplementedError
 
     @property
     def boot_options(self):
         """
-        The images that are candidates for booting on reload.
+        Images that are candidates for booting on reload.
 
         Returns:
             dict: The boot options on the device. The "sys" key is the expected image on reload.
@@ -495,6 +504,16 @@ class AIREOSDevice(BaseDevice):
         return result
 
     def checkpoint(self, filename):
+        """
+        Create a checkpoint file of the current config.
+
+        Args:
+            checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
+
+        Raises:
+            NotImplementedError: Function currently not implemented
+
+        """
         raise NotImplementedError
 
     def close(self):
@@ -505,7 +524,7 @@ class AIREOSDevice(BaseDevice):
             log.debug("Host {self.host}: Connection closed.")
 
     def config(self, command, **netmiko_args):
-        """
+        r"""
         Send config commands to device.
 
         By default, entering and exiting config mode is handled automatically.
@@ -578,7 +597,7 @@ class AIREOSDevice(BaseDevice):
         log.info(f"Host {self.host}: List of config commands {command} received responses {command_response}.")
         return command_responses
 
-    def config_list(self, commands, **netmiko_args):
+    def config_list(self, commands, **netmiko_args):  # noqa: D401
         """
         DEPRECATED - Use the `config` method.
 
@@ -648,7 +667,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def connected(self):
         """
-        The connection status of the device.
+        Get connection status of the device.
 
         Returns:
             bool: True if the device is connected, else False.
@@ -710,9 +729,9 @@ class AIREOSDevice(BaseDevice):
         log.info(f"Host {self.host}: All WLANs with IDs {disabled_wlans} were disabled.")
 
     @property
-    def disabled_wlans(self):
+    def disabled_wlans(self):  # noqa: D403
         """
-        The IDs for all disabled WLANs.
+        IDs for all disabled WLANs.
 
         Returns:
             list: Disabled WLAN IDs.
@@ -801,9 +820,9 @@ class AIREOSDevice(BaseDevice):
                 raise WLANEnableError(self.host, desired_wlans, post_enabled_wlans)
 
     @property
-    def enabled_wlans(self):
+    def enabled_wlans(self):  # noqa: D403
         """
-        The IDs for all enabled WLANs.
+        IDs for all enabled WLANs.
 
         Returns:
             list: Enabled WLAN IDs.
@@ -829,6 +848,12 @@ class AIREOSDevice(BaseDevice):
 
     @property
     def facts(self):
+        """
+        Get facts from device.
+
+        Raises:
+            NotImplementedError: Function currently not implemented.
+        """
         raise NotImplementedError
 
     def file_copy(
@@ -917,6 +942,17 @@ class AIREOSDevice(BaseDevice):
         return True
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        """
+        Copy 'src' file to remote device.
+
+        Args:
+            src (str): The path to the file to be copied to the device.
+            dest (str, optional): The name to use for storing the file on the device.
+                Defaults to use the name of the ``src`` file.
+
+        Raises:
+            NotImplementedError: Function currently not implemented.
+        """
         raise NotImplementedError
 
     def install_os(self, image_name, controller="both", save_config=True, disable_wlans=None, **vendor_specifics):
@@ -1138,7 +1174,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        The oprating redundancy mode of the controller.
+        Get operating redundancy mode of the controller.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -1182,10 +1218,22 @@ class AIREOSDevice(BaseDevice):
         return redundancy_state
 
     def rollback(self):
+        """
+        Rollback to stored file config.
+
+        Raises:
+            NotImplementedError: Function currently not implemented.
+        """
         raise NotImplementedError
 
     @property
     def running_config(self):
+        """
+        Show running config.
+
+        Raises:
+            NotImplementedError: Function currently not implemented.
+        """
         raise NotImplementedError
 
     def save(self):
@@ -1317,9 +1365,10 @@ class AIREOSDevice(BaseDevice):
         log.debug(f"Host {self.host}: Successfully executed command 'show' with responses {command_responses}.")
         return command_responses
 
-    def show_list(self, commands, **netmiko_args):
+    def show_list(self, commands, **netmiko_args):  # noqa: D401
         """
         DEPRECATED - Use the `show` method.
+
         Send operational commands to the device.
 
         Args:
@@ -1350,6 +1399,12 @@ class AIREOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
+        """
+        Get startup config.
+
+        Raises:
+            NotImplementedError: Function currently not implemented.
+        """
         raise NotImplementedError
 
     def transfer_image_to_ap(self, image, timeout=None):
@@ -1432,7 +1487,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def uptime(self):
         """
-        The uptime of the device in seconds.
+        Get uptime of the device in seconds.
 
         Returns:
             int: The number of seconds the device has been up.
@@ -1453,8 +1508,7 @@ class AIREOSDevice(BaseDevice):
     @property
     def uptime_string(self):
         """
-        The uptime of the device as a string.
-        The format is dd::hh::mm
+        Get uptime of the device as a string in the format is dd::hh::mm.
 
         Returns:
             str: The uptime of the device.

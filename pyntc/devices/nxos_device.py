@@ -1,5 +1,4 @@
-"""Module for using an NXOX device over NX-API.
-"""
+"""Module for using an NXOS device over NX-API."""
 import os
 import re
 import time
@@ -26,7 +25,17 @@ class NXOSDevice(BaseDevice):
 
     vendor = "cisco"
 
-    def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):
+    def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):  # noqa: D403
+        """PyNTC Device implementation for Cisco IOS.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            transport (str, optional): Transport protocol to connect to device. Defaults to "http".
+            timeout (int, optional): Timeout in seconds. Defaults to 30.
+            port (int, optional): Port used to connect to device. Defaults to None.
+        """
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
@@ -52,25 +61,57 @@ class NXOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
+        """Backup running configuration.
+
+        Args:
+            filename (str): Name of backup file.
+        """
         self.native.backup_running_config(filename)
 
     @property
     def boot_options(self):
+        """Get current boot variables.
+
+        Returns:
+            dict: e.g . {"kick": "router_kick.img", "sys": "router_sys.img"}
+        """
         return self.native.get_boot_options()
 
     def checkpoint(self, filename):
+        """Save a checkpoint of the running configuration to the device.
+
+        Args:
+            filename (str): The filename to save the checkpoint on the remote device.
+        """
         return self.native.checkpoint(filename)
 
-    def close(self):
+    def close(self):  # noqa: D401
+        """Implements ``pass``."""
         pass
 
     def config(self, command):
+        """Send configuration command.
+
+        Args:
+            command (str): command to be sent to the device.
+
+        Raises:
+            CommandError: Error if command is not succesfully ran on device.
+        """
         try:
             self.native.config(command)
         except CLIError as e:
             raise CommandError(command, str(e))
 
     def config_list(self, commands):
+        """Send a list of configuration commands.
+
+        Args:
+            commands (list): A list of commands.
+
+        Raises:
+            CommandListError: Error if any of the commands in the list fail running on the device.
+        """
         try:
             self.native.config_list(commands)
         except CLIError as e:
@@ -78,6 +119,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def uptime(self):
+        """Get uptime of the device in seconds.
+
+        Returns:
+            int: Uptime of the device in seconds.
+        """
         if self._uptime is None:
             self._uptime = self.native.facts.get("uptime")
 
@@ -85,6 +131,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def hostname(self):
+        """Get hostname of the device.
+
+        Returns:
+            str: Hostname of the device.
+        """
         if self._hostname is None:
             self._hostname = self.native.facts.get("hostname")
 
@@ -92,6 +143,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def interfaces(self):
+        """Get list of interfaces.
+
+        Returns:
+          list: List of interfaces.
+        """
         if self._interfaces is None:
             self._interfaces = self.native.facts.get("interfaces")
 
@@ -99,6 +155,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def vlans(self):
+        """Get list of vlans.
+
+        Returns:
+            list: List of vlans on the device.
+        """
         if self._vlans is None:
             self._vlans = self.native.facts.get("vlans")
 
@@ -106,6 +167,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def fqdn(self):
+        """Get fully qualified domain name.
+
+        Returns:
+            str: Fully qualified domain name.
+        """
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
 
@@ -113,6 +179,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def model(self):
+        """Get device model.
+
+        Returns:
+            str: Model of device.
+        """
         if self._model is None:
             self._model = self.native.facts.get("model")
 
@@ -120,6 +191,11 @@ class NXOSDevice(BaseDevice):
 
     @property
     def os_version(self):
+        """Get device version.
+
+        Returns:
+            str: Device version.
+        """
         if self._os_version is None:
             self._os_version = self.native.facts.get("os_version")
 
@@ -127,12 +203,27 @@ class NXOSDevice(BaseDevice):
 
     @property
     def serial_number(self):
+        """Get device serial number.
+
+        Returns:
+            str: Device serial number.
+        """
         if self._serial_number is None:
             self._serial_number = self.native.facts.get("serial_number")
 
         return self._serial_number
 
     def file_copy(self, src, dest=None, file_system="bootflash:"):
+        """Send a local file to the device.
+
+        Args:
+            src (str): Path to the local file to send.
+            dest (str, optional): The destination file path. Defaults to basename of source path.
+            file_system (str, optional): [The file system for the remote file. Defaults to "bootflash:".
+
+        Raises:
+            FileTransferError: Error if transfer of file cannot be verified.
+        """
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
             try:
@@ -148,10 +239,31 @@ class NXOSDevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system="bootflash:"):
+        """Check if a remote file exists.
+
+        Args:
+            src (str): Path to the local file to send.
+            dest (str, optional): The destination file path to be saved on remote device. Defaults to basename of source path.
+            file_system (str, optional): The file system for the remote file. Defaults to "bootflash:".
+
+        Returns:
+            bool: True if the remote file exists. Otherwise, false.
+        """
         dest = dest or os.path.basename(src)
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
 
     def install_os(self, image_name, **vendor_specifics):
+        """Upgrade device with provided image.
+
+        Args:
+            image_name (str): Name of the image file to upgrade the device to.
+
+        Raises:
+            OSInstallError: Error if boot option is not set to new image.
+
+        Returns:
+            bool: True if new image is boot option on device. Otherwise, false.
+        """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
@@ -164,7 +276,8 @@ class NXOSDevice(BaseDevice):
 
         return False
 
-    def open(self):
+    def open(self):  # noqa: D401
+        """Implements ``pass``."""
         pass
 
     def reboot(self, timer=0, **kwargs):
@@ -191,6 +304,14 @@ class NXOSDevice(BaseDevice):
         self.native.reboot(confirm=True)
 
     def rollback(self, filename):
+        """Rollback configuration to specified file.
+
+        Args:
+            filename (str): Name of the file to rollback to.
+
+        Raises:
+            RollbackError: Error if rollback command is unsuccesfull.
+        """
         try:
             self.native.rollback(filename)
         except CLIError:
@@ -198,12 +319,34 @@ class NXOSDevice(BaseDevice):
 
     @property
     def running_config(self):
+        """Get running configuration of device.
+
+        Returns:
+            str: Running configuration of device.
+        """
         return self.native.running_config
 
     def save(self, filename="startup-config"):
+        """Save a device's running configuration.
+
+        Args:
+            filename (str, optional): Filename to save running configuration to. Defaults to "startup-config".
+
+        Returns:
+            bool: True if configuration is saved.
+        """
         return self.native.save(filename=filename)
 
     def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+        """Set boot variables.
+
+        Args:
+            image_name (str): Main system image file.
+            kickstart (str, optional): Kickstart filename. Defaults to None.
+
+        Raises:
+            NTCFileNotFoundError: Error if either image_name or kickstart image not found on device.
+        """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
             file_system = "bootflash:"
@@ -226,15 +369,44 @@ class NXOSDevice(BaseDevice):
         return upgrade_result
 
     def set_timeout(self, timeout):
+        """Set timeout value on device connection.
+
+        Args:
+            timeout (int): Timeout value.
+        """
         self.native.timeout = timeout
 
     def show(self, command, raw_text=False):
+        """Send a non-configuration command.
+
+        Args:
+            command (str): The command to send to the device.
+            raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
+
+        Raises:
+            CommandError: Error message stating which command failed.
+
+        Returns:
+            str: Results of the command ran.
+        """
         try:
             return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
             raise CommandError(command, str(e))
 
     def show_list(self, commands, raw_text=False):
+        """Send a list of non-configuration commands.
+
+        Args:
+            commands (str): A list of commands to be sent to the device.
+            raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
+
+        Raises:
+            CommandListError: Error message stating which command failed.
+
+        Returns:
+            list: Outputs of all the commands ran on the device.
+        """
         try:
             return self.native.show_list(commands, raw_text=raw_text)
         except CLIError as e:
@@ -242,4 +414,9 @@ class NXOSDevice(BaseDevice):
 
     @property
     def startup_config(self):
+        """Get startup configuration.
+
+        Returns:
+            str: Startup configuration.
+        """
         return self.show("show startup-config", raw_text=True)

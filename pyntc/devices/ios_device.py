@@ -1,5 +1,4 @@
-"""Module for using a Cisco IOS device over SSH.
-"""
+"""Module for using a Cisco IOS device over SSH."""
 
 import signal
 import os
@@ -27,15 +26,18 @@ from pyntc.errors import (
 from pyntc import log
 
 
-BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
+BASIC_FACTS_KM = {"model": "hardware", "os_version": "version",
+                  "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
     r"^Redundant\s+System\s+Information\s*:\s*\n^-.+-\s*\n(?P<info>.+?)\n"
     r"^Current\s+Processor\s+Information\s*:\s*\n^-.+-\s*\n(?P<self>.+?$)\n"
     r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\d+\).+)",
     re.DOTALL | re.MULTILINE,
 )
-RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
-RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_OPERATION_MODE = re.compile(
+    r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
+RE_REDUNDANCY_STATE = re.compile(
+    r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
@@ -47,7 +49,9 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):
+    def __init__(
+        self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs
+    ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco IOS.
 
@@ -58,6 +62,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -66,6 +71,7 @@ class IOSDevice(BaseDevice):
         self.port = int(port)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
+        self._fast_cli = fast_cli
         self._connected = False
         self.open(confirm_active=confirm_active)
         log.init(host=host)
@@ -95,7 +101,8 @@ class IOSDevice(BaseDevice):
             raise CommandError(command, command_response)
 
     def _enable(self):
-        log.warning("_enable() is deprecated; use enable().", DeprecationWarning)
+        log.warning("_enable() is deprecated; use enable().",
+                    DeprecationWarning)
         self.enable()
         log.debug(f"Host {self.host}: Device enabled")
 
@@ -113,7 +120,7 @@ class IOSDevice(BaseDevice):
         return fc
 
     def _get_file_system(self):
-        """Determines the default file system or directory for device.
+        """Determine the default file system or directory for device.
 
         Returns:
             str: The name of the default file system or directory for the device.
@@ -136,24 +143,39 @@ class IOSDevice(BaseDevice):
                 # Allow to continue through the loop
                 continue
 
-        log.error(f"Host {self.host}: File system not found with command 'dir'.")
+        log.error(
+            f"Host {self.host}: File system not found with command 'dir'.")
         raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     # Get the version of the image that is booted into on the device
-    def _image_booted(self, image_name, **vendor_specifics):
+    def _image_booted(self, image_name, image_pattern=r".*\.(\d+\.\d+\.\w+)\.SPA.+", **vendor_specifics):
         version_data = self.show("show version")
         if re.search(image_name, version_data):
-            log.info(f"Host {self.host}: Image {image_name} booted successfully.")
+            log.info(
+                f"Host {self.host}: Image {image_name} booted successfully.")
             return True
 
-        log.info(f"Host {self.host}: Image {image_name} not booted successfully.")
+        log.info(
+            f"Host {self.host}: Image {image_name} not booted successfully.")
+        # Test for version number in the text, used on install mode devices that use packages.conf
+        try:
+            version_number = re.search(image_pattern, image_name).group(1)
+            if version_number and version_number in version_data:
+                return True
+        # Continue on if regex is unable to find the result, which raises an attribute error
+        except AttributeError:
+            pass
+
+        # Unable to find the version number in output, the image is not booted.
         return False
 
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show("show ip int br")
-        ip_int_br_data = get_structured_data("cisco_ios_show_ip_int_brief.template", ip_int_br_out)
+        ip_int_br_data = get_structured_data(
+            "cisco_ios_show_ip_int_brief.template", ip_int_br_out)
 
-        log.debug(f"Host {self.host}: interfaces detailed list {ip_int_br_data}.")
+        log.debug(
+            f"Host {self.host}: interfaces detailed list {ip_int_br_data}.")
         return ip_int_br_data
 
     def _is_catalyst(self):
@@ -162,7 +184,8 @@ class IOSDevice(BaseDevice):
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
-            version_data = get_structured_data("cisco_ios_show_version.template", show_version_out)[0]
+            version_data = get_structured_data(
+                "cisco_ios_show_version.template", show_version_out)[0]
         except IndexError:
             log.error(f"Host {self.host}: index error.")
             return {}
@@ -184,17 +207,21 @@ class IOSDevice(BaseDevice):
         response = self.native.send_command(**command_args)
 
         if "% " in response or "Error:" in response:
-            log.error(f"Host {self.host}: Error in {command} with response: {response}")
+            log.error(
+                f"Host {self.host}: Error in {command} with response: {response}")
             raise CommandError(command, response)
 
-        log.info(f"Host {self.host}: Command {command} was executed successfully with response: {response}")
+        log.info(
+            f"Host {self.host}: Command {command} was executed successfully with response: {response}")
         return response
 
     def _show_vlan(self):
         show_vlan_out = self.show("show vlan")
-        show_vlan_data = get_structured_data("cisco_ios_show_vlan.template", show_vlan_out)
+        show_vlan_data = get_structured_data(
+            "cisco_ios_show_vlan.template", show_vlan_out)
 
-        log.debug(f"Host {self.host}: Successfully executed command 'show vlan' with responses {show_vlan_data}.")
+        log.debug(
+            f"Host {self.host}: Successfully executed command 'show vlan' with responses {show_vlan_data}.")
         return show_vlan_data
 
     def _uptime_components(self, uptime_full_string):
@@ -236,21 +263,33 @@ class IOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
+        """Backup running configuration to filename specified.
+
+        Args:
+            filename (str): Filename to save running configuration to.
+        """
         with open(filename, "w") as f:
             f.write(self.running_config)
 
     @property
     def boot_options(self):
+        """Get current boot image.
+
+        Returns:
+            dict: Key ``sys`` with value being the current boot image.
+        """
         boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
         try:
             # Try show bootvar command first
             show_boot_out = self.show("show bootvar")
-            show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
+            show_boot_out = show_boot_out.split(
+                "Boot Variables on next reload", 1)[-1]
         except CommandError:
             try:
                 # Try show boot if previous command was invalid
                 show_boot_out = self.show("show boot")
-                show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
+                show_boot_out = show_boot_out.split(
+                    "Boot Variables on next reload", 1)[-1]
             except CommandError:
                 # Default to running config value
                 show_boot_out = self.show("show run | inc boot")
@@ -262,7 +301,8 @@ class IOSDevice(BaseDevice):
             boot_path_tuple = match.groups()
             # The regex match will return two values: the boot value and None
             # The return order will depend on which side of the `or` is matched in the regex
-            boot_path = [value for value in boot_path_tuple if value is not None][0]
+            boot_path = [
+                value for value in boot_path_tuple if value is not None][0]
             file_system = self._get_file_system()
             boot_image = boot_path.replace(file_system, "")
             boot_image = boot_image.replace("/", "")
@@ -271,21 +311,28 @@ class IOSDevice(BaseDevice):
         else:
             boot_image = None
 
-        log.debug(f"Host {self.host}: the boot options are {dict(sys=boot_image)}")
+        log.debug(
+            f"Host {self.host}: the boot options are {dict(sys=boot_image)}")
         return {"sys": boot_image}
 
     def checkpoint(self, checkpoint_file):
+        """Create checkpoint file.
+
+        Args:
+            checkpoint_file (str): Name of checkpoint file.
+        """
         log.debug(f"Host {self.host}: checkpoint is {checkpoint_file}.")
         self.save(filename=checkpoint_file)
 
     def close(self):
+        """Disconnect from device."""
         if self.connected:
             self.native.disconnect()
             self._connected = False
             log.debug("Host {self.host}: Connection closed.")
 
     def config(self, command, **netmiko_args):
-        """
+        r"""
         Send config commands to device.
 
         By default, entering and exiting config mode is handled automatically.
@@ -298,8 +345,8 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
-            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+            str: When ``command`` is a str, the config session input and output from sending ``command``.
+            list: When ``command`` is a list, the config session input and output from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -334,7 +381,8 @@ class IOSDevice(BaseDevice):
         try:
             for cmd in command:
                 entered_commands.append(cmd)
-                command_response = self.native.send_config_set(cmd, **netmiko_args)
+                command_response = self.native.send_config_set(
+                    cmd, **netmiko_args)
                 command_responses.append(command_response)
                 self._check_command_output_for_errors(cmd, command_response)
         except TypeError as err:
@@ -359,11 +407,12 @@ class IOSDevice(BaseDevice):
         if original_command_is_str:
             return command_responses[0]
 
-        log.info(f"Host {self.host}: Device configured with command responses {command_responses}.")
+        log.info(
+            f"Host {self.host}: Device configured with command responses {command_responses}.")
         return command_responses
 
-    def config_list(self, commands, **netmiko_args):
-        """
+    def config_list(self, commands, **netmiko_args):  # noqa: D401
+        r"""
         DEPRECATED - Use the `config` method.
 
         Send config commands to device.
@@ -377,7 +426,7 @@ class IOSDevice(BaseDevice):
             **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            list: Each command's input and ouput from sending the command in ``commands``.
+            list: Each command's input and output from sending the command in ``commands``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -389,7 +438,8 @@ class IOSDevice(BaseDevice):
             ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
             >>>
         """
-        log.warning("config_list() is deprecated; use config.", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config.",
+                    DeprecationWarning)
         return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
@@ -426,15 +476,16 @@ class IOSDevice(BaseDevice):
             log.error(
                 f"Host {self.host}: Device not active error with reduncdancy state {redundancy_state} and peer redundancy state {peer_redundancy_state}"
             )
-            raise DeviceNotActiveError(self.host, redundancy_state, peer_redundancy_state)
+            raise DeviceNotActiveError(
+                self.host, redundancy_state, peer_redundancy_state)
 
         log.debug(f"Host {self.host}: Device is active.")
         return True
 
     @property
-    def connected(self):
+    def connected(self):  # noqa: D401
         """
-        The connection status of the device.
+        Get connection status of the device.
 
         Returns:
             bool: True if the device is connected, else False.
@@ -462,6 +513,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime(self):
+        """Get uptime from device.
+
+        Returns:
+            int: Uptime in seconds.
+        """
         if self._uptime is None:
             version_data = self._raw_version_data()
             uptime_full_string = version_data["uptime"]
@@ -472,6 +528,9 @@ class IOSDevice(BaseDevice):
 
     @property
     def uptime_string(self):
+        """
+        Get uptime in format dd:hh:mm.
+        """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
             uptime_full_string = version_data["uptime"]
@@ -481,6 +540,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def hostname(self):
+        """Get hostname of device.
+
+        Returns:
+            str: Hostname of device.
+        """
         version_data = self._raw_version_data()
         if self._hostname is None:
             self._hostname = version_data["hostname"]
@@ -490,14 +554,27 @@ class IOSDevice(BaseDevice):
 
     @property
     def interfaces(self):
+        """
+        Get list of interfaces on device.
+
+        Returns:
+            list: List of interfaces on device.
+        """
         if self._interfaces is None:
-            self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
+            self._interfaces = list(x["intf"]
+                                    for x in self._interfaces_detailed_list())
 
         log.debug(f"Host {self.host}: Interfaces {self._interfaces}")
         return self._interfaces
 
     @property
     def vlans(self):
+        """
+        Get list of VLANs on device.
+
+        Returns:
+            list: List of VLANs on device.
+        """
         if self._vlans is None:
             if self.model.startswith("WS"):
                 self._vlans = list(str(x["vlan_id"]) for x in self._show_vlan())
@@ -509,6 +586,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def fqdn(self):
+        """Get fully qualified domain name.
+
+        Returns:
+            str: Fully qualified domain name or ``N/A`` if not defined.
+        """
         if self._fqdn is None:
             self._fqdn = "N/A"
 
@@ -517,6 +599,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def model(self):
+        """Get the device model.
+
+        Returns:
+            str: Device model.
+        """
         version_data = self._raw_version_data()
         if self._model is None:
             self._model = version_data["hardware"]
@@ -526,6 +613,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def os_version(self):
+        """Get os version on device.
+
+        Returns:
+            str: OS version on device.
+        """
         version_data = self._raw_version_data()
         if self._os_version is None:
             self._os_version = version_data["version"]
@@ -535,6 +627,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def serial_number(self):
+        """Get serial number of device.
+
+        Returns:
+            str: Serial number of device.
+        """
         version_data = self._raw_version_data()
         if self._serial_number is None:
             self._serial_number = version_data["serial"]
@@ -544,6 +641,11 @@ class IOSDevice(BaseDevice):
 
     @property
     def config_register(self):
+        """Get config register of device.
+
+        Returns:
+            str: Config register.
+        """
         # ios-specific facts
         version_data = self._raw_version_data()
         self._config_register = version_data["config_register"]
@@ -551,7 +653,33 @@ class IOSDevice(BaseDevice):
         log.debug(f"Host {self.host}: Config register {self._config_register}")
         return self._config_register
 
+    @property
+    def fast_cli(self):
+        """Get current fast_cli value.
+
+        Returns:
+            bool: True if fast_cli is set to true. Otherwise, false.
+        """
+        return self._fast_cli
+
+    @fast_cli.setter
+    def fast_cli(self, value):
+        self._fast_cli = value
+        self.native.fast_cli = value
+
     def file_copy(self, src, dest=None, file_system=None):
+        """Copy file to device.
+
+        Args:
+            src (str): Source of file.
+            dest (str, optional): Destination name for file. Defaults to None.
+            file_system (str, optional): File system to copy file to. Defaults to None.
+
+        Raises:
+            SocketClosedError: Error raised if connection to device is closed.
+            FileTransferError: Error in transferring file.
+            FileTransferError: Error if unable to verify file was transferred successfully.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -565,7 +693,8 @@ class IOSDevice(BaseDevice):
                 fc.enable_scp()
                 fc.establish_scp_conn()
                 fc.transfer_file()
-                log.info(f"Host {self.host}: File {src} transferred successfully.")
+                log.info(
+                    f"Host {self.host}: File {src} transferred successfully.")
             except OSError as error:
                 # compare hashes
                 if not fc.compare_md5():
@@ -573,7 +702,8 @@ class IOSDevice(BaseDevice):
                     raise SocketClosedError(message=error)
                 log.error(f"Host {self.host}: OS error {error}")
             except:  # noqa E722
-                log.error(f"Host {self.host}: File transfer error {FileTransferError.default_message}")
+                log.error(
+                    f"Host {self.host}: File transfer error {FileTransferError.default_message}")
                 raise FileTransferError
             finally:
                 fc.close_scp_chan()
@@ -589,6 +719,16 @@ class IOSDevice(BaseDevice):
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        """Copy file to device.
+
+        Args:
+            src (str): Source of file.
+            dest (str, optional): Destination name for file. Defaults to None.
+            file_system (str, optional): File system to copy file to. Defaults to None.
+
+        Returns:
+            bool: True if file copied succesfully and md5 hashes match. Otherwise, false.
+        """
         self.enable()
         if file_system is None:
             file_system = self._get_file_system()
@@ -598,10 +738,11 @@ class IOSDevice(BaseDevice):
             log.debug(f"Host {self.host}: File {src} already exists on remote.")
             return True
 
-        log.debug(f"Host {self.host}: File {src} does not already exist on remote.")
+        log.debug(
+            f"Host {self.host}: File {src} does not already exist on remote.")
         return False
 
-    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=10, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=20, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
@@ -618,7 +759,14 @@ class IOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
-                self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
+                self.set_boot_options(
+                    INSTALL_MODE_FILE_NAME, **vendor_specifics)
+
+                # Get the current fast_cli to set it back later to whatever it is
+                current_fast_cli = self.fast_cli
+
+                # Set fast_cli to False to handle install mode, 10+ minute installation
+                self.fast_cli = False
 
                 # Check for OS Version specific upgrade path
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
@@ -636,10 +784,13 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher delay factor and send it in
                     try:
-                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.show(
+                            command, delay_factor=install_mode_delay_factor)
                     except IOError:
-                        log.error(f"Host {self.host}: IO error for image {image_name}")
+                        log.error(
+                            f"Host {self.host}: IO error for image {image_name}")
                         pass
+
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot()
@@ -647,12 +798,19 @@ class IOSDevice(BaseDevice):
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
 
+            # Set FastCLI back to originally set when using install mode
+            if install_mode:
+                self.fast_cli = current_fast_cli
+
             # Verify the OS level
             if not self._image_booted(image_name):
-                log.error(f"Host {self.host}: OS install error for image {image_name}")
-                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+                log.error(
+                    f"Host {self.host}: OS install error for image {image_name}")
+                raise OSInstallError(hostname=self.hostname,
+                                     desired_boot=image_name)
 
-            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
+            log.info(
+                f"Host {self.host}: OS image {image_name} installed successfully.")
             return True
 
         log.info(f"Host {self.host}: OS image {image_name} not installed.")
@@ -678,13 +836,13 @@ class IOSDevice(BaseDevice):
         Open a connection to the network device.
 
         This method will close the connection if ``confirm_active`` is True and the device is not active.
-        Devices that do not have high availibility are considred active.
+        Devices that do not have high availability are considered active.
 
         Args:
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
 
         Raises:
-            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availabilit state is not active.
+            DeviceNotActiveError: When ``confirm_active`` is True, and the device high availability state is not active.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -716,13 +874,15 @@ class IOSDevice(BaseDevice):
                 global_delay_factor=self.global_delay_factor,
                 secret=self.secret,
                 verbose=False,
+                fast_cli=self.fast_cli,
             )
             self._connected = True
 
         if confirm_active:
             self.confirm_is_active()
 
-        log.debug(f"Host {self.host}: Connection to controller was opened successfully.")
+        log.debug(
+            f"Host {self.host}: Connection to controller was opened successfully.")
 
     @property
     def peer_redundancy_state(self):
@@ -742,21 +902,25 @@ class IOSDevice(BaseDevice):
         try:
             show_redundancy = self.show("show redundancy")
         except CommandError:
-            log.error(f"Host {self.host}: Command error for command 'show redundancy'.")
+            log.error(
+                f"Host {self.host}: Command error for command 'show redundancy'.")
             return None
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         processor_redundancy_info = re_show_redundancy.group("other")
         if processor_redundancy_info is not None:
-            re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+            re_redundancy_state = RE_REDUNDANCY_STATE.search(
+                processor_redundancy_info)
             processor_redundancy_state = re_redundancy_state.group(1).lower()
         else:
             processor_redundancy_state = "disabled"
 
-        log.debug(f"Host {self.host}: Processor redundancy state {processor_redundancy_state}.")
+        log.debug(
+            f"Host {self.host}: Processor redundancy state {processor_redundancy_state}.")
         return processor_redundancy_state
 
     def reboot(self, timer=0, **kwargs):
         """Reboot device.
+
         Reload the controller or controller pair.
 
         Args:
@@ -766,10 +930,12 @@ class IOSDevice(BaseDevice):
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
         """
         if kwargs.get("confirm"):
-            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning(
+                "Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
-            log.error(f"Host {self.host}: Reboot signal error interrupting after reload.")
+            log.error(
+                f"Host {self.host}: Reboot signal error interrupting after reload.")
             raise RebootSignal
 
         signal.signal(signal.SIGALRM, handler)
@@ -777,7 +943,8 @@ class IOSDevice(BaseDevice):
 
         try:
             if timer > 0:
-                first_response = self.native.send_command_timing("reload in %d" % timer)
+                first_response = self.native.send_command_timing(
+                    "reload in %d" % timer)
             else:
                 first_response = self.native.send_command_timing("reload")
 
@@ -797,7 +964,7 @@ class IOSDevice(BaseDevice):
     @property
     def redundancy_mode(self):
         """
-        The operating redundancy mode of the device.
+        Get operating redundancy mode of the device.
 
         Returns:
             str: The redundancy mode the device is operating in.
@@ -812,11 +979,13 @@ class IOSDevice(BaseDevice):
         try:
             show_redundancy = self.show("show redundancy")
         except CommandError:
-            log.error(f"Host {self.host}: Command error for command 'show redundancy'.")
+            log.error(
+                f"Host {self.host}: Command error for command 'show redundancy'.")
             return "n/a"
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         redundancy_info = re_show_redundancy.group("info")
-        re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
+        re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(
+            redundancy_info)
         redundancy_mode = re_redundancy_mode.group(1).lower()
         log.debug(f"Host {self.host}: Redundancy mode is {redundancy_mode}.")
         return redundancy_mode
@@ -839,30 +1008,56 @@ class IOSDevice(BaseDevice):
         try:
             show_redundancy = self.show("show redundancy")
         except CommandError:
-            log.error(f"Host {self.host}: Command error for command 'show redundancy'.")
+            log.error(
+                f"Host {self.host}: Command error for command 'show redundancy'.")
             return None
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
         processor_redundancy_info = re_show_redundancy.group("self")
-        re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
+        re_redundancy_state = RE_REDUNDANCY_STATE.search(
+            processor_redundancy_info)
         processor_redundancy_state = re_redundancy_state.group(1).lower()
 
-        log.debug(f"Host {self.host}: Redundancy state is {processor_redundancy_state}.")
+        log.debug(
+            f"Host {self.host}: Redundancy state is {processor_redundancy_state}.")
         return processor_redundancy_state
 
     def rollback(self, rollback_to):
+        """Rollback configuration to file on flash.
+
+        Args:
+            rollback_to (sEtr): Name of the file to rollback to.
+
+        Raises:
+            RollbackError: Error if unable to rollback to configuration.
+        """
         try:
             self.show("configure replace flash:%s force" % rollback_to)
             log.info(f"Host {self.host}: Rollback to {rollback_to}.")
         except CommandError:
-            log.error(f"Host {self.host}: Rollback unsuccessful. {rollback_to} may not exist.")
-            raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
+            log.error(
+                f"Host {self.host}: Rollback unsuccessful. {rollback_to} may not exist.")
+            raise RollbackError(
+                "Rollback unsuccessful. %s may not exist." % rollback_to)
 
     @property
     def running_config(self):
+        """Get running configuration.
+
+        Returns:
+            str: Output of ``show running-config``.
+        """
         log.debug(f"Host {self.host}: Show running config.")
         return self.show("show running-config")
 
     def save(self, filename="startup-config"):
+        """Save running configuration.
+
+        Args:
+            filename (str, optional): Name of file to save running configuration. Defaults to "startup-config".
+
+        Returns:
+            bool: True if save is succesfull.
+        """
         command = "copy running-config %s" % filename
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
@@ -872,18 +1067,30 @@ class IOSDevice(BaseDevice):
         self.native.send_command_timing("\n", delay_factor=2)
         # Confirm that we have a valid prompt again before returning.
         self.native.find_prompt()
-        log.debug(f"Host {self.host}: Copy running config with name {filename}.")
+        log.debug(
+            f"Host {self.host}: Copy running config with name {filename}.")
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
+        """Set specified image as boot image.
+
+        Args:
+            image_name (str): Name of image to set as boot variable.
+
+        Raises:
+            NTCFileNotFoundError: Error if file is not found on device.
+            CommandError: Error if setting new image as boot variable fails.
+        """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            log.error(f"Host {self.host}: File not found error for image {image_name}.")
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
+            log.error(
+                f"Host {self.host}: File not found error for image {image_name}.")
+            raise NTCFileNotFoundError(
+                hostname=self.hostname, file=image_name, dir=file_system)
 
         try:
             command = "boot system {0}/{1}".format(file_system, image_name)
@@ -892,24 +1099,48 @@ class IOSDevice(BaseDevice):
             file_system = file_system.replace(":", "")
             command = "boot system {0} {1}".format(file_system, image_name)
             self.config(["no boot system", command])
-            log.error(f"Host {self.host}: Command list error for command {command}.")
+            log.error(
+                f"Host {self.host}: Command list error for command {command}.")
 
         self.save()
         new_boot_options = self.boot_options["sys"]
         if new_boot_options != image_name:
-            log.error(f"Host {self.host}: Setting boot command did not yield expected results")
+            log.error(
+                f"Host {self.host}: Setting boot command did not yield expected results")
             raise CommandError(
                 command=command,
-                message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
+                message="Setting boot command did not yield expected results, found {0}".format(
+                    new_boot_options),
             )
 
-        log.info(f"Host {self.host}: boot options have been set to {image_name}")
+        log.info(
+            f"Host {self.host}: boot options have been set to {image_name}")
 
     def show(self, command, expect_string=None):
+        """Run command on device.
+
+        Args:
+            command (str): Command to be ran.
+            expect_string (str, optional): Expected string from command output. Defaults to None.
+
+        Returns:
+            str: Output of command.
+        """
         self.enable()
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
+        """Run a list of commands on device.
+
+        Args:
+            commands (list): List of commands to run on device.
+
+        Raises:
+            CommandListError: Error if one of the commands is not able to be ran on the device.
+
+        Returns:
+            list: Responses from each command ran on device.
+        """
         self.enable()
 
         responses = []
@@ -918,18 +1149,27 @@ class IOSDevice(BaseDevice):
             entered_commands.append(command)
             try:
                 responses.append(self._send_command(command))
-                log.debug(f"Host {self.host}: Successfully executed command 'show' with responses {responses}.")
+                log.debug(
+                    f"Host {self.host}: Successfully executed command 'show' with responses {responses}.")
             except CommandError as e:
-                log.error(f"Host {self.host}: Command list error for commands {commands} with message {e.message}.")
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+                log.error(
+                    f"Host {self.host}: Command list error for commands {commands} with message {e.message}.")
+                raise CommandListError(
+                    entered_commands, command, e.cli_error_msg)
 
         return responses
 
     @property
     def startup_config(self):
-        log.debug(f"Host {self.host}: Successfully executed command 'show startup-config'.")
+        """Get startup configuration.
+
+        Returns:
+            str: Startup configuration from device.
+        """
+        log.debug(
+            f"Host {self.host}: Successfully executed command 'show startup-config'.")
         return self.show("show startup-config")
 
 
-class RebootSignal(NTCError):
+class RebootSignal(NTCError):  # noqa: D101
     pass
