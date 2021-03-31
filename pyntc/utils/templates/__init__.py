@@ -1,4 +1,4 @@
-"""Module used to use NTC_TEMPLATES."""
+"""Module to use NTC_TEMPLATES."""
 import os
 import textfsm
 
@@ -14,7 +14,7 @@ def get_structured_data(template_name, rawtxt):
         rawtxt (str): Raw output from device.
 
     Returns:
-        list: Structured data.
+        list: A dict per entry returned by TextFSM.
     """
     template_file = get_template(template_name)
     with open(template_file) as template:

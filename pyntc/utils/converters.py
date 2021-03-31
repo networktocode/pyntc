@@ -55,7 +55,7 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
             the original dictionary besides those in the blacklist.
 
     Returns:
-        list: A conveted list.
+        list: A converted list.
     """
     converted_list = []
     for original in list(original_list):
@@ -66,9 +66,19 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
     return converted_list
 
 
-def recursive_key_lookup(keys, obj):  # noqa D205, D200
+def recursive_key_lookup(keys, obj):
     """
-    Return obj[keys] if keys is actually a single key. Otherwise return obj[keys[0]][keys[1]]...[keys[n]] if keys is a list.
+    Lookup nested object by indexing through a dictionary sequentally through ``keys``.
+
+    Args:
+        keys (list): The dictionary keys to use to lookup an object.
+        obj (dict): The dictionary to traverse.
+
+    Example:
+        >>> keys = ["a", "b", "c"]
+        >>> data = {"a": {"b": {"c": 1}}}
+        >>> recursive_key_lookup(keys, data)
+        1
     """
     if not isinstance(keys, list):
         return obj.get(keys)

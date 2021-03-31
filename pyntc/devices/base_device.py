@@ -220,10 +220,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    def facts(self):  # noqa: D403, D401, D200
-        """
-        DEPRECATED - Use individual properties to get facts.
-        """
+    def facts(self):  # noqa 401
+        """DEPRECATED - Use individual properties to get facts."""
         warnings.warn("facts() is deprecated; use individual fact properties.", DeprecationWarning)
         facts = {
             fact: getattr(self, fact, None)

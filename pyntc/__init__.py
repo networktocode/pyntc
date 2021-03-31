@@ -20,10 +20,11 @@ LIB_PATH_DEFAULT = "~/.ntc.conf"
 warnings.simplefilter("default")
 
 
-def ntc_device(device_type, *args, **kwargs):  # noqa: D205, D400
-    """Instantiate and return an instance of a device subclassed
-    from ``pyntc.devices.BaseDevice``. ``*args`` and ``*kwargs`` are passed
-    directly to the device initializer.
+def ntc_device(device_type, *args, **kwargs):
+    """
+    Instantiate an instance of a ``pyntc.devices.BaseDevice`` by ``device_type``.
+
+    The ``*args`` and ``*kwargs`` are passed directly to the device initializer.
 
     Arguments:
         device_type (string): A valid device_type
@@ -42,10 +43,9 @@ def ntc_device(device_type, *args, **kwargs):  # noqa: D205, D400
         raise UnsupportedDeviceError(device_type)
 
 
-def ntc_device_by_name(name, filename=None):  # noqa: D205, D400
-    """Instantiate and return an instance of a device subclassed
-    from ``pyntc.devices.BaseDevice`` based on its name in an
-    NTC configuration file.
+def ntc_device_by_name(name, filename=None):
+    """
+    Instantiate an instance of a ``pyntc.devices.BaseDevice`` from ntc.conf file.
 
     If no filename is given the environment variable PYNTC_CONF is checked
     for a path, and then ~/.ntc.conf.
@@ -56,9 +56,8 @@ def ntc_device_by_name(name, filename=None):  # noqa: D205, D400
             the ``name`` argument as section header.
 
     Raises:
-        DeviceNameNotFoundError: if the name is not found in the
-            NTC configuration file.
-        ConfFileNotFoundError: if no NTC configuration can be found.
+        DeviceNameNotFoundError: If the name is not found in the NTC configuration file.
+        ConfFileNotFoundError: If no NTC configuration can be found.
     """
     config, filename = _get_config_from_file(filename=filename)
     sections = config.sections()

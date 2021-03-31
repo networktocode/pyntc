@@ -1,4 +1,4 @@
-"""Supported devices are stored here. Every supported device needs adevice_type stored as a string, and a class subclassed from BaseDevice."""
+"""Device drivers."""
 
 from .eos_device import EOSDevice
 from .nxos_device import NXOSDevice
