@@ -88,5 +88,14 @@ class IOSXEWLCDevice(IOSDevice):
         return False
 
     def show(self, command, expect_string=None, **netmiko_args):
+        """Run command on device.
+
+        Args:
+            command (str): Command to be ran.
+            expect_string (str, optional): Expected string from command output. Defaults to None.
+
+        Returns:
+            str: Output of command.
+        """
         self.enable()
         return self._send_command(command, expect_string=expect_string, **netmiko_args)

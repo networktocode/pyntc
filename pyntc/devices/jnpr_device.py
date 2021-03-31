@@ -403,6 +403,7 @@ class JunosDevice(BaseDevice):
     def save(self, filename=None):
         """
         Save current configuration to device.
+
         If filename is provided, save current configuration to file.
 
         Args:
