@@ -17,16 +17,16 @@ jobs:
   include:
     - stage: "lint"
       name: "Linting Tests"
-      script: ".venv/bin/tox -e black"
-    - script: ".venv/bin/tox -e flake8"
-    - script: ".venv/bin/tox -e bandit"
-    - script: ".venv/bin/tox -e pydocstyle"
+      script: "tox -e black"
+    - script: "tox -e flake8"
+    - script: "tox -e bandit"
+    - script: "tox -e pydocstyle"
     - stage: "test"
       name: "Unit Tests"
-      script: ".venv/bin/tox -e py46,py37,py38"
+      script: "tox -e py46,py37,py38"
     - stage: "coveralls"
       name: "Coveralls"
-      script: ".venv/bin/tox -e coveralls"
+      script: "tox -e coveralls"
 
 stages:
   - "lint"
