@@ -8,14 +8,27 @@ python:
 
 install:
   # XXX: Migrate this to Poetry fully
-  - pip install virtualenv
+  - "pip install virtualenv"
+  - "virtualenv ./venv"
+  - ".venv/bin/pip install pip setuptools -U"
+  - ".venv/bin/pip install tox"
 
+jobs:
+  include:
+    - stage: "lint"
+      name: "Linting Tests"
+      script: ".venv/bin/tox -e black"
+    - script: ".venv/bin/tox -e flake8"
+    - script: ".venv/bin/tox -e bandit"
+    - script: ".venv/bin/tox -e pydocstyle"
+    - stage: "test"
+      name: "Unit Tests"
+      script: ".venv/bin/tox -e py46,py37,py38"
+    - stage: "coveralls"
+      name: "Coveralls"
+      script: ".venv/bin/tox -e coveralls"
 
-script:
-  # Activate virtualenv, install tox and run all tests.
-  - virtualenv ./venv
-  - source ./venv/bin/activate
-  - python -m pip install -U pip
-  - pip install tox
-  - tox
-  - tox -e coveralls
+stages:
+  - "lint"
+  - "test"
+  - "coveralls"
