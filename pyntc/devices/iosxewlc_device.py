@@ -7,12 +7,15 @@ from pyntc.errors import (
     OSInstallError,
     WaitingRebootTimeoutError,
 )
+from pyntc import log
 
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
 
 class IOSXEWLCDevice(IOSDevice):
     """Cisco IOSXE WLC Device Implementation."""
+
+    log.init()
 
     def _wait_for_device_start_reboot(self, timeout=600):
         start = time.time()
@@ -23,7 +26,10 @@ class IOSXEWLCDevice(IOSDevice):
             except Exception:  # noqa E722 # nosec
                 return
 
-        raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+        log.error(
+            f"Host {self.hostname}: Wait reboot timeout error with timeout {timeout}")
+        raise WaitingRebootTimeoutError(
+            hostname=self.hostname, wait_time=timeout)
 
     def _wait_for_device_reboot(self, timeout=5400):
         start = time.time()
@@ -81,7 +87,8 @@ class IOSXEWLCDevice(IOSDevice):
 
             # Verify the OS level
             if not self._image_booted(image_name):
-                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname,
+                                     desired_boot=image_name)
 
             return True
 

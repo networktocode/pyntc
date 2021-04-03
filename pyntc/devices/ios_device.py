@@ -392,7 +392,7 @@ class IOSDevice(BaseDevice):
         except CommandError as err:
             if not original_command_is_str:
                 log.error(
-                    f"Host {self.host}: Command error with commands: {entered_commands} and error message {e.cli_error_msg}"
+                    f"Host {self.host}: Command error with commands: {entered_commands} and error message {err.cli_error_msg}"
                 )
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
