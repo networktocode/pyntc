@@ -10,6 +10,7 @@ install:
   # XXX: Migrate this to Poetry fully
   - "pip install virtualenv"
   - "virtualenv ./venv"
+  - "source ./venv/bin/activate"
   - "python -m pip install -U pip"
   - "pip install tox"
 
