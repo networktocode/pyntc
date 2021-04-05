@@ -34,9 +34,11 @@ class JunosDevice(BaseDevice):
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
         """
-        super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
+        super().__init__(host, username, password, *args,
+                         device_type="juniper_junos_netconf", **kwargs)
 
-        self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
+        self.native = JunosNativeDevice(
+            *args, host=host, user=username, passwd=password, **kwargs)
         self.open()
         self.cu = JunosNativeConfig(self.native)
         self.fs = JunosNativeFS(self.native)
@@ -87,7 +89,8 @@ class JunosDevice(BaseDevice):
         return days, hours, minutes, seconds
 
     def _uptime_to_seconds(self, uptime_full_string):
-        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
+        days, hours, minutes, seconds = self._uptime_components(
+            uptime_full_string)
 
         seconds += days * 24 * 60 * 60
         seconds += hours * 60 * 60
@@ -96,7 +99,8 @@ class JunosDevice(BaseDevice):
         return seconds
 
     def _uptime_to_string(self, uptime_full_string):
-        days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
+        days, hours, minutes, seconds = self._uptime_components(
+            uptime_full_string)
         return "%02d:%02d:%02d:%02d" % (days, hours, minutes, seconds)
 
     def _wait_for_device_reboot(self, timeout=3600):
@@ -175,7 +179,8 @@ class JunosDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+        warnings.warn("config_list() is deprecated; use config().",
+                      DeprecationWarning)
         self.config(commands, format=format)
 
     @property
@@ -366,7 +371,8 @@ class JunosDevice(BaseDevice):
             >>>
         """
         if kwargs.get("confirm"):
-            warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            warnings.warn(
+                "Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         self.sw = JunosNativeSW(self.native)
         self.sw.reboot(in_min=timer)
@@ -453,8 +459,10 @@ class JunosDevice(BaseDevice):
         for command in commands:
             if not command.startswith("show"):
                 if original_commands_is_str:
-                    raise CommandError(command, 'Juniper "show" commands must begin with "show".')
-                raise CommandListError(commands, command, 'Juniper "show" commands must begin with "show".')
+                    raise CommandError(
+                        command, 'Juniper "show" commands must begin with "show".')
+                raise CommandListError(
+                    commands, command, 'Juniper "show" commands must begin with "show".')
 
             response = self.native.cli(command, warning=False)
             responses.append(response)
@@ -469,7 +477,8 @@ class JunosDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        warnings.warn("show_list() is deprecated; use show().",
+                      DeprecationWarning)
         return self.show(commands)
 
     @property
