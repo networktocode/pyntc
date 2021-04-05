@@ -22,14 +22,11 @@ jobs:
     - script: "tox -e flake8"
     - script: "tox -e bandit"
     - script: "tox -e pydocstyle"
-    - stage: "unit"
-      name: "Unit Tests"
-      script: "tox -e py46,py37,py38"
-    - stage: "coveralls"
-      name: "Coveralls"
-      script: "tox -e coveralls"
 
 stages:
   - "lint"
-  - "unit"
-  - "coveralls"
+  - "test"
+
+script:
+  - "tox -e py46,py37,py38"
+  - "tox -e coveralls"
