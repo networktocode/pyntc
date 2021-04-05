@@ -22,7 +22,7 @@ jobs:
     - script: "tox -e flake8"
     - script: "tox -e bandit"
     - script: "tox -e pydocstyle"
-    - stage: "test"
+    - stage: "unit"
       name: "Unit Tests"
       script: "tox -e py46,py37,py38"
     - stage: "coveralls"
@@ -31,5 +31,5 @@ jobs:
 
 stages:
   - "lint"
-  - "test"
+  - "unit"
   - "coveralls"
