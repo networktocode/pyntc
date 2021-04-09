@@ -249,7 +249,7 @@ class IOSDevice(BaseDevice):
             except CommandError:
                 # Default to running config value
                 show_boot_out = self.show("show run | inc boot")
-                boot_path_regex = r"boot\s+system\s+(?:\S+\s+|)(\S+)\s*$"
+                boot_path_regex = r"boot\ssystem\s\S+(?::/+|\s)(\S+.bin)"
 
         match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
         if match:
@@ -616,7 +616,12 @@ class IOSDevice(BaseDevice):
                         self.show(command, delay_factor=install_mode_delay_factor)
                     except IOError:
                         pass
-
+                    except CommandError:
+                        command = (
+                            f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
+                        )
+                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.reboot()
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot()
@@ -627,7 +632,7 @@ class IOSDevice(BaseDevice):
             # Set FastCLI back to originally set when using install mode
             if install_mode:
                 self.fast_cli = current_fast_cli
-
+                image_name = INSTALL_MODE_FILE_NAME
             # Verify the OS level
             if not self._image_booted(image_name):
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
@@ -845,23 +850,23 @@ class IOSDevice(BaseDevice):
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
-
-        # Obtaining current boot system configuration command
-        # Example. Should be either boot system flash:/cat3k_caa-universalk9.16.12.01.SPA.bin
-        # or boot system flash cat3k_caa-universalk9.16.12.01.SPA.bin
-        boot_sys_syntax = self.show("show run | in boot system")
-        if re.search(r'boot\ssystem\s\S+\:\/+\S+', boot_sys_syntax): # Will match boot system flash:/cat3k_caa-universalk9.16.12.01.SPA.bin
-            command = "boot system {0}/{1}".format(file_system, image_name)
-            self.config(["no boot system", command])
-        elif re.search(r'boot\ssystem\s\S+\s\S+', boot_sys_syntax): # Will match boot system flash cat3k_caa-universalk9.16.12.01.SPA.bin
-            file_system = file_system.replace(":", "")
-            command = "boot system {0} {1}".format(file_system, image_name)
+        if image_name == "packages.conf":
+            command = "boot system {0}{1}".format(file_system, image_name)
             self.config(["no boot system", command])
         else:
-            raise CommandError(
-                command=command,
-                message="Unable to determine the proper boot system syntax. Current configuration is {0}".format(boot_sys_syntax)
-            )
+            show_boot_sys = self.show("show run | include boot system")
+            if re.search(r'boot\ssystem\s\S+\:\/+\S+', show_boot_sys):
+                command = "boot system {0}/{1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            elif re.search(r'boot\ssystem\s\S+\s\S+', show_boot_sys):  # TODO: Update to CommandError when deprecating config_list
+                file_system = file_system.replace(":", "")
+                command = "boot system {0} {1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            else:
+                raise CommmandError(
+                    command=command,
+                    message="Unable to determine the boot system configuration syntax. Current config is {0}".format(show_boot_sys)
+                )
 
         self.save()
         new_boot_options = self.boot_options["sys"]
@@ -871,9 +876,9 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect_string=None):
+    def show(self, command, expect_string=None, delay_factor=1):
         self.enable()
-        return self._send_command(command, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string, delay_factor=delay_factor)
 
     def show_list(self, commands):
         self.enable()
