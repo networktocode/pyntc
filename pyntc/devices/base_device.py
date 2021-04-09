@@ -6,7 +6,6 @@ import warnings
 
 
 from pyntc.errors import NTCError, FeatureNotFoundError
-from pyntc import log
 
 
 def fix_docs(cls):

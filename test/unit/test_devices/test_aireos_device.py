@@ -2,7 +2,6 @@ import json
 
 import pytest
 from unittest import mock
-import unittest
 
 from pyntc.devices import AIREOSDevice
 from pyntc.devices import aireos_device as aireos_module
@@ -1526,7 +1525,7 @@ def test_transfer_image_to_ap_already_transferred_secondary_fail(
     aireos_boot_image,
 ):
     mock_ap_image_matches_expected.side_effect = [False, False, True, True, True, True, False]
-    with pytest.raises(aireos_module.FileTransferError) as fte:
+    with pytest.raises(aireos_module.FileTransferError):
         aireos_device.transfer_image_to_ap(aireos_boot_image)
     assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image swap all")] * 3)
@@ -1603,7 +1602,7 @@ def test_transfer_image_to_ap_transfer_secondary_fail(
 ):
     mock_boot_options.return_value = {"primary": None, "backup": aireos_boot_image}
     mock_ap_image_matches_expected.side_effect = [False, False, False, True, True, True, False]
-    with pytest.raises(aireos_module.FileTransferError) as fte:
+    with pytest.raises(aireos_module.FileTransferError):
         aireos_device.transfer_image_to_ap(aireos_boot_image)
     assert len(mock_ap_image_matches_expected.mock_calls) == 7
     mock_config.assert_has_calls([mock.call("ap image predownload backup all")] + [mock.call("ap image swap all")] * 3)
@@ -1654,7 +1653,7 @@ def test_transfer_image_does_not_exist(
 ):
     mock_boot_options.return_value = {"primary": None, "backup": None}
     mock_ap_image_matches_expected.return_value = False
-    with pytest.raises(aireos_module.FileTransferError) as fte:
+    with pytest.raises(aireos_module.FileTransferError):
         aireos_device.transfer_image_to_ap(aireos_boot_image)
     assert len(mock_ap_image_matches_expected.mock_calls) == 3
     mock_config.assert_not_called()

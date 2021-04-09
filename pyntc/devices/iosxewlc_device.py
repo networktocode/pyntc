@@ -26,10 +26,8 @@ class IOSXEWLCDevice(IOSDevice):
             except Exception:  # noqa E722 # nosec
                 return
 
-        log.error(
-            f"Host {self.hostname}: Wait reboot timeout error with timeout {timeout}")
-        raise WaitingRebootTimeoutError(
-            hostname=self.hostname, wait_time=timeout)
+        log.error(f"Host {self.hostname}: Wait reboot timeout error with timeout {timeout}")
+        raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _wait_for_device_reboot(self, timeout=5400):
         start = time.time()
@@ -89,13 +87,10 @@ class IOSXEWLCDevice(IOSDevice):
 
             # Verify the OS level
             if not self._image_booted(image_name):
-                log.error(
-                    f"Host {self.host}: OS install error for image {image_name}")
-                raise OSInstallError(hostname=self.hostname,
-                                     desired_boot=image_name)
+                log.error(f"Host {self.host}: OS install error for image {image_name}")
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
-            log.info(
-                f"Host {self.host}: OS image {image_name} installed successfully.")
+            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
             return True
 
         log.info(f"Host {self.host}: OS image {image_name} not installed.")
@@ -103,6 +98,5 @@ class IOSXEWLCDevice(IOSDevice):
 
     def show(self, command, expect_string=None, **netmiko_args):
         self.enable()
-        log.debug(
-            f"Host {self.host}: Successfully executed command 'show'.")
+        log.debug(f"Host {self.host}: Successfully executed command 'show'.")
         return self._send_command(command, expect_string=expect_string, **netmiko_args)

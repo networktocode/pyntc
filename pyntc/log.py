@@ -1,5 +1,5 @@
 """
-Logging utilities for Pyntc 
+Logging utilities for Pyntc
 ===========================
 
 This module contains helpers and wrappers for making logging more consistent
