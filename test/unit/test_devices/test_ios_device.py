@@ -233,9 +233,8 @@ class TestIOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command.assert_called_with("show run | inc boot")
 
-    @mock.patch.object(IOSDevice, "pwd", autospec=True)
-    def test_rollback(self, mock_pwd):
-        self.device.pwd = "flash:"
+    @mock.patch.object(IOSDevice, "_get_file_system", return_value='flash:')
+    def test_rollback(self, mock_boot):
         self.device.rollback("good_checkpoint")
         self.device.native.send_command.assert_called_with("configure replace flash:good_checkpoint force")
 
@@ -313,10 +312,6 @@ class TestIOSDevice(unittest.TestCase):
     def test_starting_config(self):
         expected = self.device.show("show startup-config")
         self.assertEqual(self.device.startup_config, expected)
-
-    def test_pwd(self):
-        expected = self.device.show("pwd")
-        self.assertEqual(self.device.pwd, expected)
 
     def test_enable_from_disable(self):
         self.device.native.check_enable_mode.return_value = False
