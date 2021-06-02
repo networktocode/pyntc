@@ -922,7 +922,7 @@ class IOSDevice(BaseDevice):
             RollbackError: Error if unable to rollback to configuration.
         """
         try:
-            self.show("configure replace flash:%s force" % rollback_to)
+            self.show("configure replace %s:%s force" % (self.pwd, rollback_to))
         except CommandError:
             raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
 
@@ -1035,6 +1035,10 @@ class IOSDevice(BaseDevice):
             str: Startup configuration from device.
         """
         return self.show("show startup-config")
+
+    @property
+    def pwd(self):
+        return self.show("pwd")
 
 
 class RebootSignal(NTCError):  # noqa: D101
