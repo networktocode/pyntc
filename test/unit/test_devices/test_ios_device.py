@@ -226,7 +226,9 @@ class TestIOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, {"sys": BOOT_IMAGE})
         self.device.native.send_command.assert_called_with("show run | inc boot")
 
-    def test_rollback(self):
+    @mock.patch.object(IOSDevice, "pwd", autospec=True)
+    def test_rollback(self, mock_pwd):
+        self.device.pwd = "flash:"
         self.device.rollback("good_checkpoint")
         self.device.native.send_command.assert_called_with("configure replace flash:good_checkpoint force")
 

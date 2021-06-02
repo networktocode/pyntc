@@ -770,8 +770,9 @@ class IOSDevice(BaseDevice):
         return processor_redundancy_state
 
     def rollback(self, rollback_to):
+
         try:
-            self.show("configure replace %s:%s force" % (self.pwd, rollback_to))
+            self.show("configure replace %s%s force" % (self.pwd, rollback_to))
         except CommandError:
             raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
 
