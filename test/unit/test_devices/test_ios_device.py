@@ -305,6 +305,10 @@ class TestIOSDevice(unittest.TestCase):
         expected = self.device.show("show startup-config")
         self.assertEqual(self.device.startup_config, expected)
 
+    def test_pwd(self):
+        expected = self.device.show("pwd")
+        self.assertEqual(self.device.pwd, expected)
+
     def test_enable_from_disable(self):
         self.device.native.check_enable_mode.return_value = False
         self.device.native.check_config_mode.return_value = False
