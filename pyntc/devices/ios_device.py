@@ -772,7 +772,7 @@ class IOSDevice(BaseDevice):
     def rollback(self, rollback_to):
 
         try:
-            self.show("configure replace %s%s force" % (self.pwd, rollback_to))
+            self.show("configure replace %s%s force" % (self._get_file_system(), rollback_to))
         except CommandError:
             raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
 
@@ -838,10 +838,6 @@ class IOSDevice(BaseDevice):
     @property
     def startup_config(self):
         return self.show("show startup-config")
-
-    @property
-    def pwd(self):
-        return self.show("pwd")
 
 
 class RebootSignal(NTCError):
