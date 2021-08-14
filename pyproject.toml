@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "pyntc"
-version = "0.17.0"
+version = "0.18.0"
 description = "SDK to simplify common workflows for Network Devices."
 authors = ["NTC <info@networktocode.com>"]
 readme = "README.md"
@@ -48,5 +48,6 @@ exclude = '''
 | dist
 | blib2to3
 | tests/data
+| venv
 )/
 '''

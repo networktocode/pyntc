@@ -2,8 +2,8 @@ import os
 
 import pytest
 from unittest import mock
-
-from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice
+from pyntc.devices import supported_devices
+from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice
 
 
 def get_side_effects(mock_path, side_effects):
@@ -15,6 +15,15 @@ def get_side_effects(mock_path, side_effects):
         else:
             effects.append(effect)
     return effects
+
+
+def pytest_generate_tests(metafunc):
+    if metafunc.function.__name__ == "test_device_creation":
+        metafunc.parametrize(
+            "device_type,expected",
+            ((device_type, device_class) for device_type, device_class in supported_devices.items()),
+            ids=(device_type for device_type in supported_devices),
+        )
 
 
 @pytest.fixture
@@ -249,8 +258,23 @@ def ios_device():
 
 
 @pytest.fixture
+def iosxewlc_device():
+    with mock.patch.object(IOSXEWLCDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
+        with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
+            device = IOSXEWLCDevice("host", "user", "password")
+            device.native = ch
+            yield device
+
+
+@pytest.fixture
 def ios_mock_path(mock_path):
     return f"{mock_path}/ios"
+
+
+@pytest.fixture
+def iosxewlc_mock_path(mock_path):
+    return f"{mock_path}/iosxe"
 
 
 @pytest.fixture
@@ -330,6 +354,19 @@ def ios_show(ios_device, ios_mock_path):
         with mock.patch.object(IOSDevice, "show") as mock_show:
             mock_show.side_effect = get_side_effects(ios_mock_path, side_effects)
         device.show = mock_show
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def iosxewlc_send_command(iosxewlc_device, iosxewlc_mock_path):
+    def _mock(side_effects, existing_device=None, device=iosxewlc_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(IOSXEWLCDevice, "_send_command") as mock_send_command:
+            mock_send_command.side_effect = get_side_effects(iosxewlc_mock_path, side_effects)
+        device._send_command = mock_send_command
         return device
 
     return _mock

@@ -9,6 +9,11 @@ from pyntc.errors import NTCError, FeatureNotFoundError
 
 
 def fix_docs(cls):
+    """Create docstring at runtime.
+
+    Returns:
+        class: Returns the class passed in.
+    """
     for name, func in vars(cls).items():
         if hasattr(func, "__call__") and not func.__doc__:
             # print(func, 'needs doc')
@@ -25,7 +30,15 @@ class BaseDevice(object):
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, username, password, device_type=None, **kwargs):
+    def __init__(self, host, username, password, device_type=None, **kwargs):  # noqa: D403
+        """PyNTC base device implementation.
+
+        Args:
+            host (str): The address of the network device.
+            username (str): The username to authenticate with the device.
+            password (str): The password to authenticate with the device.
+            device_type (str, optional): Denotes which device type. Defaults to None.
+        """
         self.host = host
         self.username = username
         self.password = password
@@ -41,7 +54,7 @@ class BaseDevice(object):
         self._vlans = None
 
     def _image_booted(self, image_name, **vendor_specifics):
-        """Determines if a particular image is serving as the active OS.
+        """Determine if a particular image is serving as the active OS.
 
         Args:
             image_name (str): The image that you would like the device to be using for active OS.
@@ -68,7 +81,8 @@ class BaseDevice(object):
     @property
     @abc.abstractmethod
     def boot_options(self):
-        """Get current boot variables
+        """Get current boot variables.
+
         like system image and kickstart image.
 
         Returns:
@@ -157,7 +171,8 @@ class BaseDevice(object):
     @property
     @abc.abstractmethod
     def fqdn(self):
-        """fqdn name string property, part of device facts.
+        """
+        Get FQDN of the device.
 
         Raises:
             NotImplementedError: returns not implemented if not included in facts.
@@ -177,7 +192,8 @@ class BaseDevice(object):
     @property
     @abc.abstractmethod
     def serial_number(self):
-        """Serial number string property, part of device facts.
+        """
+        Get serial number of the device.
 
         Raises:
             NotImplementedError: returns not implemented if not included in facts.
@@ -204,7 +220,8 @@ class BaseDevice(object):
         """
         raise NotImplementedError
 
-    def facts(self):
+    def facts(self):  # noqa 401
+        """DEPRECATED - Use individual properties to get facts."""
         warnings.warn("facts() is deprecated; use individual fact properties.", DeprecationWarning)
         facts = {
             fact: getattr(self, fact, None)
@@ -265,7 +282,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def install_os(self, image_name, **vendor_specifics):
-        """Install the OS from specified image_name
+        """Install the OS from specified image_name.
 
         Args:
             image_name(str): The name of the image on the device to install.
@@ -339,8 +356,7 @@ class BaseDevice(object):
 
     @abc.abstractmethod
     def set_boot_options(self, image_name, **vendor_specifics):
-        """Set boot variables
-        like system image and kickstart image.
+        """Set boot variables like system image and kickstart image.
 
         Args:
             image_name: The main system image file name.
@@ -400,8 +416,7 @@ class BaseDevice(object):
     #################################
 
     def feature(self, feature_name):
-        """Return a feature class based on the ``feature_name`` for the
-        appropriate subclassed device type."""
+        """Return a feature class based on the ``feature_name`` for the appropriate subclassed device type."""
         try:
             feature_module = importlib.import_module(
                 "pyntc.devices.system_features.%s.%s_%s" % (feature_name, self.device_type, feature_name)
@@ -413,8 +428,7 @@ class BaseDevice(object):
             raise
 
     def get_boot_options(self):
-        """Get current boot variables
-        like system image and kickstart image.
+        """Get current boot variables like system image and kickstart image.
 
         Returns:
             A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
@@ -460,13 +474,25 @@ class BaseDevice(object):
 
 
 class RebootTimerError(NTCError):
+    """Reboot timer error class to notify user reboot timer is not supported."""
+
     def __init__(self, device_type):
+        """
+        Error to notify user reboot timer is not supported.
+
+        Args:
+            device_type (str): Ex: cisco_nxos_nxapi, cisco_ios_ssh
+        """
         super().__init__("Reboot timer not supported on %s." % device_type)
 
 
 class RollbackError(NTCError):
+    """Rollback error."""
+
     pass
 
 
 class SetBootImageError(NTCError):
+    """Set boot image error."""
+
     pass

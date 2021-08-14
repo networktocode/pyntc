@@ -1,6 +1,4 @@
-"""Supported devices are stored here. Every supported device needs a
-device_type stored as a string, and a class subclassed from BaseDevice.
-"""
+"""Device drivers."""
 
 from .eos_device import EOSDevice
 from .nxos_device import NXOSDevice
@@ -9,6 +7,7 @@ from .jnpr_device import JunosDevice
 from .asa_device import ASADevice
 from .f5_device import F5Device
 from .aireos_device import AIREOSDevice
+from .iosxewlc_device import IOSXEWLCDevice
 
 
 supported_devices = {
@@ -19,4 +18,5 @@ supported_devices = {
     "juniper_junos_netconf": JunosDevice,
     "cisco_nxos_nxapi": NXOSDevice,
     "cisco_aireos_ssh": AIREOSDevice,
+    "cisco_iosxewlc_ssh": IOSXEWLCDevice,
 }
