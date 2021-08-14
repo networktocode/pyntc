@@ -48,5 +48,6 @@ exclude = '''
 | dist
 | blib2to3
 | tests/data
+| venv
 )/
 '''
