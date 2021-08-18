@@ -27,12 +27,9 @@ from pyntc import log
 
 
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
-RE_SHOW_FAILOVER_STATE = re.compile(
-    r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
-RE_SHOW_IP_ADDRESS = re.compile(
-    r"^\S+\s+(\S+)\s+((?:\d+.){3}\d+)\s+((?:\d+.){3}\d+)", re.M)
-RE_IPV6_INTERFACE_MATCH = re.compile(
-    r"^\s+([A-Fa-f0-9:]{5,}).+?(/\d+)\s*$", re.M)
+RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
+RE_SHOW_IP_ADDRESS = re.compile(r"^\S+\s+(\S+)\s+((?:\d+.){3}\d+)\s+((?:\d+.){3}\d+)", re.M)
+RE_IPV6_INTERFACE_MATCH = re.compile(r"^\s+([A-Fa-f0-9:]{5,}).+?(/\d+)\s*$", re.M)
 
 
 @fix_docs
@@ -67,8 +64,7 @@ class ASADevice(BaseDevice):
         log.init(host=host)
 
     def _enable(self):
-        log.warning("_enable() is deprecated; use enable().",
-                    DeprecationWarning)
+        log.warning("_enable() is deprecated; use enable().", DeprecationWarning)
         self.enable()
         log.debug("Host %s: Device enabled", self.host)
 
@@ -81,8 +77,7 @@ class ASADevice(BaseDevice):
         self.enable()
 
         if not self.file_copy_remote_exists(src, dest, file_system):
-            fc: CiscoAsaFileTransfer = self._file_copy_instance(
-                src, dest, file_system)
+            fc: CiscoAsaFileTransfer = self._file_copy_instance(src, dest, file_system)
 
             try:
                 fc.establish_scp_conn()
@@ -92,17 +87,17 @@ class ASADevice(BaseDevice):
                 log.error("Host %s: EOF error.", self.host)
                 self.open()
             except Exception:
-                log.error(
-                    "Host %s: File transfer error %s", self.host, FileTransferError.default_message)
+                log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
                 raise FileTransferError
             finally:
-                log.error(
-                    "Host %s: An error occurred when transferring file %s.", self.host, src)
+                log.error("Host %s: An error occurred when transferring file %s.", self.host, src)
                 fc.close_scp_chan()
 
             if not self.file_copy_remote_exists(src, dest, file_system):
                 log.error(
-                    "Host %s: Attempted file copy, but could not validate file %s existed after transfer.", self.host, src
+                    "Host %s: Attempted file copy, but could not validate file %s existed after transfer.",
+                    self.host,
+                    src,
                 )
                 raise FileTransferError
 
@@ -111,13 +106,11 @@ class ASADevice(BaseDevice):
     def _file_copy_instance(
         self, src: str, dest: Optional[str] = None, file_system: str = "flash:"
     ) -> CiscoAsaFileTransfer:
-        log.info(
-            "Host %s: _file_copy_instance dest %s.", self.host, dest)
+        log.info("Host %s: _file_copy_instance dest %s.", self.host, dest)
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = CiscoAsaFileTransfer(
-            self.native, src, dest, file_system=file_system)
+        fc = CiscoAsaFileTransfer(self.native, src, dest, file_system=file_system)
         log.debug("Host %s: File copy instance %s.", self.host, fc)
         return fc
 
@@ -136,8 +129,7 @@ class ASADevice(BaseDevice):
 
         except AttributeError:
             # TODO: Get proper hostname
-            log.error(
-                "Host %s: File system not found with command 'dir'.", self.host)
+            log.error("Host %s: File system not found with command 'dir'.", self.host)
             raise FileSystemNotFoundError(hostname=self.host, command="dir")
 
         log.debug("Host %s: File system %s.", self.host, file_system)
@@ -199,8 +191,7 @@ class ASADevice(BaseDevice):
             command = "failover exec mate show ipv6 interface"
 
         show_ipv6_interface = self.show(command)
-        show_ipv6_interface_lines: List[str] = show_ipv6_interface.strip(
-        ).splitlines()
+        show_ipv6_interface_lines: List[str] = show_ipv6_interface.strip().splitlines()
         first_line = show_ipv6_interface_lines.pop(0)
         interface: str = first_line.split()[0]
         ipv6_addresses: List[IPv6Interface] = []
@@ -210,8 +201,7 @@ class ASADevice(BaseDevice):
             if line[0].isspace():
                 match = RE_IPV6_INTERFACE_MATCH.match(line)
                 if match:
-                    ipv6_addresses.append(IPv6Interface(
-                        f"{match.group(1)}{match.group(2)}"))
+                    ipv6_addresses.append(IPv6Interface(f"{match.group(1)}{match.group(2)}"))
             # update results mapping interface to matched IPv6 addresses and generate the next interface name
             else:
                 if ipv6_addresses:
@@ -223,38 +213,31 @@ class ASADevice(BaseDevice):
         if ipv6_addresses:
             results[interface] = ipv6_addresses
 
-        log.debug("Host %s: ip interfaces %s",
-                  self.host, results)
+        log.debug("Host %s: ip interfaces %s", self.host, results)
         return results
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version")
         if re.search(image_name, version_data):
-            log.info(
-                "Host %s: Image %s booted successfully.", self.host, image_name)
+            log.info("Host %s: Image %s booted successfully.", self.host, image_name)
             return True
 
-        log.info(
-            "Host %s: Image %s not booted successfully.", self.host, image_name)
+        log.info("Host %s: Image %s not booted successfully.", self.host, image_name)
         return False
 
     def _interfaces_detailed_list(self):
         ip_int = self.show("show interface")
-        ip_int_data = get_structured_data(
-            "cisco_asa_show_interface.template", ip_int)
+        ip_int_data = get_structured_data("cisco_asa_show_interface.template", ip_int)
 
-        log.debug(
-            "Host %s: interfaces detailed list %s.", self.host, ip_int_data)
+        log.debug("Host %s: interfaces detailed list %s.", self.host, ip_int_data)
         return ip_int_data
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
-            version_data = get_structured_data(
-                "cisco_asa_show_version.template", show_version_out)[0]
+            version_data = get_structured_data("cisco_asa_show_version.template", show_version_out)[0]
 
-            log.debug(
-                "Host %s: version data %s.", self.host, version_data)
+            log.debug("Host %s: version data %s.", self.host, version_data)
             return version_data
         except IndexError:
             log.error("Host %s: index error.", self.host)
@@ -264,25 +247,20 @@ class ASADevice(BaseDevice):
         if expect_string is None:
             response = self.native.send_command_timing(command)
         else:
-            response = self.native.send_command(
-                command, expect_string=expect_string)
+            response = self.native.send_command(command, expect_string=expect_string)
 
         if "% " in response or "Error:" in response:
-            log.error(
-                "Host %s: Error in %s with response: %s", self.host, response)
+            log.error("Host %s: Error in %s with response: %s", self.host, response)
             raise CommandError(command, response)
 
-        log.info(
-            "Host %s: Command %s was executed successfully with response: %s", self.host, command, response)
+        log.info("Host %s: Command %s was executed successfully with response: %s", self.host, command, response)
         return response
 
     def _show_vlan(self):
         show_vlan_out = self.show("show vlan")
-        show_vlan_data = get_structured_data(
-            "cisco_ios_show_vlan.template", show_vlan_out)
+        show_vlan_data = get_structured_data("cisco_ios_show_vlan.template", show_vlan_out)
 
-        log.debug(
-            "Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_data)
+        log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_data)
         return show_vlan_data
 
     def _uptime_components(self, uptime_full_string):
@@ -320,8 +298,7 @@ class ASADevice(BaseDevice):
                 pass
 
         # TODO: Get proper hostname parameter
-        log.error(
-            "Host %s: Device timed out while rebooting.", self.host)
+        log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
     def _wait_for_peer_reboot(self, acceptable_states: Iterable[str], timeout: int = 3600) -> None:
@@ -354,7 +331,10 @@ class ASADevice(BaseDevice):
         while time.time() - start < timeout:
             if self.peer_redundancy_state == "failed":
                 log.error(
-                    "Host %s: Redundancy state for device {self.host} did not form properly to desired state: %s.", self.host, self.host, self.peer_redundancy_state
+                    "Host %s: Redundancy state for device {self.host} did not form properly to desired state: %s.",
+                    self.host,
+                    self.host,
+                    self.peer_redundancy_state,
                 )
                 break
 
@@ -364,10 +344,8 @@ class ASADevice(BaseDevice):
             time.sleep(1)
 
         # TODO: Get proper hostname parameter
-        log.error(
-            "Host %s: reboot timeout error with timeout %s.", self.host, timeout)
-        raise RebootTimeoutError(
-            hostname=f"{self.host}-peer", wait_time=timeout)
+        log.error("Host %s: reboot timeout error with timeout %s.", self.host, timeout)
+        raise RebootTimeoutError(hostname=f"{self.host}-peer", wait_time=timeout)
 
     def backup_running_config(self, filename):
         """
@@ -379,8 +357,7 @@ class ASADevice(BaseDevice):
         with open(filename, "w") as f:
             f.write(self.running_config)
 
-        log.debug(
-            "Host %s: Running config backed up to %s.", self.host, self.running_config)
+        log.debug("Host %s: Running config backed up to %s.", self.host, self.running_config)
 
     @property
     def boot_options(self):
@@ -400,8 +377,7 @@ class ASADevice(BaseDevice):
         else:
             boot_image = None
 
-        log.debug(
-            "Host %s: the boot options are %s", self.host, dict(sys=boot_image))
+        log.debug("Host %s: the boot options are %s", self.host, dict(sys=boot_image))
         return dict(sys=boot_image)
 
     def checkpoint(self, checkpoint_file):
@@ -411,8 +387,7 @@ class ASADevice(BaseDevice):
         Args:
             checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
         """
-        log.debug(
-            "Host %s: checkpoint is %s.", self.host, checkpoint_file)
+        log.debug("Host %s: checkpoint is %s.", self.host, checkpoint_file)
         self.save(filename=checkpoint_file)
 
     def close(self):
@@ -432,8 +407,7 @@ class ASADevice(BaseDevice):
         self._enter_config()
         self._send_command(command)
         self.native.exit_config_mode()
-        log.info(
-            "Host %s: Device configured with command %s.", self.host, command)
+        log.info("Host %s: Device configured with command %s.", self.host, command)
 
     def config_list(self, commands):
         """
@@ -453,12 +427,13 @@ class ASADevice(BaseDevice):
                 self._send_command(command)
             except CommandError as e:
                 log.error(
-                    "Host %s: Command error with commands: %s and error message %s", self.host, entered_commands, e.cli_error_msg
+                    "Host %s: Command error with commands: %s and error message %s",
+                    self.host,
+                    entered_commands,
+                    e.cli_error_msg,
                 )
-                raise CommandListError(
-                    entered_commands, command, e.cli_error_msg)
-        log.info(
-            "Host %s: Configured with commands: %s", self.host, entered_commands)
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
+        log.info("Host %s: Configured with commands: %s", self.host, entered_commands)
         self.native.exit_config_mode()
 
     @property
@@ -484,8 +459,7 @@ class ASADevice(BaseDevice):
                 break
 
         # TODO: Raise custom exception for when connected_interface is not discovered
-        log.debug(
-            "Host %s: Interface connected to %s is %s.", self.host, address, connected_interface)
+        log.debug("Host %s: Interface connected to %s is %s.", self.host, address, connected_interface)
         return connected_interface
 
     def enable(self):
@@ -529,15 +503,13 @@ class ASADevice(BaseDevice):
             device = self.peer_device
 
         if not device.is_active():
-            log.error(
-                "Host %s: Unable to establish a connection with the active device", self.host)
+            log.error("Host %s: Unable to establish a connection with the active device", self.host)
             raise FileTransferError
 
         try:
             device.config("ssh scopy enable")
         except CommandError:
-            log.error(
-                "Host %s: Unable to enable scopy on the device", self.host)
+            log.error("Host %s: Unable to enable scopy on the device", self.host)
             raise FileTransferError
 
         log.info("Host %s: ssh copy enabled.", self.host)
@@ -621,12 +593,10 @@ class ASADevice(BaseDevice):
 
         fc = self._file_copy_instance(src, dest, file_system=file_system)
         if fc.check_file_exists() and fc.compare_md5():
-            log.debug(
-                "Host %s: File %s already exists on remote.", self.host, src)
+            log.debug("Host %s: File %s already exists on remote.", self.host, src)
             return True
 
-        log.debug(
-            "Host %s: File %s does not already exist on remote.", self.host, src)
+        log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
     def install_os(self, image_name, **vendor_specifics):
@@ -648,17 +618,13 @@ class ASADevice(BaseDevice):
             self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                log.error(
-                    "Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(hostname=self.facts.get(
-                    "hostname"), desired_boot=image_name)
+                log.error("Host %s: OS install error for image %s", self.host, image_name)
+                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
 
-            log.info(
-                "Host %s: OS image %s installed successfully.", self.host, image_name)
+            log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
-        log.info(
-            "Host %s: OS image %s not installed.", self.host, image_name)
+        log.info("Host %s: OS image %s not installed.", self.host, image_name)
         return False
 
     @property
@@ -685,12 +651,10 @@ class ASADevice(BaseDevice):
             ip = ip_address(self.host)
         except ValueError:
             # Assume hostname was used, and retrieve resolved IP from paramiko transport
-            log.error(
-                "Host %s: value error for ip address used to establish connection.", self.host)
+            log.error("Host %s: value error for ip address used to establish connection.", self.host)
             ip = ip_address(self.native.remote_conn.transport.getpeername()[0])
 
-        log.debug(
-            "Host %s: ip address used to establish connection %s.", self.host, ip)
+        log.debug("Host %s: ip address used to establish connection %s.", self.host, ip)
         return ip
 
     @property
@@ -707,8 +671,7 @@ class ASADevice(BaseDevice):
             {'outside': [IPv4Interface('10.132.8.6/24')], 'inside': [IPv4Interface('10.1.1.2/23')]}
             >>>
         """
-        log.debug(
-            "Host %s: ipv4 addresses of the devices interfaces %s.", self.host, self._get_ipv4_addresses('self'))
+        log.debug("Host %s: ipv4 addresses of the devices interfaces %s.", self.host, self._get_ipv4_addresses("self"))
         return self._get_ipv4_addresses("self")
 
     @property
@@ -725,8 +688,7 @@ class ASADevice(BaseDevice):
             {'outside': [IPv6Interface('fe80::5200:ff:fe0a:1')]}
             >>>
         """
-        log.debug(
-            "Host %s: ipv6 addresses of the devices interfaces %s.", self.host, self._get_ipv6_addresses('self'))
+        log.debug("Host %s: ipv6 addresses of the devices interfaces %s.", self.host, self._get_ipv6_addresses("self"))
         return self._get_ipv6_addresses("self")
 
     @property
@@ -751,8 +713,7 @@ class ASADevice(BaseDevice):
         """
         protocol = f"ipv{self.ip_address.version}"
 
-        log.debug(
-            "Host %s: IP protocol for paramiko is %s.", self.host)
+        log.debug("Host %s: IP protocol for paramiko is %s.", self.host)
         return protocol
 
     def is_active(self):
@@ -791,8 +752,7 @@ class ASADevice(BaseDevice):
             )
             self._connected = True
 
-        log.debug(
-            "Host %s: Connection to controller was opened successfully.", self.host)
+        log.debug("Host %s: Connection to controller was opened successfully.", self.host)
 
     @property
     def peer_device(self) -> "ASADevice":
@@ -809,8 +769,7 @@ class ASADevice(BaseDevice):
         else:
             self._peer_device.open()
 
-        log.debug(
-            "Host %s: Peer device %s.", self.host, self._peer_device)
+        log.debug("Host %s: Peer device %s.", self.host, self._peer_device)
         return self._peer_device
 
     @property
@@ -838,8 +797,7 @@ class ASADevice(BaseDevice):
         peer_ip_addresses = peer_ip_property[self.connected_interface]
         for address in peer_ip_addresses:
             if self_address in address.network:
-                log.debug("Host %s: Peer IP %s.",
-                          self.host, address.ip)
+                log.debug("Host %s: Peer IP %s.", self.host, address.ip)
                 return address.ip
 
     @property
@@ -896,31 +854,25 @@ class ASADevice(BaseDevice):
         try:
             show_failover = self.show("show failover")
         except CommandError:
-            log.error(
-                "Host %s: Peer redundancy state command error.", self.host)
+            log.error("Host %s: Peer redundancy state command error.", self.host)
             return None
 
         if "Failover On" in show_failover:
             peer_failover_data = show_failover.split("Other host:")[1]
-            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(
-                peer_failover_data)
+            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(peer_failover_data)
             if not show_failover_groups:
-                re_show_failover_peer_state = RE_SHOW_FAILOVER_STATE.search(
-                    peer_failover_data)
+                re_show_failover_peer_state = RE_SHOW_FAILOVER_STATE.search(peer_failover_data)
                 peer_redundancy_state = re_show_failover_peer_state.group(1)
             else:
                 if "Active" in show_failover_groups:
                     peer_redundancy_state = "active"
                 else:
-                    peer_redundancy_state_counter = Counter(
-                        show_failover_groups)
-                    peer_redundancy_state = peer_redundancy_state_counter.most_common()[
-                        0][0]
+                    peer_redundancy_state_counter = Counter(show_failover_groups)
+                    peer_redundancy_state = peer_redundancy_state_counter.most_common()[0][0]
         else:
             peer_redundancy_state = "disabled"
 
-        log.debug(
-            "Host %s: Peer redundancy state: %s.", self.host, peer_redundancy_state)
+        log.debug("Host %s: Peer redundancy state: %s.", self.host, peer_redundancy_state)
         return peer_redundancy_state.lower()
 
     def reboot(self, timer=0, **kwargs):
@@ -939,12 +891,10 @@ class ASADevice(BaseDevice):
             >>>
         """
         if kwargs.get("confirm"):
-            log.warning(
-                "Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         def handler(signum, frame):
-            log.error(
-                "Host %s: Interrupting after reload.", self.host)
+            log.error("Host %s: Interrupting after reload.", self.host)
             raise RebootSignal
 
         signal.signal(signal.SIGALRM, handler)
@@ -1000,8 +950,7 @@ class ASADevice(BaseDevice):
         self.show("failover reload-standby")
         self._wait_for_peer_reboot(**kwargs)
 
-        log.debug(
-            "Host %s: reboot standby with timeout %s.", self.host, timeout)
+        log.debug("Host %s: reboot standby with timeout %s.", self.host, timeout)
 
     @property
     def redundancy_mode(self):
@@ -1025,8 +974,7 @@ class ASADevice(BaseDevice):
 
         show_failover_first_line = show_failover.splitlines()[0].strip()
         redundancy_mode = show_failover_first_line.lower().lstrip("failover")
-        log.debug(
-            "Host %s: Redundancy mode: %s", self.host, redundancy_mode.lstrip())
+        log.debug("Host %s: Redundancy mode: %s", self.host, redundancy_mode.lstrip())
         return redundancy_mode.lstrip()
 
     @property
@@ -1051,30 +999,25 @@ class ASADevice(BaseDevice):
         try:
             show_failover = self.show("show failover")
         except CommandError:
-            log.error(
-                "Host %s: Redundancy state command error.", self.host)
+            log.error("Host %s: Redundancy state command error.", self.host)
             return None
 
         if "Failover On" in show_failover:
             failover_data = show_failover.split("Other host:")[0]
-            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(
-                failover_data)
+            show_failover_groups = RE_SHOW_FAILOVER_GROUPS.findall(failover_data)
             if not show_failover_groups:
-                re_show_failover_state = RE_SHOW_FAILOVER_STATE.search(
-                    failover_data)
+                re_show_failover_state = RE_SHOW_FAILOVER_STATE.search(failover_data)
                 redundancy_state = re_show_failover_state.group(1)
             else:
                 if "Active" in show_failover_groups:
                     redundancy_state = "active"
                 else:
                     redundancy_state_counter = Counter(show_failover_groups)
-                    redundancy_state = redundancy_state_counter.most_common()[
-                        0][0]
+                    redundancy_state = redundancy_state_counter.most_common()[0][0]
         else:
             redundancy_state = "disabled"
 
-        log.debug(
-            "Host %s: Redundancy state %s.", self.host, redundancy_state.lower())
+        log.debug("Host %s: Redundancy state %s.", self.host, redundancy_state.lower())
         return redundancy_state.lower()
 
     def rollback(self, rollback_to):
@@ -1139,8 +1082,7 @@ class ASADevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system))
         if re.search(image_name, file_system_files) is None:
-            log.error(
-                "Host %s: File not found error for image %s.", self.host, image_name)
+            log.error("Host %s: File not found error for image %s.", self.host, image_name)
             raise NTCFileNotFoundError(
                 # TODO: Update to use hostname
                 hostname=self.host,
@@ -1150,21 +1092,18 @@ class ASADevice(BaseDevice):
 
         current_images = current_boot.splitlines()
         commands_to_exec = ["no {0}".format(image) for image in current_images]
-        commands_to_exec.append(
-            "boot system {0}/{1}".format(file_system, image_name))
+        commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
         self.config_list(commands_to_exec)
 
         self.save()
         if self.boot_options["sys"] != image_name:
-            log.error(
-                "Host %s: Setting boot command did not yield expected results", self.host)
+            log.error("Host %s: Setting boot command did not yield expected results", self.host)
             raise CommandError(
                 command="boot system {0}/{1}".format(file_system, image_name),
                 message="Setting boot command did not yield expected results",
             )
 
-        log.info(
-            "Host %s: boot options have been set to %s", self.host, image_name)
+        log.info("Host %s: boot options have been set to %s", self.host, image_name)
 
     def show(self, command, expect_string=None):
         """
@@ -1178,8 +1117,7 @@ class ASADevice(BaseDevice):
             str: Output from running command on device.
         """
         self.enable()
-        log.debug(
-            "Host %s: Successfully executed command 'show' with responses.", self.host)
+        log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
@@ -1205,13 +1143,14 @@ class ASADevice(BaseDevice):
                 responses.append(self._send_command(command))
             except CommandError as e:
                 log.error(
-                    "Host %s: Command error for commands %s with message %s.", self.host, entered_commands, e.cli_error_msg
+                    "Host %s: Command error for commands %s with message %s.",
+                    self.host,
+                    entered_commands,
+                    e.cli_error_msg,
                 )
-                raise CommandListError(
-                    entered_commands, command, e.cli_error_msg)
+                raise CommandListError(entered_commands, command, e.cli_error_msg)
 
-        log.debug(
-            "Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
+        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
         return responses
 
     @property

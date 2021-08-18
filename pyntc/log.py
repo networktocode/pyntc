@@ -1,19 +1,4 @@
-"""
-Logging utilities for Pyntc.
-============================
-
-This module contains helpers and wrappers for making logging more consistent
-across applications.
-How to use me:
-
-    >>> from . import log
-    >>> log.init()
-    2020-07-21 10:35:40,860 [INFO] pyntc: Logging initialized.
-    >>> log.info("NTC")
-    2020-07-21 10:39:40,463 [INFO] pyntc: NTC
-
-"""
-
+"""Logging utilities for Pyntc."""
 import os
 import logging
 
@@ -62,8 +47,6 @@ def init(**kwargs):
     debug = os.environ.get("DEBUG", None)
     log_format = DEBUG_FORMAT if debug else FORMAT
 
-    # TODO(drx): change this to a log_level variable that can be taken from configuration
-    # if not set in the env var
     log_level = getattr(logging, os.environ.get("LOG_LEVEL", "info").upper())
     log_level = logging.DEBUG if debug else log_level
 
@@ -71,11 +54,11 @@ def init(**kwargs):
     kwargs.setdefault("level", log_level)
 
     logging.basicConfig(**kwargs)
-    info("Logging initialized for host %s.", kwargs.get('host'))
+    info("Logging initialized for host %s.", kwargs.get("host"))
 
 
 def logger(level):
-    """Wrapper around logger methods.
+    """Wrap around logger methods.
 
     Args:
         level (str): defines the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)

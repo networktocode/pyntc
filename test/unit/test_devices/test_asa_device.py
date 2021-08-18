@@ -87,8 +87,7 @@ class TestASADevice:
             self.device.config(command)
 
     def test_config_list(self):
-        commands = ["crypto key generate rsa modulus 2048",
-                    "aaa authentication ssh console LOCAL"]
+        commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
         self.device.config_list(commands)
 
         for cmd in commands:
@@ -141,8 +140,7 @@ class TestASADevice:
         result = self.device.save()
 
         assert result
-        self.device.native.send_command_timing.assert_any_call(
-            "copy running-config startup-config")
+        self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
     @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
@@ -201,8 +199,7 @@ class TestASADevice:
         self.device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
         boot_options = self.device.boot_options
         assert boot_options == {"sys": BOOT_IMAGE}
-        self.device.native.send_command_timing.assert_called_with(
-            "show boot | i BOOT variable")
+        self.device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_none(self, mock_boot):
@@ -254,8 +251,7 @@ class TestASADevice:
 
     def test_checkpoint(self):
         self.device.checkpoint("good_checkpoint")
-        self.device.native.send_command_timing.assert_any_call(
-            "copy running-config good_checkpoint")
+        self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
 
     def test_running_config(self):
         expected = self.device.show("show running config")
@@ -382,7 +378,7 @@ def test__file_copy_transfer_file_does_not_transfer(
     mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
     mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
     mock_log.assert_called_with(
-        'Host %s: Attempted file copy, but could not validate file %s existed after transfer.', 'host', 'a.txt'
+        "Host %s: Attempted file copy, but could not validate file %s existed after transfer.", "host", "a.txt"
     )
 
 
@@ -392,8 +388,7 @@ def test__get_ipv4_addresses(host, command_prefix, asa_show):
     device = asa_show([f"{command.replace(' ', '_')}.txt"])
     actual = device._get_ipv4_addresses(host)
     device.show.assert_called_with(f"{command_prefix}{command}")
-    expected = {"inside": [ip_interface(
-        "10.1.1.1/24")], "outside": [ip_interface("10.2.2.1/27")]}
+    expected = {"inside": [ip_interface("10.1.1.1/24")], "outside": [ip_interface("10.2.2.1/27")]}
     assert actual == expected
 
 
@@ -412,8 +407,7 @@ def test__get_ipv6_addresses(host, command_prefix, asa_show):
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test__wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
-    mock_peer_redundancy_state.side_effect = [
-        STANDBY_READY, FAILED, FAILED, STANDBY_READY]
+    mock_peer_redundancy_state.side_effect = [STANDBY_READY, FAILED, FAILED, STANDBY_READY]
     asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
     assert mock_peer_redundancy_state.call_count == 4
 
@@ -429,8 +423,7 @@ def test__wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test__wait_for_peer_reboot_fail_state_error(mock_peer_redundancy_state, asa_device):
-    mock_peer_redundancy_state.side_effect = [
-        FAILED, FAILED, COLD_STANDBY, COLD_STANDBY]
+    mock_peer_redundancy_state.side_effect = [FAILED, FAILED, COLD_STANDBY, COLD_STANDBY]
     with pytest.raises(asa_module.RebootTimeoutError):
         asa_device._wait_for_peer_reboot([STANDBY_READY], 1)
 
@@ -497,8 +490,7 @@ def test_enable_scp_device_not_active(mock_log, mock_save, mock_config, mock_pee
     mock_peer_device.return_value = asa_device
     with pytest.raises(asa_module.FileTransferError):
         asa_device.enable_scp()
-    mock_log.assert_called_once_with(
-        'Host %s: Unable to establish a connection with the active device', 'host')
+    mock_log.assert_called_once_with("Host %s: Unable to establish a connection with the active device", "host")
     mock_is_active.assert_has_calls([mock.call()] * 2)
     mock_peer_device.assert_called()
     mock_config.assert_not_called()
@@ -515,8 +507,7 @@ def test_enable_scp_device_not_active(mock_log, mock_save, mock_config, mock_pee
 def test_enable_scp_enable_fail(mock_log, mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
     with pytest.raises(asa_module.FileTransferError):
         asa_device.enable_scp()
-    mock_log.assert_called_once_with(
-        'Host %s: Unable to enable scopy on the device', 'host')
+    mock_log.assert_called_once_with("Host %s: Unable to enable scopy on the device", "host")
     mock_config.assert_called_with("ssh scopy enable")
     mock_save.assert_not_called()
 
@@ -587,8 +578,7 @@ def test_ip_address_from_hostname(asa_device):
 
 @mock.patch.object(ASADevice, "_get_ipv4_addresses")
 def test_ipv4_addresses(mock_get_ipv4_addresses, asa_device):
-    expected = {"outside": [ip_interface(
-        "10.132.8.6/24")], "inside": [ip_interface("10.1.1.2/23")]}
+    expected = {"outside": [ip_interface("10.132.8.6/24")], "inside": [ip_interface("10.1.1.2/23")]}
     mock_get_ipv4_addresses.return_value = expected
     actual = asa_device.ipv4_addresses
     assert actual == expected
@@ -624,8 +614,7 @@ def test_ip_protocol(mock_ip_address, ip, ip_version, asa_device):
         (COLD_STANDBY, False),
         (None, True),
     ),
-    ids=(ACTIVE, "standby_ready", NEGOTIATION,
-         FAILED, "cold_standby", "unsupported"),
+    ids=(ACTIVE, "standby_ready", NEGOTIATION, FAILED, "cold_standby", "unsupported"),
 )
 def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected):
     mock_redundancy_state.return_value = redundancy_state
@@ -701,8 +690,7 @@ def test_peer_ip_address(
 
 @mock.patch.object(ASADevice, "_get_ipv4_addresses")
 def test_peer_ipv4_addresses(mock_get_ipv4_addresses, asa_device):
-    expected = {"outside": [ip_interface(
-        "10.132.8.7/24")], "inside": [ip_interface("10.1.1.3/23")]}
+    expected = {"outside": [ip_interface("10.132.8.7/24")], "inside": [ip_interface("10.1.1.3/23")]}
     mock_get_ipv4_addresses.return_value = expected
     actual = asa_device.peer_ipv4_addresses
     assert actual == expected
@@ -758,26 +746,22 @@ def test_reboot_standby(mock_peer_redundancy_state, mock_wait_for_peer_reboot, a
     device = asa_show([""])
     assert device.reboot_standby() is None
     mock_peer_redundancy_state.assert_called_once()
-    mock_wait_for_peer_reboot.assert_called_with(
-        acceptable_states=[STANDBY_READY])
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[STANDBY_READY])
 
 
 @mock.patch.object(ASADevice, "_wait_for_peer_reboot")
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
 def test_reboot_standby_pass_args(mock_peer_redundancy_state, mock_wait_for_peer_reboot, asa_show):
     device = asa_show([""])
-    device.reboot_standby(
-        acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+    device.reboot_standby(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
     mock_peer_redundancy_state.assert_not_called()
-    mock_wait_for_peer_reboot.assert_called_with(
-        acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
+    mock_wait_for_peer_reboot.assert_called_with(acceptable_states=[COLD_STANDBY, STANDBY_READY], timeout=1)
 
 
 @mock.patch.object(ASADevice, "_wait_for_peer_reboot")
 def test_reboot_standby_error(mock_wait_for_peer_reboot, asa_show):
     device = asa_show([""])
-    mock_wait_for_peer_reboot.side_effect = [
-        asa_module.RebootTimeoutError(device.host, 1)]
+    mock_wait_for_peer_reboot.side_effect = [asa_module.RebootTimeoutError(device.host, 1)]
     with pytest.raises(asa_module.RebootTimeoutError):
         device.reboot_standby(acceptable_states=[STANDBY_READY], timeout=1)
 
@@ -811,8 +795,7 @@ def test_redundancy_mode(side_effect, expected, asa_show):
         ("show_failover_groups_standby_active.txt", STANDBY_READY),
         (asa_module.CommandError("show failover", r"% invalid command"), None),
     ),
-    ids=(ACTIVE, "standby", "disabled", NEGOTIATION, "active_active",
-         "active_standby", "standby_active", "none"),
+    ids=(ACTIVE, "standby", "disabled", NEGOTIATION, "active_active", "active_standby", "standby_active", "none"),
 )
 def test_redundancy_state(side_effect, expected, asa_show):
     device = asa_show([side_effect])
@@ -832,8 +815,7 @@ def test_send_command_expect(asa_send_command):
     command = "send_command_expect"
     device = asa_send_command([f"{command}.txt"])
     device._send_command(command, expect_string="Continue?")
-    device.native.send_command.assert_called_with(
-        "send_command_expect", expect_string="Continue?")
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?")
 
 
 def test_send_command_error(asa_send_command_timing):

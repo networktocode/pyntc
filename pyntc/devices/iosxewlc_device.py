@@ -26,7 +26,7 @@ class IOSXEWLCDevice(IOSDevice):
             except Exception:  # noqa E722 # nosec
                 return
 
-        log.error(f"Host {self.hostname}: Wait reboot timeout error with timeout {timeout}")
+        log.error("Host %s: Wait reboot timeout error with timeout %s", self.host, timeout)
         raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _wait_for_device_reboot(self, timeout=5400):
@@ -35,12 +35,12 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.open()
                 self.show("show version")
-                log.debug(f"Host {self.host}: Device rebooted.")
+                log.debug("Host %s: Device rebooted.", self.host)
                 return
             except Exception:  # noqa E722 # nosec
                 pass
 
-        log.error(f"Host {self.host}: Device timed out while rebooting.")
+        log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def install_os(self, image_name, install_mode_delay_factor=20, **vendor_specifics):
@@ -87,13 +87,13 @@ class IOSXEWLCDevice(IOSDevice):
 
             # Verify the OS level
             if not self._image_booted(image_name):
-                log.error(f"Host {self.host}: OS install error for image {image_name}")
+                log.error("Host %s: OS install error for image %s", self.host, image_name)
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
-            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
+            log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
-        log.info(f"Host {self.host}: OS image {image_name} not installed.")
+        log.info("Host %s: OS image %s not installed.", self.host, image_name)
         return False
 
     def show(self, command, expect_string=None, **netmiko_args):
@@ -107,5 +107,5 @@ class IOSXEWLCDevice(IOSDevice):
             str: Output of command.
         """
         self.enable()
-        log.debug(f"Host {self.host}: Successfully executed command 'show'.")
+        log.debug("Host %s: Successfully executed command 'show'.", self.host)
         return self._send_command(command, expect_string=expect_string, **netmiko_args)

@@ -45,10 +45,10 @@ class NXOSDevice(BaseDevice):
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version", raw_text=True)
         if re.search(image_name, version_data):
-            log.info(f"Host {self.host}: Image {image_name} booted successfully.")
+            log.info("Host %s: Image %s booted successfully.", self.host, image_name)
             return True
 
-        log.info(f"Host {self.host}: Image {image_name} not booted successfully.")
+        log.info("Host %s: Image %s not booted successfully.", self.host, image_name)
         return False
 
     def _wait_for_device_reboot(self, timeout=600):
@@ -57,12 +57,12 @@ class NXOSDevice(BaseDevice):
             try:
                 self.refresh_facts()
                 if self.uptime < 180:
-                    log.debug(f"Host {self.host}: Device rebooted.")
+                    log.debug("Host %s: Device rebooted.", self.host)
                     return
             except:  # noqa E722 # nosec
                 pass
 
-        log.error(f"Host {self.host}: Device timed out while rebooting.")
+        log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def backup_running_config(self, filename):
@@ -72,7 +72,7 @@ class NXOSDevice(BaseDevice):
             filename (str): Name of backup file.
         """
         self.native.backup_running_config(filename)
-        log.debug(f"Host {self.host}: Running config backed up.")
+        log.debug("Host %s: Running config backed up.", self.host)
 
     @property
     def boot_options(self):
@@ -82,7 +82,7 @@ class NXOSDevice(BaseDevice):
             dict: e.g . {"kick": "router_kick.img", "sys": "router_sys.img"}
         """
         boot_options = self.native.get_boot_options()
-        log.debug(f"Host {self.host}: the boot options are {boot_options}")
+        log.debug("Host %s: the boot options are %s", self.host, boot_options)
         return boot_options
 
     def checkpoint(self, filename):
@@ -91,7 +91,7 @@ class NXOSDevice(BaseDevice):
         Args:
             filename (str): The filename to save the checkpoint on the remote device.
         """
-        log.debug(f"Host {self.host}: checkpoint is {filename}.")
+        log.debug("Host %s: checkpoint is %s.", self.host, filename)
         return self.native.checkpoint(filename)
 
     def close(self):  # noqa: D401
@@ -109,9 +109,9 @@ class NXOSDevice(BaseDevice):
         """
         try:
             self.native.config(command)
-            log.info(f"Host {self.host}: Device configured with command {command}.")
+            log.info("Host %s: Device configured with command %s.", self.host, command)
         except CLIError as e:
-            log.error(f"Host {self.host}: Command error with commands: {command} and error message {str(e)}")
+            log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
             raise CommandError(command, str(e))
 
     def config_list(self, commands):
@@ -125,9 +125,9 @@ class NXOSDevice(BaseDevice):
         """
         try:
             self.native.config_list(commands)
-            log.info(f"Host {self.host}: Configured with commands: {commands}")
+            log.info("Host %s: Configured with commands: %s", self.host, commands)
         except CLIError as e:
-            log.error(f"Host {self.host}: Command error with commands: {commands} and error message {str(e)}")
+            log.error("Host %s: Command error with commands: %s and error message %s", self.host, commands, str(e))
             raise CommandListError(commands, e.command, str(e))
 
     @property
@@ -140,7 +140,7 @@ class NXOSDevice(BaseDevice):
         if self._uptime is None:
             self._uptime = self.native.facts.get("uptime")
 
-        log.debug(f"Host {self.host}: Uptime {self._uptime}")
+        log.debug("Host %s: Uptime %s", self.host, self._uptime)
         return self._uptime
 
     @property
@@ -153,7 +153,7 @@ class NXOSDevice(BaseDevice):
         if self._hostname is None:
             self._hostname = self.native.facts.get("hostname")
 
-        log.debug(f"Host {self.host}: Hostname {self._hostname}")
+        log.debug("Host %s: Hostname %s", self.host, self._hostname)
         return self._hostname
 
     @property
@@ -166,7 +166,7 @@ class NXOSDevice(BaseDevice):
         if self._interfaces is None:
             self._interfaces = self.native.facts.get("interfaces")
 
-        log.debug(f"Host {self.host}: Interfaces {self._interfaces}")
+        log.debug("Host %s: Interfaces %s", self.host, self._interfaces)
         return self._interfaces
 
     @property
@@ -179,7 +179,7 @@ class NXOSDevice(BaseDevice):
         if self._vlans is None:
             self._vlans = self.native.facts.get("vlans")
 
-        log.debug(f"Host {self.host}: Vlans {self._vlans}")
+        log.debug("Host %s: Vlans %s", self.host, self._vlans)
         return self._vlans
 
     @property
@@ -192,7 +192,7 @@ class NXOSDevice(BaseDevice):
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
 
-        log.debug(f"Host {self.host}: FQDN {self._fqdn}")
+        log.debug("Host %s: FQDN %s", self.host, self._fqdn)
         return self._fqdn
 
     @property
@@ -205,7 +205,7 @@ class NXOSDevice(BaseDevice):
         if self._model is None:
             self._model = self.native.facts.get("model")
 
-        log.debug(f"Host {self.host}: Model {self._model}")
+        log.debug("Host %s: Model %s", self.host, self._model)
         return self._model
 
     @property
@@ -218,7 +218,7 @@ class NXOSDevice(BaseDevice):
         if self._os_version is None:
             self._os_version = self.native.facts.get("os_version")
 
-        log.debug(f"Host {self.host}: OS version {self._os_version}")
+        log.debug("Host %s: OS version %s", self.host, self._os_version)
         return self._os_version
 
     @property
@@ -231,7 +231,7 @@ class NXOSDevice(BaseDevice):
         if self._serial_number is None:
             self._serial_number = self.native.facts.get("serial_number")
 
-        log.debug(f"Host {self.host}: Serial number {self._serial_number}")
+        log.debug("Host %s: Serial number %s", self.host, self._serial_number)
         return self._serial_number
 
     def file_copy(self, src, dest=None, file_system="bootflash:"):
@@ -249,15 +249,17 @@ class NXOSDevice(BaseDevice):
             dest = dest or os.path.basename(src)
             try:
                 file_copy = self.native.file_copy(src, dest, file_system=file_system)
-                log.info(f"Host {self.host}: File {src} transferred successfully.")
+                log.info("Host %s: File %s transferred successfully.", self.host, src)
                 if not self.file_copy_remote_exists(src, dest, file_system):
                     log.error(
-                        f"Host {self.host}: Attempted file copy, but could not validate file existed after transfer {FileTransferError.default_message}"
+                        "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
+                        self.host,
+                        FileTransferError.default_message,
                     )
                     raise FileTransferError
                 return file_copy
             except NXOSFileTransferError as e:
-                log.error(f"Host {self.host}: NXOS file transfer error {str(e)}")
+                log.error("Host %s: NXOS file transfer error %s", self.host, str(e))
                 raise FileTransferError
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
@@ -274,7 +276,10 @@ class NXOSDevice(BaseDevice):
         """
         dest = dest or os.path.basename(src)
         log.debug(
-            f"Host {self.host}: File {src} exists on remote {self.native.file_copy_remote_exists(src, dest, file_system=file_system)}."
+            "Host %s: File %s exists on remote %s.",
+            self.host,
+            src,
+            self.native.file_copy_remote_exists(src, dest, file_system=file_system),
         )
         return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
 
@@ -295,14 +300,14 @@ class NXOSDevice(BaseDevice):
             self.set_boot_options(image_name, **vendor_specifics)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
-                log.error(f"Host {self.host}: OS install error for image {image_name}")
+                log.error("Host %s: OS install error for image %s", self.host, image_name)
                 raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
             self.save()
 
-            log.info(f"Host {self.host}: OS image {image_name} installed successfully.")
+            log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
-        log.info(f"Host {self.host}: OS image {image_name} not installed.")
+        log.info("Host %s: OS image %s not installed.", self.host, image_name)
         return False
 
     def open(self):  # noqa: D401
@@ -328,11 +333,11 @@ class NXOSDevice(BaseDevice):
             log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         if timer != 0:
-            log.error(f"Host {self.host}: Reboot time error for device type {self.device_type}.")
+            log.error("Host %s: Reboot time error for device type %s.", self.host, self.device_type)
             raise RebootTimerError(self.device_type)
 
         self.native.reboot(confirm=True)
-        log.info(f"Host {self.host}: Device rebooted.")
+        log.info("Host %s: Device rebooted.", self.host)
 
     def rollback(self, filename):
         """Rollback configuration to specified file.
@@ -345,9 +350,9 @@ class NXOSDevice(BaseDevice):
         """
         try:
             self.native.rollback(filename)
-            log.info(f"Host {self.host}: Rollback to {filename}.")
+            log.info("Host %s: Rollback to %s.", self.host, filename)
         except CLIError:
-            log.error(f"Host {self.host}: Rollback unsuccessful. {filename} may not exist.")
+            log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, filename)
             raise RollbackError("Rollback unsuccessful, %s may not exist." % filename)
 
     @property
@@ -357,7 +362,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             str: Running configuration of device.
         """
-        log.debug(f"Host {self.host}: Show running config.")
+        log.debug("Host %s: Show running config.", self.host)
         return self.native.running_config
 
     def save(self, filename="startup-config"):
@@ -369,7 +374,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             bool: True if configuration is saved.
         """
-        log.debug(f"Host {self.host}: Copy running config with name {filename}.")
+        log.debug("Host %s: Copy running config with name %s.", self.host, filename)
         return self.native.save(filename=filename)
 
     def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
@@ -388,12 +393,12 @@ class NXOSDevice(BaseDevice):
 
         file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            log.error(f"Host {self.host}: File not found error for image {image_name}.")
+            log.error("Host %s: File not found error for image %s.", self.host, image_name)
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
 
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
-                log.error(f"Host {self.host}: File not found error for image {image_name}.")
+                log.error("Host %s: File not found error for image %s.", self.host, image_name)
                 raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, dir=file_system)
 
             kickstart = file_system + kickstart
@@ -403,7 +408,7 @@ class NXOSDevice(BaseDevice):
         upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
         self.native.timeout = 30
 
-        log.info(f"Host {self.host}: boot options have been set to {upgrade_result}")
+        log.info("Host %s: boot options have been set to %s", self.host, upgrade_result)
         return upgrade_result
 
     def set_timeout(self, timeout):
@@ -412,7 +417,7 @@ class NXOSDevice(BaseDevice):
         Args:
             timeout (int): Timeout value.
         """
-        log.debug(f"Host {self.host}: Timeout set to {timeout}.")
+        log.debug("Host %s: Timeout set to %s.", self.host, timeout)
         self.native.timeout = timeout
 
     def show(self, command, raw_text=False):
@@ -429,10 +434,10 @@ class NXOSDevice(BaseDevice):
             str: Results of the command ran.
         """
         try:
-            log.debug(f"Host {self.host}: Successfully executed command 'show'.")
+            log.debug("Host %s: Successfully executed command 'show'.", self.host)
             return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
-            log.error(f"Host {self.host}: Command error {str(e)}.")
+            log.error("Host %s: Command error %s.", self.host, str(e))
             raise CommandError(command, str(e))
 
     def show_list(self, commands, raw_text=False):
@@ -449,10 +454,10 @@ class NXOSDevice(BaseDevice):
             list: Outputs of all the commands ran on the device.
         """
         try:
-            log.debug(f"Host {self.host}: Successfully executed command 'show' with commands {commands}.")
+            log.debug("Host %s: Successfully executed command 'show' with commands %s.", self.host, commands)
             return self.native.show_list(commands, raw_text=raw_text)
         except CLIError as e:
-            log.error(f"Host {self.host}: Command error for command {e.command} with message {str(e)}.")
+            log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
             raise CommandListError(commands, e.command, str(e))
 
     @property
