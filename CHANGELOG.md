@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.18.0]
+### Added
+- IOSXEWLCDevice device Driver.
+### Fixed
+- IOS `rollback()` method derives filesystem name using `_get_file_system()` method to discover it from system.
+
 ## [0.17.0]
 ### Added
 - ASADevice supports connecting to HA Peer

@@ -1,5 +1,4 @@
-"""Kickoff functions for getting instancs of device objects.
-"""
+"""Kickoff functions for getting instancs of device objects."""
 
 import os
 import warnings
@@ -12,7 +11,7 @@ try:
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
@@ -22,9 +21,10 @@ warnings.simplefilter("default")
 
 
 def ntc_device(device_type, *args, **kwargs):
-    """Instantiate and return an instance of a device subclassed
-    from ``pyntc.devices.BaseDevice``. ``*args`` and ``*kwargs`` are passed
-    directly to the device initializer.
+    """
+    Instantiate an instance of a ``pyntc.devices.BaseDevice`` by ``device_type``.
+
+    The ``*args`` and ``*kwargs`` are passed directly to the device initializer.
 
     Arguments:
         device_type (string): A valid device_type
@@ -36,7 +36,6 @@ def ntc_device(device_type, *args, **kwargs):
     Raises:
         UnsupportedDeviceError: if the device_type is unsupported.
     """
-
     try:
         device_class = supported_devices[device_type]
         return device_class(*args, **kwargs)
@@ -45,9 +44,8 @@ def ntc_device(device_type, *args, **kwargs):
 
 
 def ntc_device_by_name(name, filename=None):
-    """Instantiate and return an instance of a device subclassed
-    from ``pyntc.devices.BaseDevice`` based on its name in an
-    NTC configuration file.
+    """
+    Instantiate an instance of a ``pyntc.devices.BaseDevice`` from ntc.conf file.
 
     If no filename is given the environment variable PYNTC_CONF is checked
     for a path, and then ~/.ntc.conf.
@@ -58,9 +56,8 @@ def ntc_device_by_name(name, filename=None):
             the ``name`` argument as section header.
 
     Raises:
-        DeviceNameNotFoundError: if the name is not found in the
-            NTC configuration file.
-        ConfFileNotFoundError: if no NTC configuration can be found.
+        DeviceNameNotFoundError: If the name is not found in the NTC configuration file.
+        ConfFileNotFoundError: If no NTC configuration can be found.
     """
     config, filename = _get_config_from_file(filename=filename)
     sections = config.sections()

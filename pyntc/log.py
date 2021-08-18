@@ -1,6 +1,6 @@
 """
-Logging utilities for Pyntc
-===========================
+Logging utilities for Pyntc.
+============================
 
 This module contains helpers and wrappers for making logging more consistent
 across applications.
@@ -13,6 +13,7 @@ How to use me:
     2020-07-21 10:39:40,463 [INFO] pyntc: NTC
 
 """
+
 import os
 import logging
 
@@ -30,7 +31,7 @@ DEBUG_FORMAT = "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s
 
 
 def get_log(name=None):
-    """Gets log namespace and creates logger and rotating file handler.
+    """Get log namespace and creates logger and rotating file handler.
 
     Args:
         name (str, optional): Sublogger name. Defaults to None.
@@ -39,9 +40,11 @@ def get_log(name=None):
         logger: Return a logger instance in the :data:`APP` namespace.
     """
     name = f"{APP}.{name}" if name else APP
+    # file handler
     handler = RotatingFileHandler(f"{name}.log", maxBytes=2000)
     logger = logging.getLogger(name)
     logger.addHandler(handler)
+
     return logger
 
 
@@ -68,7 +71,7 @@ def init(**kwargs):
     kwargs.setdefault("level", log_level)
 
     logging.basicConfig(**kwargs)
-    info("Logging initialized for host {kwargs.get('host')}.")
+    info("Logging initialized for host %s.", kwargs.get('host'))
 
 
 def logger(level):
