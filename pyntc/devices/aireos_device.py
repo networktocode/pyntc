@@ -1411,7 +1411,7 @@ class AIREOSDevice(BaseDevice):
             return command_responses[0]
 
         log.debug(
-            "Host %s: Successfully executed command 'show' with responses {command_responses}.",
+            "Host %s: Successfully executed show commands with responses %s.",
             self.host,
             command_responses,
         )
