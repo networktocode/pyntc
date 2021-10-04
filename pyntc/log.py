@@ -47,7 +47,7 @@ def init(**kwargs):
     debug = os.environ.get("PYNTC_DEBUG", None)
     log_format = DEBUG_FORMAT if debug else FORMAT
 
-    log_level = getattr(logging, os.environ.get("LOG_LEVEL", "info").upper())
+    log_level = getattr(logging, os.environ.get("PYNTC_LOG_LEVEL", "info").upper())
     log_level = logging.DEBUG if debug else log_level
 
     kwargs.setdefault("format", log_format)
