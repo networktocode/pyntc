@@ -171,7 +171,7 @@ class AIREOSDevice(BaseDevice):
         sysinfo = self.show("show sysinfo")
         booted_image = re.search(re_version, sysinfo, re.M)
         if booted_image.group(1) == image_name:
-            log.info("Host %s: Image %s booted successfully.", self.host, image_name)
+            log.info("Host %s: Image %s is booted.", self.host, image_name)
             return True
 
         log.warning("Host %s: Image %s not booted successfully.", self.host, image_name)
