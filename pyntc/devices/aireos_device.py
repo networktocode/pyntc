@@ -1391,7 +1391,7 @@ class AIREOSDevice(BaseDevice):
         except CommandError as err:
             if not original_command_is_str:
                 log.error(
-                    "Host %s: Command error for commands {entered_commands} with message {err.cli_error_msg}.",
+                    "Host %s: Command error for commands %s with message %s.",
                     self.host,
                     entered_commands,
                     err.cli_error_msg,
