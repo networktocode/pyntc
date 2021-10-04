@@ -24,10 +24,10 @@ def get_log(name=None):
     Returns:
         logger: Return a logger instance in the :data:`APP` namespace.
     """
-    name = f"{APP}.{name}" if name else APP
+    logger_name = f"{APP}.{name}" if name else APP
     # file handler
-    handler = RotatingFileHandler(f"{name}.log", maxBytes=2000)
-    logger = logging.getLogger(name)
+    handler = RotatingFileHandler(f"{logger_name}.log", maxBytes=2000)
+    logger = logging.getLogger(logger_name)
     logger.addHandler(handler)
 
     return logger
