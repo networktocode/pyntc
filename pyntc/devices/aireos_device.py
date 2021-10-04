@@ -1399,7 +1399,7 @@ class AIREOSDevice(BaseDevice):
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
                 log.error(
-                    "Host %s: Command error for commands {entered_commands} with message %s.",
+                    "Host %s: Command error for commands %s with message %s.",
                     self.host,
                     entered_commands,
                     err,
