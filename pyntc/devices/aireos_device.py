@@ -1554,7 +1554,7 @@ class AIREOSDevice(BaseDevice):
         hours += days * 24
         minutes += hours * 60
         seconds = minutes * 60
-        log.debug("Host %s: Device has been up for %s seconds", self.host, seconds)
+        log.debug("Host %s: Device has been up for %d seconds", self.host, seconds)
         return seconds
 
     @property
