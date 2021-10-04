@@ -1531,7 +1531,7 @@ class AIREOSDevice(BaseDevice):
 
         if not self._ap_images_match_expected("primary", image):
             log.error("Host %s: Unable to set all APs to use %s", self.host, image)
-            raise FileTransferError
+            raise FileTransferError(f"Unable to set all APs to use {image}")
 
         log.info("Host %s: All images transferred to AP connected to WLC.", self.host)
         return changed
