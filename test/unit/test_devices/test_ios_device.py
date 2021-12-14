@@ -699,6 +699,13 @@ def test_re_show_redundancy_no_peer(ios_show, ios_redundancy_info, ios_redundanc
     }
 
 
+def test_re_show_redundancy_no_peer_slot_unavailable(ios_show, ios_redundancy_info, ios_redundancy_self):
+    device = ios_show(["show_redundancy_slot_unavailable.txt"])
+    show_redundancy = device.show("show_redundancy")
+    re_show_redundancy = ios_module.RE_SHOW_REDUNDANCY.match(show_redundancy)
+    assert re_show_redundancy.groupdict() == {"info": ios_redundancy_info, "self": ios_redundancy_self, "other": None}
+
+
 def test_re_redundancy_operation_mode(ios_redundancy_info):
     re_operational_mode = ios_module.RE_REDUNDANCY_OPERATION_MODE.search(ios_redundancy_info)
     assert re_operational_mode.group(1) == "Stateful Switchover"

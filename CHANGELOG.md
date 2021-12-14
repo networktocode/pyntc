@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.19.0]
+### Fixed
+- IOS Show Redundancy parsing updated on new output data.
+
+### Changed
+- F5 hostname and fqdn are not derived using bigsuds, but now use f5-sdk.
+
+### Removed
+- Dependency on bigsuds package.
+
 ## [0.18.0]
 ### Added
 - IOSXEWLCDevice device Driver.
