@@ -11,7 +11,6 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.6"
-bigsuds = "^1.0.6"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.4.1"
 netmiko = "^3.1"

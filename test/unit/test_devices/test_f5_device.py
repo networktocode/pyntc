@@ -29,9 +29,8 @@ class Image:
 
 
 class TestF5Device:
-    @mock.patch("bigsuds.BIGIP")
     @mock.patch("pyntc.devices.f5_device.ManagementRoot")
-    def setup(self, api, big_ip):
+    def setup(self, big_ip):
 
         self.device = F5Device("host", "user", "password")
         self.device.native = big_ip
@@ -292,17 +291,31 @@ class TestF5Device:
         interfaces = self.device.interfaces
         assert interfaces == expected
 
-    @mock.patch.object(F5Device, "_get_hostname", autospec=True)
-    def test_hostname(self, mock_get_hostname):
-        mock_get_hostname.return_value = "f5-spine3"
-        hostname = self.device.hostname
-        assert hostname == "f5-spine3"
+    @mock.patch.object(F5Device, "fqdn", new_callable=mock.PropertyMock)
+    def test_hostname_not_initialized(self, mock_fqdn):
+        self.device._hostname = None
+        mock_fqdn.return_value = "f5-spine3.ntc.com"
+        assert self.device.hostname == "f5-spine3"
+        mock_fqdn.assert_called_once()
 
-    @mock.patch.object(F5Device, "_get_hostname", autospec=True)
-    def test_fqdn(self, mock_get_hostname):
-        mock_get_hostname.return_value = "f5-spine3.ntc.com"
-        fqdn = self.device.fqdn
-        assert fqdn == "f5-spine3.ntc.com"
+    @mock.patch.object(F5Device, "fqdn", new_callable=mock.PropertyMock)
+    def test_hostname_already_initialized(self, mock_fqdn):
+        self.device._hostname = "f5-spine3"
+        assert self.device.hostname == "f5-spine3"
+        mock_fqdn.assert_not_called()
+
+    def test_fqdn_not_initialized(self):
+        self.device._fqdn = None
+        global_setttings_mock = mock.Mock()
+        global_setttings_mock.hostname = "f5-spine3.ntc.com"
+        self.device.api_handler.tm.sys.global_settings.load.return_value = global_setttings_mock
+        assert self.device.fqdn == "f5-spine3.ntc.com"
+        self.device.api_handler.tm.sys.global_settings.load.assert_called_once()
+
+    def test_fqdn_already_initialized(self):
+        self.device._fqdn = "f5-spine3.ntc.com"
+        assert self.device.fqdn == "f5-spine3.ntc.com"
+        self.device.api_handler.tm.sys.global_settings.load.assert_not_called()
 
     @mock.patch.object(F5Device, "_get_serial_number", autospec=True)
     def test_serial_number(self, mock_get_serial):
