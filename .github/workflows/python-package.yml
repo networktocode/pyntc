@@ -30,4 +30,4 @@ jobs:
           tox -e black,flake8,bandit,pydocstyle
       - name: Test with pytest
         run: |
-          tox -e py36,py37,py38,coveralls
+          tox -e py36,py37,py38
