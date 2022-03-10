@@ -4,19 +4,19 @@ import re
 import time
 import warnings
 
-from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
     CommandError,
-    OSInstallError,
     CommandListError,
     FileTransferError,
-    RebootTimeoutError,
     NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
 )
-
 from pynxos.device import Device as NXOSNative
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+
+from .base_device import BaseDevice, RebootTimerError, RollbackError, fix_docs
 
 
 @fix_docs
@@ -362,7 +362,8 @@ class NXOSDevice(BaseDevice):
             kickstart = file_system + kickstart
 
         image_name = file_system + image_name
-        self.native.timeout = 300
+        if self.native.timeout < 300:
+            self.native.timeout = 300
         upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
         self.native.timeout = 30
 
