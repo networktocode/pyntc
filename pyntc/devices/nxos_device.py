@@ -39,7 +39,7 @@ class NXOSDevice(BaseDevice):
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
+        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, kwargs)
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version", raw_text=True)
