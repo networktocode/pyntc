@@ -362,7 +362,14 @@ class NXOSDevice(BaseDevice):
             kickstart = file_system + kickstart
 
         image_name = file_system + image_name
-        self.native.timeout = 300
+        # Allow for user defined timeout to take precedence if its over 300 seconds, otherwise change to 300.
+        try:
+            native_timeout = int(self.native.timeout)
+        except (TypeError, ValueError):
+            native_timeout = 1
+
+        if native_timeout < 300:
+            self.native.timeout = 300
         upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
         self.native.timeout = 30
 
