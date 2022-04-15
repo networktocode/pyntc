@@ -4,19 +4,19 @@ import re
 import time
 import warnings
 
-from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
 from pyntc.errors import (
     CommandError,
-    OSInstallError,
     CommandListError,
     FileTransferError,
-    RebootTimeoutError,
     NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
 )
-
 from pynxos.device import Device as NXOSNative
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+
+from .base_device import BaseDevice, RebootTimerError, RollbackError, fix_docs
 
 
 @fix_docs
@@ -39,7 +39,7 @@ class NXOSDevice(BaseDevice):
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port)
+        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version", raw_text=True)
