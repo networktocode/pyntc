@@ -69,7 +69,7 @@ class F5Device(BaseDevice):
     def _file_copy_local_file_exists(filepath):
         return os.path.isfile(filepath)
 
-    def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
+    def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
             m = hashlib.md5()  # nosec
             with open(filepath, "rb") as f:
