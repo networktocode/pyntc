@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.20.1]
+
+### Fixed
+
+- Tox pipeline black linting issue.
+
 ## [0.20.0]
 
 ### Fixed
