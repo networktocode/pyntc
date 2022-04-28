@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.20.0]
+
+### Fixed
+
+- Add a higher timeout to install os for nexus to cope with N5Ks slow response time.
+
+### Added
+
+- kwargs to pynxos native init to allow for additional arguments, such as `verify=False` for nxos.
+
 ## [0.19.0]
 ### Fixed
 - IOS Show Redundancy parsing updated on new output data.
