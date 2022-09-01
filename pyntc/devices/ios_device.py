@@ -699,7 +699,7 @@ class IOSDevice(BaseDevice):
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                    self.show(command)
+                    self.show(command, delay_factor=install_mode_delay_factor)
                     self.reboot()
 
                 else:
@@ -709,7 +709,7 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher delay factor and send it in
                     try:
-                        self.show(command)
+                        self.show(command, delay_factor=install_mode_delay_factor)
                     except IOError:
                         pass
 
@@ -989,7 +989,7 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect_string=None):
+    def show(self, command, expect_string=None, **netmiko_args):
         """Run command on device.
 
         Args:
@@ -1000,7 +1000,7 @@ class IOSDevice(BaseDevice):
             str: Output of command.
         """
         self.enable()
-        return self._send_command(command, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string, **netmiko_args)
 
     def show_list(self, commands):
         """Run a list of commands on device.
