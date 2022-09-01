@@ -699,7 +699,7 @@ class IOSDevice(BaseDevice):
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                    self.show(command, delay_factor=install_mode_delay_factor)
+                    self.show(command)
                     self.reboot()
 
                 else:
@@ -709,7 +709,7 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher delay factor and send it in
                     try:
-                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.show(command)
                     except IOError:
                         pass
 
