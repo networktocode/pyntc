@@ -325,7 +325,7 @@ def ios_redundancy_self():
 
 
 @pytest.fixture
-def ios_send_command(ios_device, ios_mock_path):
+def ios_native_send_command(ios_device, ios_mock_path):
     def _mock(side_effects, existing_device=None, device=ios_device):
         if existing_device is not None:
             device = existing_device
@@ -336,11 +336,24 @@ def ios_send_command(ios_device, ios_mock_path):
 
 
 @pytest.fixture
-def ios_send_command_timing(ios_device, ios_mock_path):
+def ios_native_send_command_timing(ios_device, ios_mock_path):
     def _mock(side_effects, existing_device=None, device=ios_device):
         if existing_device is not None:
             device = existing_device
         device.native.send_command_timing.side_effect = get_side_effects(ios_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def ios_send_command(ios_device, ios_mock_path):
+    def _mock(side_effects, existing_device=None, device=ios_device):
+        if existing_device is not None:
+            device = existing_device
+        with mock.patch.object(IOSDevice, "_send_command") as mock_send_command:
+            mock_send_command.side_effect = get_side_effects(ios_mock_path, side_effects)
+        device._send_command = mock_send_command
         return device
 
     return _mock
