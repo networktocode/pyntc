@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/)
 ### Fixed
 ### Security
 
+## [0.20.2]
+
+### Fixed
+
+- Fixed ios device install mode run command.
+
 ## [0.20.1]
 
 ### Fixed

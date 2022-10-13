@@ -791,24 +791,24 @@ def test_get_file_system_raise_error(mock_hostname, ios_show):
     device.show.assert_has_calls([mock.call("dir")] * 5)
 
 
-def test_send_command_error(ios_send_command):
+def test_send_command_error(ios_native_send_command):
     command = "send_command_error"
-    device = ios_send_command([f"{command}.txt"])
+    device = ios_native_send_command([f"{command}.txt"])
     with pytest.raises(ios_module.CommandError):
         device._send_command(command)
     device.native.send_command.assert_called()
 
 
-def test_send_command_expect(ios_send_command):
+def test_send_command_expect(ios_native_send_command):
     command = "send_command_expect"
-    device = ios_send_command([f"{command}.txt"])
+    device = ios_native_send_command([f"{command}.txt"])
     device._send_command(command, expect_string="Continue?")
     device.native.send_command.assert_called_with(command_string="send_command_expect", expect_string="Continue?")
 
 
-def test_send_command_timing(ios_send_command_timing):
+def test_send_command_timing(ios_native_send_command_timing):
     command = "send_command_timing"
-    device = ios_send_command_timing([f"{command}.txt"])
+    device = ios_native_send_command_timing([f"{command}.txt"])
     device.native.send_command_timing(command)
     device.native.send_command_timing.assert_called()
     device.native.send_command_timing.assert_called_with(command)
@@ -1197,13 +1197,52 @@ def test_show(ios_send_command):
     command = "show_ip_arp"
     device = ios_send_command([f"{command}.txt"])
     device.show(command)
-    device.native.send_command.assert_called_with(command_string="show_ip_arp")
-    device.native.send_command.assert_called_once()
+    device._send_command.assert_called_with(
+        "show_ip_arp",
+        expect_string=None,
+    )
+    device._send_command.assert_called_once()
 
 
-def test_show_list(ios_send_command):
+def test_show_expect(ios_send_command):
+    command = "show_ip_arp"
+    expect = "this string"
+    device = ios_send_command([f"{command}.txt"])
+    device.show(command, expect)
+    device._send_command.assert_called_with(
+        "show_ip_arp",
+        expect_string=expect,
+    )
+
+
+def test_show_expect_netmiko_args(ios_send_command):
+    command = "show_ip_arp"
+    expect = "this string"
+    netmiko_args = {"some_flag": "passed"}
+    device = ios_send_command([f"{command}.txt"])
+    device.show(command, expect, **netmiko_args)
+    device._send_command.assert_called_with(
+        "show_ip_arp",
+        expect_string=expect,
+        **netmiko_args,
+    )
+
+
+def test_show_netmiko_args(ios_send_command):
+    command = "show_ip_arp"
+    netmiko_args = {"some_flag": "passed"}
+    device = ios_send_command([f"{command}.txt"])
+    device.show(command, **netmiko_args)
+    device._send_command.assert_called_with(
+        "show_ip_arp",
+        expect_string=None,
+        **netmiko_args,
+    )
+
+
+def test_show_list(ios_native_send_command):
     commands = ["show_version", "show_ip_arp"]
-    device = ios_send_command([f"{commands[0]}.txt", f"{commands[1]}"])
+    device = ios_native_send_command([f"{commands[0]}.txt", f"{commands[1]}"])
     device.show_list(commands)
     device.native.send_command.assert_has_calls(
         [mock.call(command_string="show_version"), mock.call(command_string="show_ip_arp")]
@@ -1222,9 +1261,9 @@ def test_vlans(mock_show_vlan, mock_model, ios_show):
 
 @pytest.mark.parametrize("show_boot_out", (SHOW_BOOT_VARIABLE, SHOW_BOOT_PATH_LIST), ids=("bootvar", "bootpath"))
 @mock.patch.object(IOSDevice, "_get_file_system", return_value="flash:")
-def test_boot_options_show_boot(mock_boot, show_boot_out, ios_send_command):
+def test_boot_options_show_boot(mock_boot, show_boot_out, ios_native_send_command):
     results = [ios_module.CommandError("show bootvar", "fail"), show_boot_out]
-    device = ios_send_command(results)
+    device = ios_native_send_command(results)
     boot_options = device.boot_options
     assert boot_options == {"sys": BOOT_IMAGE}
     device.native.send_command.assert_called_with(command_string="show boot")

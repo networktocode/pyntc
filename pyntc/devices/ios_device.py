@@ -989,7 +989,7 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-    def show(self, command, expect_string=None):
+    def show(self, command, expect_string=None, **netmiko_args):
         """Run command on device.
 
         Args:
@@ -1000,7 +1000,7 @@ class IOSDevice(BaseDevice):
             str: Output of command.
         """
         self.enable()
-        return self._send_command(command, expect_string=expect_string)
+        return self._send_command(command, expect_string=expect_string, **netmiko_args)
 
     def show_list(self, commands):
         """Run a list of commands on device.
