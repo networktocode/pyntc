@@ -187,8 +187,8 @@ jobs:
         run: "docker image ls"
       - name: "Run Tests"
         run: "poetry run invoke pytest"
-    needs:
-      - "pylint"
+    # needs:
+    #   - "pylint"
   publish_gh:
     name: "Publish to GitHub"
     runs-on: "ubuntu-20.04"
