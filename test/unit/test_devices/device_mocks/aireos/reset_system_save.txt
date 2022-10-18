@@ -1,2 +1,0 @@
-The system has unsaved changes.
-Would you like to save them now? (y/N)

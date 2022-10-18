@@ -1,2 +1,0 @@
-no service pad
-host#(config)#

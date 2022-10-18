@@ -1,3 +1,0 @@
-boot-start-marker
-boot system flash other_image
-boot-end-marker

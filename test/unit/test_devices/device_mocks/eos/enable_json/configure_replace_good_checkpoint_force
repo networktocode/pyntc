@@ -1,5 +1,0 @@
-{
-    "command": "configure replace good_checkpoint force",
-    "result": {},
-    "encoding": "json"
-}

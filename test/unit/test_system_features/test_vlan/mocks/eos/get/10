@@ -1,6 +1,0 @@
-{
-    "state": "active",
-    "name": "VLAN0010",
-    "vlan_id": "10",
-    "trunk_groups": []
-}

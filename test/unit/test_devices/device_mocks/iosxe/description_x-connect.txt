@@ -1,2 +1,0 @@
-description x-connect
-host#(config-if)#

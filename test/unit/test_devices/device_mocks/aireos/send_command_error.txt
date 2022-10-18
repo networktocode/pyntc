@@ -1,2 +1,0 @@
-This is only a test
-Incorrect usage.  Use the '?' or <TAB> key to list commands.
