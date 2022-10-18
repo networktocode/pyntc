@@ -37,10 +37,11 @@ toml = "*"
 # we need to pin flake8 because of package dependencies that cause it to downgrade and 
 # therefore cause issues with linting since older versions do not take .flake8 as config
 flake8 = "^3.9.2"
-Sphinx = "*"
-myst-parser = "*"
-sphinx-autoapi = "*"
-sphinx-rtd-theme = "*"
+mkdocs = "1.3.1"
+mkdocs-material = "8.3.9"
+mkdocstrings = "0.19"
+mkdocstrings-python = "0.7.1"
+mkdocs-version-annotations = "1.0.0"
 
 [tool.pyntc]
 string_required = "some string"
