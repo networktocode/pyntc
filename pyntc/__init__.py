@@ -4,14 +4,14 @@ import os
 import warnings
 
 from .devices import supported_devices
-from .errors import UnsupportedDeviceError, DeviceNameNotFoundError, ConfFileNotFoundError
+from .errors import ConfFileNotFoundError, DeviceNameNotFoundError, UnsupportedDeviceError
 
 try:
     from configparser import ConfigParser as SafeConfigParser
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-__version__ = "0.20.2"
+__version__ = "0.20.3"
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
