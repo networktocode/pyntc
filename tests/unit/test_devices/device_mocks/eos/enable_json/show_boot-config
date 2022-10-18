@@ -1,0 +1,9 @@
+{
+    "command": "show boot-config",
+    "result": {
+        "memTestIterations": 0,
+        "softwareImage": "flash:EOS.swi",
+        "abootPassword": "(not set)"
+    },
+    "encoding": "json"
+}

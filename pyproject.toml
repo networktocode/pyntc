@@ -1,16 +1,14 @@
-[build-system]
-requires = ["poetry>=^0.12"]
-build-backend = "poetry.masonry.api"
-
 [tool.poetry]
 name = "pyntc"
-version = "0.20.2"
+version = "0.20.3"
 description = "SDK to simplify common workflows for Network Devices."
-authors = ["NTC <info@networktocode.com>"]
+authors = ["Network to Code, LLC <info@networktocode.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.6"
+python = "^3.7"
+# Required for Python 3.7 for now. See: https://stackoverflow.com/a/73932581/194311
+importlib-metadata = "4.13.0"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.4.1"
 netmiko = "^3.1"
@@ -21,32 +19,103 @@ requests = "^2.23"
 scp = "^0.13.2"
 textfsm = "^1.1"
 
-[tool.poetry.dev-dependencies]
-coverage = "^5.1"
-mock = "^4.0.2"
-tox = "^3.15.0"
-pylint = "^2.5.2"
-flake8 = "^3.8.1"
-black = "^20.8b1"
-pydocstyle = "^5.0.2"
-bandit = "^1.6.2"
-coveralls = "^2.0.0"
+[tool.poetry.scripts]
+pyntc = 'pyntc.cli:main'
+
+[tool.poetry.group.dev.dependencies]
 pytest = "^5.4.2"
+mock = "*"
+requests_mock = "*"
+pyyaml = "*"
+black = "*"
+pylint = "*"
+pydocstyle = "*"
+yamllint = "*"
+bandit = "*"
+invoke = "*"
+toml = "*"
+# we need to pin flake8 because of package dependencies that cause it to downgrade and 
+# therefore cause issues with linting since older versions do not take .flake8 as config
+flake8 = "^3.9.2"
+Sphinx = "*"
+myst-parser = "*"
+sphinx-autoapi = "*"
+sphinx-rtd-theme = "*"
+
+[tool.pyntc]
+string_required = "some string"
+array_default = ["a", "b", "c"]
+url_default = "http://localhost"
+ip_address = "192.168.0.1"
+ip_network = "2001:db8:3c4d:15::/64"
+file = "README.md"
+
 
 [tool.black]
 line-length = 120
+target-version = ['py37']
 include = '\.pyi?$'
 exclude = '''
-/(
-  \.git
-| \.tox
-| \.venv
-| _build
-| buck-out
-| build
-| dist
-| blib2to3
-| tests/data
-| venv
-)/
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | settings.py     # This is where you define files that should not be stylized by black
+                     # the root of the project
+)
 '''
+
+[tool.pylint.master]
+ignore=".venv"
+
+[tool.pylint.basic]
+# No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.
+no-docstring-rgx="^(_|test_|Meta$)"
+
+[tool.pylint.messages_control]
+# Line length is enforced by Black, so pylint doesn't need to check it.
+# Pylint and Black disagree about how to format multi-line arrays; Black wins.
+disable = """,
+    line-too-long,
+    bad-continuation,
+    consider-iterating-dictionary
+    """
+
+[tool.pylint.miscellaneous]
+# Don't flag TODO as a failure, let us commit with things that still need to be done in the code
+notes = """,
+    FIXME,
+    XXX,
+    """
+
+[tool.pydocstyle]
+convention = "google"
+inherit = false
+match = "(?!__init__).*\\.py"
+match-dir = "(?!tests|migrations|development)[^\\.].*"
+# D212 is enabled by default in google convention, and complains if we have a docstring like:
+# """
+# My docstring is on the line after the opening quotes instead of on the same line as them.
+# """
+# We've discussed and concluded that we consider this to be a valid style choice.
+add_ignore = "D212"
+
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+python_paths = "./"
+testpaths = [
+    "tests/"
+]
+addopts = "-vv --doctest-modules -p no:warnings --ignore-glob='*mock*'"

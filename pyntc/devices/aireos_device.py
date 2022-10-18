@@ -2,27 +2,26 @@
 
 import os
 import re
-import time
 import signal
+import time
 import warnings
 
 from netmiko import ConnectHandler
-
-from .base_device import BaseDevice, fix_docs
 from pyntc.errors import (
-    NTCError,
     CommandError,
-    OSInstallError,
-    WLANEnableError,
     CommandListError,
-    WLANDisableError,
-    FileTransferError,
-    RebootTimeoutError,
     DeviceNotActiveError,
+    FileTransferError,
+    NTCError,
     NTCFileNotFoundError,
+    OSInstallError,
     PeerFailedToFormError,
+    RebootTimeoutError,
+    WLANDisableError,
+    WLANEnableError,
 )
 
+from .base_device import BaseDevice, fix_docs
 
 RE_FILENAME_FIND_VERSION = re.compile(r"^.+?(?P<version>\d+(?:-|_)\d+(?:-|_)\d+(?:-|_)\d+)\.", re.M)
 RE_AP_IMAGE_COUNT = re.compile(r"^[Tt]otal\s+number\s+of\s+APs\.+\s+(?P<count>\d+)\s*$", re.M)
@@ -69,7 +68,9 @@ class AIREOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):  # noqa: D403
+    def __init__(  # nosec
+        self, host, username, password, secret="", port=22, confirm_active=True, **kwargs
+    ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco WLC.
 

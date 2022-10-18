@@ -1,0 +1,133 @@
+{
+    "command": "show interfaces status",
+    "result": {
+        "interfaceStatuses": {
+            "Management1": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "routed",
+                    "interfaceForwardingModel": "routed"
+                },
+                "bandwidth": 1000000000,
+                "interfaceType": "10/100/1000",
+                "autoNegotiateActive": true,
+                "autoNegotigateActive": true,
+                "linkStatus": "connected"
+            },
+            "Ethernet8": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet2": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet3": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet1": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet6": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet7": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet4": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            },
+            "Ethernet5": {
+                "description": "",
+                "duplex": "duplexFull",
+                "vlanInformation": {
+                    "interfaceMode": "bridged",
+                    "vlanId": 1,
+                    "interfaceForwardingModel": "bridged"
+                },
+                "bandwidth": 10000000000,
+                "interfaceType": "EbraTestPhyPort",
+                "autoNegotiateActive": false,
+                "autoNegotigateActive": false,
+                "linkStatus": "connected"
+            }
+        }
+    },
+    "encoding": "json"
+}

@@ -1,0 +1,7 @@
+{
+    "command": "show hostname",
+    "result": {
+        "output": "Hostname: spine1\nFQDN:     spine1.ntc.com\n"
+    },
+    "encoding": "text"
+}

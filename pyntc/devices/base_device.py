@@ -4,8 +4,7 @@ import abc
 import importlib
 import warnings
 
-
-from pyntc.errors import NTCError, FeatureNotFoundError
+from pyntc.errors import FeatureNotFoundError, NTCError
 
 
 def fix_docs(cls):
@@ -333,7 +332,7 @@ class BaseDevice(object):
         """Rollback to a checkpoint file.
 
         Args:
-            filename (str): The filename of the checkpoint file to load into the running configuration.
+            checkpoint_file (str): The filename of the checkpoint file to load into the running configuration.
         """
         raise NotImplementedError
 

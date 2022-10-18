@@ -1,0 +1,8 @@
+System IP Addresses:
+Interface Name IP address Subnet mask Method
+GigabitEthernet0/1 inside 10.1.1.1 255.255.255.0 CONFIG
+GigabitEthernet0/2.40 outside 10.2.2.1 255.255.255.224 DHCP
+Current IP Addresses:
+Interface Name IP address Subnet mask Method
+GigabitEthernet0/1 inside 10.1.1.1 255.255.255.0 CONFIG
+GigabitEthernet0/2.40 outside 10.2.2.1 255.255.255.224 DHCP

@@ -1,0 +1,15 @@
+[cisco_nxos_nxapi:test_nxos]
+host: 192.168.43.3
+username: user
+password: pass
+transport: http
+
+[arista_eos_eapi:test_eos]
+username: user
+password: arista
+transport: http
+
+[cisco_ios_ssh:test_ios]
+username: user
+password: pass
+secret: cisco

@@ -1,6 +1,3 @@
-[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=main)](https://travis-ci.org/networktocode/pyntc)
-[![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=main)](https://coveralls.io/github/networktocode/pyntc?branch=main)
-
 # Introduction
 
 pyntc is an open source multi-vendor Python library that establishes a common framework for working with different network APIs & device types (including IOS devices)
@@ -434,3 +431,34 @@ configuration, and download all dependencies separately.
 # Run all tests against multiple Python versions
 $ tox
 ```
+
+---
+
+
+### Local Doc Build
+
+If you want to build the documentation locally, follow these steps:
+
+1. Run poetry to install all necessary packages: 
+
+```bash
+$ poetry install
+$ poetry shell
+```
+
+2. Create local docs:
+
+```bash
+$ sphinx-build -vvv -b html ./docs public
+``
+
+3. Run a local python server to check your documentation rendering:
+
+```bash
+cd public
+python -m http.server &
+```
+
+
+[![Build Status](https://travis-ci.org/networktocode/pyntc.svg?branch=main)](https://travis-ci.org/networktocode/pyntc)
+[![Coverage Status](https://coveralls.io/repos/github/networktocode/pyntc/badge.svg?branch=main)](https://coveralls.io/github/networktocode/pyntc?branch=main)
