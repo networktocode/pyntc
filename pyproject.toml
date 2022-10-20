@@ -23,7 +23,7 @@ textfsm = "^1.1"
 pyntc = 'pyntc.cli:main'
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^5.4.2"
+pytest = "*"
 mock = "*"
 requests_mock = "*"
 pyyaml = "*"

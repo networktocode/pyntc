@@ -1,11 +1,12 @@
-import pytest
 import os
+from ipaddress import ip_address, ip_interface
 from unittest import mock
-from ipaddress import ip_interface, ip_address
+
+import pytest
+from pyntc.devices import asa_device as asa_module
+from pyntc.devices import ASADevice
 
 from .device_mocks.asa import send_command
-from pyntc.devices import ASADevice
-from pyntc.devices import asa_device as asa_module
 
 BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.asa_device.ASADevice.boot_options"
