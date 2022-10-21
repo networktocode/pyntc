@@ -1,9 +1,8 @@
 import os
+from unittest import mock
 
 import pytest
-from unittest import mock
-from pyntc.devices import supported_devices
-from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice
+from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice, supported_devices
 
 
 def get_side_effects(mock_path, side_effects):
