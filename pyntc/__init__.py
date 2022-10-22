@@ -11,7 +11,13 @@ try:
 except ImportError:
     from ConfigParser import SafeConfigParser
 
-__version__ = "0.20.3"
+try:
+    from importlib import metadata
+except ImportError:
+    # Python version < 3.8
+    import importlib_metadata as metadata
+
+__version__ = metadata.version(__name__)
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
