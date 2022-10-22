@@ -11,7 +11,7 @@ The first way is to use the `ntc_device` object. Just pass in all required param
 
 Like many libraries, we need to pass in the host/IP and credentials.  Because this is a multi-vendor/API library, we also use the `device_type` parameter to identify which device we are building an instance of.
 
-pyntc currently supports four device types:
+pyntc currently supports seven device types:
 * cisco_aireos_ssh
 * cisco_asa_ssh
 * cisco_ios_ssh
@@ -22,7 +22,7 @@ pyntc currently supports four device types:
 
 The example below shows how to build a device object when working with a Cisco IOS router.
 
-```
+```python
 >>> # CREATE DEVICE OBJECT FOR AN IOS DEVICE
 >>>
 >>> csr1 = NTC(host='csr1', username='ntc', password='ntc123', device_type='cisco_ios_ssh')
@@ -31,7 +31,7 @@ The example below shows how to build a device object when working with a Cisco I
 
 And here is an object for a Cisco Nexus device:
 
-```
+```python
 >>> # CREATE DEVICE OBJECT FOR A NEXUS DEVICE
 >>>
 >>> nxs1 = NTC(host='nxos-spine1', username='ntc', password='ntc123', device_type='cisco_nxos_nxapi')
@@ -78,7 +78,7 @@ password: ntc123
 
 We can now build device objects just by referencing the name of the device from the conf file.
 
-```
+```python
 >>> from pyntc import ntc_device_by_name as NTCNAME
 >>>
 >>> csr1 = NTCNAME('csr1')
@@ -99,7 +99,7 @@ Note: the only method and property not supported on all devices is `install_os`.
 
 On a Nexus device:
 
-```
+```python
 >>> nxs1 = NTCNAME('nxos-spine1')
 >>>
 >>> nxs1.facts
