@@ -1,13 +1,14 @@
 # v0.20 Release Notes
 
-## [0.20.3] 10-21-2022
+## [0.20.3] 10-2022
 
 ### Changed
 
-- [250](https://github.com/networktocode/pyntc/pull/250) update full project to new dev standards.
+- [250](https://github.com/networktocode/pyntc/pull/250) Update full project to new dev standards.
+- [250](https://github.com/networktocode/pyntc/pull/250) Update documentation to use mkdocs.
 
 ### Deprecated
-- [250](https://github.com/networktocode/pyntc/pull/250) remove support for py36.
+- [250](https://github.com/networktocode/pyntc/pull/250) Remove support for py36.
 
 
 ## [0.20.2]
