@@ -4,7 +4,7 @@ There are two ways to get started with pyntc.
 
 The first way is to use the `ntc_device` object. Just pass in all required parameters to the object to initialize your device.  Here we are showing the import, but renaming the object to `NTC`.
 
-```
+```python
 >>> from pyntc import ntc_device as NTC
 >>>
 ```
@@ -121,7 +121,7 @@ On a Nexus device:
 
 On an IOS device:
 
-```
+```python
 >>> csr1 = NTCNAME('csr1')
 >>>
 >>> print(json.dumps(csr1.facts, indent=4))
@@ -154,7 +154,7 @@ On an IOS device:
 - `show` method
 - Note: API enabled devices return JSON by default
 
-```
+```python
 >>> nxs1.show('show hostname')
 {'hostname': 'nxos-spine1'}
 >>>
@@ -162,7 +162,7 @@ On an IOS device:
 
 - Use `raw_text=True` to get unstructured data from the device
 
-```
+```python
 >>> nxs1.show('show hostname', raw_text=True)
 'nxos-spine1 \n'
 >>>
@@ -172,13 +172,13 @@ On an IOS device:
 
 - `show_list` method
 
-```
+```python
 >>> cmds = ['show hostname', 'show run int Eth2/1']
 
 >>> data = nxs1.show_list(cmds, raw_text=True)
 ```
 
-```
+```python
 >>> for d in data:
 ...   print(d)
 ...
@@ -196,12 +196,12 @@ interface Ethernet2/1
 
 - Use `config` and `config_list`
 
-```
+```python
 >>> csr1.config('hostname testname')
 >>>
 ```
 
-```
+```python
 >>> csr1.config_list(['interface Gi3', 'shutdown'])
 >>>
 ```
@@ -209,9 +209,9 @@ interface Ethernet2/1
 ### Viewing Running/Startup Configs
 
 - Use `running_config` and `start_up` device properties
-  - Only showing partial config (manually shortened for this slide)
+    - Only showing partial config (manually shortened for this slide)
 
-```
+```python
 >>> run = csr1.running_config
 >>>
 >>> print(run)
@@ -238,7 +238,7 @@ interface GigabitEthernet1
 
 - `file_copy` method
 
-```
+```python
 >>> devices = [csr1, nxs1]
 >>>
 >>> for device in devices:
@@ -253,7 +253,7 @@ interface GigabitEthernet1
 
 `copy run start` for Cisco/Arista and `commit` for Juniper
 
-```
+```python
 >>> csr1.save()
 True
 
@@ -261,7 +261,7 @@ True
 
 You can also do the equivalent of `copy running-config <filename>` by specifying a filename:
 
-```
+```python
 >>> csr1.save('mynewconfig.cfg')
 True
 ```
@@ -270,7 +270,7 @@ True
 
 Backup current running configuration and store it locally
 
-```
+```python
 >>> csr1.backup_running_config('csr1.cfg')
 >>>
 ```
@@ -283,7 +283,7 @@ Parameters:
   - `timer=0` by default
   - `confirm=False` by default
 
-```
+```python
 >>> csr1.reboot(confirm=True)
 >>>
 ```
