@@ -3,7 +3,7 @@
 Option 1: Install from PyPI.
 
 ```
-"pip install pyntc" or "pip install pyntc --upgrade"
+pip install pyntc
 ```
 
 Option 2: Manually install via Poetry.
