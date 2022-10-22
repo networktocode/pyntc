@@ -561,22 +561,21 @@ python-versions = "*"
 
 [[package]]
 name = "netmiko"
-version = "3.4.0"
-description = "Multi-vendor library to simplify Paramiko SSH connections to network devices"
+version = "4.1.2"
+description = "Multi-vendor library to simplify legacy CLI connections to network devices"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
-ntc-templates = "*"
-paramiko = ">=2.6.0"
+ntc-templates = ">=2.0.0"
+paramiko = ">=2.7.2"
 pyserial = "*"
-scp = ">=0.13.2"
+pyyaml = ">=5.3"
+scp = ">=0.13.3"
 setuptools = ">=38.4.0"
 tenacity = "*"
-
-[package.extras]
-test = ["pytest (>=5.1.2)", "pyyaml (>=5.1.2)"]
+textfsm = "1.1.2"
 
 [[package]]
 name = "ntc-templates"
@@ -703,11 +702,12 @@ toml = ["toml"]
 
 [[package]]
 name = "pyeapi"
-version = "0.8.4"
+version = "0.8.4rc0"
 description = "Python Client for eAPI"
 category = "main"
 optional = false
 python-versions = "*"
+develop = false
 
 [package.dependencies]
 netaddr = "*"
@@ -715,6 +715,12 @@ netaddr = "*"
 [package.extras]
 dev = ["check-manifest", "pep8", "pyflakes", "twine"]
 test = ["coverage", "mock"]
+
+[package.source]
+type = "git"
+url = "https://github.com/arista-eosplus/pyeapi.git"
+reference = "develop"
+resolved_reference = "236503162d1aa3ecc953678ec05380f1f605be02"
 
 [[package]]
 name = "pyflakes"
@@ -904,7 +910,7 @@ test = ["fixtures", "mock", "purl", "pytest", "requests-futures", "sphinx", "tes
 
 [[package]]
 name = "scp"
-version = "0.13.6"
+version = "0.14.4"
 description = "scp module for paramiko"
 category = "main"
 optional = false
@@ -975,7 +981,7 @@ doc = ["reno", "sphinx", "tornado (>=4.5)"]
 
 [[package]]
 name = "textfsm"
-version = "1.1.3"
+version = "1.1.2"
 description = "Python module for parsing semi-structured text into python tables."
 category = "main"
 optional = false
@@ -1103,7 +1109,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "97bbecb1bd5038a868c90805e54c8d7279f1ac21275f6b4df7a70709bb6903f4"
+content-hash = "26b716d7c610fcc02f7563c0b6aca28f8b71bced544d33dae6a3438e638deb0f"
 
 [metadata.files]
 astroid = [
@@ -1548,8 +1554,8 @@ netaddr = [
     {file = "netaddr-0.8.0.tar.gz", hash = "sha256:d6cc57c7a07b1d9d2e917aa8b36ae8ce61c35ba3fcd1b83ca31c5a0ee2b5a243"},
 ]
 netmiko = [
-    {file = "netmiko-3.4.0-py3-none-any.whl", hash = "sha256:b66f25717db3609878f83c85604349dd40a0ab494d8eafd817dcde8388131136"},
-    {file = "netmiko-3.4.0.tar.gz", hash = "sha256:acadb9dd97864ee848e2032f1f0e301c7b31e7a4153757d98f5c8ba1b9614993"},
+    {file = "netmiko-4.1.2-py3-none-any.whl", hash = "sha256:ee1e88ecbd07f619b0bc1e90648f82a64a0adee5968c3068621bbdadbfec5c03"},
+    {file = "netmiko-4.1.2.tar.gz", hash = "sha256:f5ede2a28670d3dfd3470061468665f80f9b4906ed20e6b0fb4d9e1c9be67afc"},
 ]
 ntc-templates = [
     {file = "ntc_templates-3.1.0-py3-none-any.whl", hash = "sha256:e59fbc485a132e0d3eecb6f53fc8e85426cec099ef39678cdc20eec8dccaced6"},
@@ -1595,9 +1601,7 @@ pydocstyle = [
     {file = "pydocstyle-6.1.1-py3-none-any.whl", hash = "sha256:6987826d6775056839940041beef5c08cc7e3d71d63149b48e36727f70144dc4"},
     {file = "pydocstyle-6.1.1.tar.gz", hash = "sha256:1d41b7c459ba0ee6c345f2eb9ae827cab14a7533a88c5c6f7e94923f72df92dc"},
 ]
-pyeapi = [
-    {file = "pyeapi-0.8.4.tar.gz", hash = "sha256:c33ad1eadd8ebac75f63488df9412081ce0b024c9e1da12a37196a5c60427c54"},
-]
+pyeapi = []
 pyflakes = [
     {file = "pyflakes-2.3.1-py2.py3-none-any.whl", hash = "sha256:7893783d01b8a89811dd72d7dfd4d84ff098e5eed95cfa8905b22bbffe52efc3"},
     {file = "pyflakes-2.3.1.tar.gz", hash = "sha256:f5bc8ecabc05bb9d291eb5203d6810b49040f6ff446a756326104746cc00c1db"},
@@ -1700,8 +1704,8 @@ requests-mock = [
     {file = "requests_mock-1.10.0-py2.py3-none-any.whl", hash = "sha256:2fdbb637ad17ee15c06f33d31169e71bf9fe2bdb7bc9da26185be0dd8d842699"},
 ]
 scp = [
-    {file = "scp-0.13.6-py2.py3-none-any.whl", hash = "sha256:5e23f22b00bdbeed83a982c6b2dfae98c125b80019c15fbb16dd64dfd864a452"},
-    {file = "scp-0.13.6.tar.gz", hash = "sha256:0a72f9d782e968b09b114d5607f96b1f16fe9942857afb355399edd55372fcf1"},
+    {file = "scp-0.14.4-py2.py3-none-any.whl", hash = "sha256:29ddaafbfba60793a8a779694c97d8c150d365668a4ef67616c515b80a69ef2f"},
+    {file = "scp-0.14.4.tar.gz", hash = "sha256:54699b92cb68ae34b5928c48a888eab9722a212502cba89aa795bd56597505bd"},
 ]
 setuptools = [
     {file = "setuptools-65.5.0-py3-none-any.whl", hash = "sha256:f62ea9da9ed6289bfe868cd6845968a2c854d1427f8548d52cae02a42b4f0356"},
@@ -1728,8 +1732,8 @@ tenacity = [
     {file = "tenacity-8.1.0.tar.gz", hash = "sha256:e48c437fdf9340f5666b92cd7990e96bc5fc955e1298baf4a907e3972067a445"},
 ]
 textfsm = [
-    {file = "textfsm-1.1.3-py2.py3-none-any.whl", hash = "sha256:dcbeebc6a6137bed561c71a56344d752e6dbc04ae5ea309252cb70fb97ccc9cd"},
-    {file = "textfsm-1.1.3.tar.gz", hash = "sha256:577ef278a9237f5341ae9b682947cefa4a2c1b24dbe486f94f2c95addc6504b5"},
+    {file = "textfsm-1.1.2-py2.py3-none-any.whl", hash = "sha256:f3d4e9bd4344935a08e6844e53d6220e2e4fb7e465bee51fa909152ed6bab406"},
+    {file = "textfsm-1.1.2.tar.gz", hash = "sha256:85a450b441aff04b1cac726bdb36f35534a5b196cca08c8bc14fddd879c4255c"},
 ]
 toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},

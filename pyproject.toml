@@ -10,14 +10,13 @@ python = "^3.7"
 # Required for Python 3.7 for now. See: https://stackoverflow.com/a/73932581/194311
 importlib-metadata = "4.13.0"
 f5-sdk = "^3.0.21"
-junos-eznc = "^2.4.1"
-netmiko = "^3.1"
-paramiko = "^2.7"
-pyeapi = "^0.8.3"
+junos-eznc = "^2.6"
+netmiko = "^4.0"
+# develop branch because these lines are required for py3.10 to work. https://github.com/arista-eosplus/pyeapi/blob/236503162d1aa3ecc953678ec05380f1f605be02/pyeapi/api/abstract.py#L44
+pyeapi = {git = "https://github.com/arista-eosplus/pyeapi.git", rev = "develop"}
 pynxos = "^0.0.5"
-requests = "^2.23"
-scp = "^0.13.2"
-textfsm = "^1.1"
+requests = "^2.28"
+scp = "^0.14"
 
 [tool.poetry.scripts]
 pyntc = 'pyntc.cli:main'
