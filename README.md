@@ -12,7 +12,7 @@
 
 ## Overview
 
-A Python library that is a collection of functions that are used in the common network automation tasks. Tasks such as converting a BGP ASN to and from dotted format, normalizing an interface name, or "type 5" encrypting a password. The intention is to centralize these functions while keeping the library light.
+A Python library that is a SDK to simplify common workflows for Network Devices.
 
 ## Documentation
 
