@@ -12,13 +12,14 @@ The first way is to use the `ntc_device` object. Just pass in all required param
 Like many libraries, we need to pass in the host/IP and credentials.  Because this is a multi-vendor/API library, we also use the `device_type` parameter to identify which device we are building an instance of.
 
 pyntc currently supports seven device types:
-* cisco_aireos_ssh
-* cisco_asa_ssh
-* cisco_ios_ssh
-* cisco_nxos_nxapi
-* arista_eos_eapi
-* juniper_junos_netconf
-* f5_tmos_icontrol
+
+- cisco_aireos_ssh
+- cisco_asa_ssh
+- cisco_ios_ssh
+- cisco_nxos_nxapi
+- arista_eos_eapi
+- juniper_junos_netconf
+- f5_tmos_icontrol
 
 The example below shows how to build a device object when working with a Cisco IOS router.
 
@@ -47,16 +48,16 @@ This simplifies creating device objects since you no longer need to specify cred
 
 - filename:  `.ntc.conf`
 - Priority of locating the conf file:
-  - `filename` param in `ntc_device_by_name`
-  - Environment Variable aka `PYNTC_CONF`
-  - Home directory `.ntc.conf`
+    - `filename` param in `ntc_device_by_name`
+    - Environment Variable aka `PYNTC_CONF`
+    - Home directory `.ntc.conf`
 - Specify device_type and a name
 - host is not required if the name is the device's FQDN
 - Four supported device types: `cisco_nxos_nxapi`, `cisco_ios_ssh`, `arista_eos_eapi`, and `juniper_junos_netconf`
 
 Here is an example `.ntc.conf` file:
 
-```bash
+```ini
 [cisco_nxos_nxapi:nxos-spine1]
 host: 31.220.64.117
 username: ntc
@@ -88,10 +89,10 @@ We can now build device objects just by referencing the name of the device from 
 >>> vmx1 = NTCNAME('vmx1')
 ```
 
-
 Once the device object is creating using either `ntc_device` or `ntc_device_by_name`, you can start using the built-in device methods in pyntc.
 
-Note: the only method and property not supported on all devices is `install_os`.  It is not supported on Juniper Junos devices.
+!!! info
+    The only method and property not supported on all devices is `install_os`.  It is not supported on Juniper Junos devices.
 
 ### Gathering Facts
 
@@ -152,7 +153,9 @@ On an IOS device:
 ### Sending Show Commands
 
 - `show` method
-- Note: API enabled devices return JSON by default
+
+!!! info
+    API enabled devices return JSON by default
 
 ```python
 >>> nxs1.show('show hostname')
