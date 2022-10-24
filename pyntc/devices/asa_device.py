@@ -6,25 +6,24 @@ import signal
 import time
 import warnings
 from collections import Counter
-from typing import List, Dict, Union, Optional, Iterable
-from ipaddress import ip_address, IPv4Address, IPv6Address, IPv4Interface, IPv6Interface
+from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
+from typing import Dict, Iterable, List, Optional, Union
 
 from netmiko import ConnectHandler
-from netmiko.cisco import CiscoAsaSSH, CiscoAsaFileTransfer
-
-from pyntc.utils import get_structured_data
-from .base_device import BaseDevice, fix_docs
+from netmiko.cisco import CiscoAsaFileTransfer, CiscoAsaSSH
 from pyntc.errors import (
-    NTCError,
     CommandError,
-    OSInstallError,
     CommandListError,
-    FileTransferError,
-    RebootTimeoutError,
-    NTCFileNotFoundError,
     FileSystemNotFoundError,
+    FileTransferError,
+    NTCError,
+    NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
 )
+from pyntc.utils import get_structured_data
 
+from .base_device import BaseDevice, fix_docs
 
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
@@ -39,7 +38,7 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
+    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):  # nosec
         """
         Pyntc Device constructor for Cisco ASA.
 
@@ -47,7 +46,7 @@ class ASADevice(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate to the device.
             password (str): The password to authenticate to the device.
-            secret (str, optional): The password to escalate privlege on the device. Defaults to "".
+            secret (str, optional): The password to escalate privilege on the device. Defaults to "".
             port (int, optional): Port used to establish connection. Defaults to 22.
         """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")

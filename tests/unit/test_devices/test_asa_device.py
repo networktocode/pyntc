@@ -1,11 +1,12 @@
-import pytest
 import os
+from ipaddress import ip_address, ip_interface
 from unittest import mock
-from ipaddress import ip_interface, ip_address
+
+import pytest
+from pyntc.devices import asa_device as asa_module
+from pyntc.devices import ASADevice
 
 from .device_mocks.asa import send_command
-from pyntc.devices import ASADevice
-from pyntc.devices import asa_device as asa_module
 
 BOOT_IMAGE = "asa9-12-3-12-smp-k8.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.asa_device.ASADevice.boot_options"
@@ -18,180 +19,32 @@ COLD_STANDBY = "cold standby"
 
 
 class TestASADevice:
-    @mock.patch("pyntc.devices.asa_device.ConnectHandler")
     def setup(self, api):
+        with mock.patch("pyntc.devices.asa_device.ConnectHandler") as api:
 
-        if not getattr(self, "device", None):
+            if not getattr(self, "device", None):
+                self.device = ASADevice("host", "user", "password")
+
+            # need to think if there should be an if before this...
+            self.device.native = api
+
+            # counts how many times we setup and tear down
+            if not getattr(self, "count_setup", None):
+                self.count_setup = 0
+
+            if not getattr(self, "count_teardown", None):
+                self.count_teardown = 0
+
             self.device = ASADevice("host", "user", "password")
-
-        # need to think if there should be an if before this...
-        self.device.native = api
-
-        # counts how many times we setup and tear down
-        if not getattr(self, "count_setup", None):
-            self.count_setup = 0
-
-        if not getattr(self, "count_teardown", None):
-            self.count_teardown = 0
-
-        self.device = ASADevice("host", "user", "password")
-        api.send_command_timing.side_effect = send_command
-        api.send_command.side_effect = send_command
-        self.device.native = api
-        self.count_setup += 1
+            api.send_command_timing.side_effect = send_command
+            api.send_command.side_effect = send_command
+            self.device.native = api
+            self.count_setup += 1
 
     def teardown(self):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
         self.count_teardown += 1
-
-    def test_enable_from_disable(self):
-        self.device.native.check_enable_mode.return_value = False
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_enable(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = False
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_not_called()
-
-    def test_enable_from_config(self):
-        self.device.native.check_enable_mode.return_value = True
-        self.device.native.check_config_mode.return_value = True
-        self.device.enable()
-        self.device.native.check_enable_mode.assert_called()
-        self.device.native.enable.assert_not_called()
-        self.device.native.check_config_mode.assert_called()
-        self.device.native.exit_config_mode.assert_called()
-
-    def test_config(self):
-        command = "hostname DATA-CENTER-FW"
-
-        result = self.device.config(command)
-        assert result is None
-
-        self.device.native.send_command_timing.assert_called_with(command)
-
-    def test_bad_config(self):
-        command = "asdf poknw"
-
-        with pytest.raises(asa_module.CommandError, match=command):
-            self.device.config(command)
-
-    def test_config_list(self):
-        commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
-        self.device.config_list(commands)
-
-        for cmd in commands:
-            self.device.native.send_command_timing.assert_any_call(cmd)
-
-    def test_bad_config_list(self):
-        commands = ["crypto key generate rsa modulus 2048", "lalala"]
-        results = ["ok", "Error: lalala"]
-
-        self.device.native.send_command_timing.side_effect = results
-
-        with pytest.raises(asa_module.CommandListError, match=commands[1]):
-            self.device.config_list(commands)
-
-    def test_show(self):
-        command = "show running config"
-        result = self.device.show(command)
-
-        assert isinstance(result, str)
-        assert "interface" in result
-        assert "inspect" in result
-
-    def test_bad_show(self):
-        command = "show linux"
-        self.device.native.send_command_timing.return_value = "Error: linux"
-        with pytest.raises(asa_module.CommandError):
-            self.device.show(command)
-
-    def test_show_list(self):
-        commands = ["show running config", "show startup-config"]
-
-        result = self.device.show_list(commands)
-        assert isinstance(result, list)
-        assert "console" in result[0]
-        assert "security-level" in result[1]
-
-        calls = list(mock.call(x) for x in commands)
-        self.device.native.send_command_timing.assert_has_calls(calls)
-
-    def test_bad_show_list(self):
-        commands = ["show badcommand", "show clock"]
-        results = ["Error: badcommand", "14:31:57.089 PST Tue Feb 10 2008"]
-
-        self.device.native.send_command_timing.side_effect = results
-
-        with pytest.raises(asa_module.CommandListError, match="show badcommand"):
-            self.device.show_list(commands)
-
-    def test_save(self):
-        result = self.device.save()
-
-        assert result
-        self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
-
-    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
-    def test_file_copy_remote_exists(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-
-        mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.return_value = True
-        mock_ft_instance.compare_md5.return_value = True
-
-        result = self.device.file_copy_remote_exists("source_file")
-
-        assert result
-
-    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
-    def test_file_copy_remote_exists_bad_md5(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-
-        mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.return_value = True
-        mock_ft_instance.compare_md5.return_value = False
-
-        result = self.device.file_copy_remote_exists("source_file")
-
-        assert not result
-
-    @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", autospec=True)
-    def test_file_copy_remote_exists_not(self, mock_ft):
-        self.device.native.send_command_timing.side_effect = None
-        self.device.native.send_command_timing.return_value = "disk0: /dev/null"
-
-        mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.return_value = False
-        mock_ft_instance.compare_md5.return_value = True
-
-        result = self.device.file_copy_remote_exists("source_file")
-
-        assert not result
-
-    def test_reboot(self):
-        self.device.reboot()
-        self.device.native.send_command_timing.assert_any_call("reload")
-
-    def test_reboot_with_timer(self):
-        self.device.reboot(timer=5)
-        self.device.native.send_command_timing.assert_any_call("reload in 5")
-
-    def test_reboot_confirm_deprecated(self):
-        self.device.reboot(confirm=True)
-        self.device.native.send_command_timing.assert_any_call("reload")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
@@ -249,18 +102,6 @@ class TestASADevice:
         assert contents == self.device.running_config
         os.remove(filename)
 
-    def test_checkpoint(self):
-        self.device.checkpoint("good_checkpoint")
-        self.device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
-
-    def test_running_config(self):
-        expected = self.device.show("show running config")
-        assert self.device.running_config == expected
-
-    def test_starting_config(self):
-        expected = self.device.show("show startup-config")
-        assert self.device.startup_config == expected
-
     def test_count_setup(self):
         # This class is reinstantiated in every test, so the counter is reset
         assert self.count_setup == 1
@@ -270,9 +111,169 @@ class TestASADevice:
         assert self.count_teardown == 0
 
 
+def test_enable_from_disable(asa_device):
+    asa_device.native.check_enable_mode.return_value = False
+    asa_device.native.check_config_mode.return_value = False
+    asa_device.enable()
+    asa_device.native.check_enable_mode.assert_called()
+    asa_device.native.enable.assert_called()
+    asa_device.native.check_config_mode.assert_called()
+    asa_device.native.exit_config_mode.assert_not_called()
+
+
+def test_enable_from_enable(asa_device):
+    asa_device.native.check_enable_mode.return_value = True
+    asa_device.native.check_config_mode.return_value = False
+    asa_device.enable()
+    asa_device.native.check_enable_mode.assert_called()
+    asa_device.native.enable.assert_not_called()
+    asa_device.native.check_config_mode.assert_called()
+    asa_device.native.exit_config_mode.assert_not_called()
+
+
+def test_enable_from_config(asa_device):
+    asa_device.native.check_enable_mode.return_value = True
+    asa_device.native.check_config_mode.return_value = True
+    asa_device.enable()
+    asa_device.native.check_enable_mode.assert_called()
+    asa_device.native.enable.assert_not_called()
+    asa_device.native.check_config_mode.assert_called()
+    asa_device.native.exit_config_mode.assert_called()
+
+
+def test_config(asa_device):
+    command = "hostname DATA-CENTER-FW"
+
+    result = asa_device.config(command)
+    assert result is None
+
+    asa_device.native.send_command_timing.assert_called_with(command)
+
+
+def test_bad_config(asa_device):
+    command = "asdf poknw"
+    result = "Error: asdf"
+
+    asa_device.native.send_command_timing.return_value = result
+    with pytest.raises(asa_module.CommandError, match=command):
+        asa_device.config(command)
+
+
+def test_config_list(asa_device):
+    commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
+    asa_device.config_list(commands)
+
+    for cmd in commands:
+        asa_device.native.send_command_timing.assert_any_call(cmd)
+
+
+def test_bad_config_list(asa_device):
+    commands = ["crypto key generate rsa modulus 2048", "lalala"]
+    results = ["ok", "Error: lalala"]
+
+    asa_device.native.send_command_timing.side_effect = results
+
+    with pytest.raises(asa_module.CommandListError, match=commands[1]):
+        asa_device.config_list(commands)
+
+
+def test_show(asa_device):
+    command = "show running config"
+    asa_device.native.send_command_timing.return_value = "interface eth1\ninspect"
+    result = asa_device.show(command)
+    asa_device.native.send_command_timing.assert_called_with(command)
+
+    assert isinstance(result, str)
+    assert "interface" in result
+    assert "inspect" in result
+
+
+def test_bad_show(asa_device):
+    command = "show linux"
+    asa_device.native.send_command_timing.return_value = "Error: linux"
+    with pytest.raises(asa_module.CommandError):
+        asa_device.show(command)
+
+
+def test_show_list(asa_device):
+    commands = ["show running config", "show startup-config"]
+    results = ["console 0", "security-level meh"]
+    asa_device.native.send_command_timing.side_effect = results
+
+    result = asa_device.show_list(commands)
+    assert isinstance(result, list)
+    assert "console" in result[0]
+    assert "security-level" in result[1]
+
+    calls = list(mock.call(x) for x in commands)
+    asa_device.native.send_command_timing.assert_has_calls(calls)
+
+
+def test_bad_show_list(asa_device):
+    commands = ["show badcommand", "show clock"]
+    results = ["Error: badcommand", "14:31:57.089 PST Tue Feb 10 2008"]
+
+    asa_device.native.send_command_timing.side_effect = results
+
+    with pytest.raises(asa_module.CommandListError, match="show badcommand"):
+        asa_device.show_list(commands)
+
+
+def test_save(asa_device):
+    result = asa_device.save()
+
+    assert result
+    asa_device.native.send_command_timing.assert_any_call("copy running-config startup-config")
+
+
+def test_reboot(asa_device):
+    asa_device.reboot()
+    asa_device.native.send_command_timing.assert_any_call("reload")
+
+
+def test_reboot_with_timer(asa_device):
+    asa_device.reboot(timer=5)
+    asa_device.native.send_command_timing.assert_any_call("reload in 5")
+
+
+def test_reboot_confirm_deprecated(asa_device):
+    asa_device.reboot(confirm=True)
+    asa_device.native.send_command_timing.assert_any_call("reload")
+
+
+def test_boot_options_dir(asa_device):
+    asa_device.native.send_command_timing.side_effect = None
+    asa_device.native.send_command_timing.return_value = f"Current BOOT variable = disk0:/{BOOT_IMAGE}"
+    boot_options = asa_device.boot_options
+    assert boot_options == {"sys": BOOT_IMAGE}
+    asa_device.native.send_command_timing.assert_called_with("show boot | i BOOT variable")
+
+
+def test_boot_options_none(asa_device):
+    asa_device.native.send_command_timing.side_effect = None
+    asa_device.native.send_command_timing.return_value = ""
+    boot_options = asa_device.boot_options
+    assert boot_options["sys"] is None
+
+
+def test_checkpoint(asa_device):
+    asa_device.checkpoint("good_checkpoint")
+    asa_device.native.send_command_timing.assert_any_call("copy running-config good_checkpoint")
+
+
+def test_running_config(asa_device):
+    expected = asa_device.show("show running config")
+    assert asa_device.running_config == expected
+
+
+def test_starting_config(asa_device):
+    expected = asa_device.show("show startup-config")
+    assert asa_device.startup_config == expected
+
+
 @mock.patch.object(ASADevice, "enable")
 @mock.patch.object(ASADevice, "file_copy_remote_exists", return_value=True)
-def test__file_copy_already_exists(mock_file_copy_remote_exists, mock_enable, asa_device):
+def test_file_copy_already_exists(mock_file_copy_remote_exists, mock_enable, asa_device):
     asa_device._file_copy("a.txt", "a.txt", "flash:")
     mock_enable.assert_called()
     mock_file_copy_remote_exists.assert_called_once()
@@ -283,7 +284,7 @@ def test__file_copy_already_exists(mock_file_copy_remote_exists, mock_enable, as
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
-def test__file_copy_transfer_file(
+def test_file_copy_transfer_file(
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -307,7 +308,7 @@ def test__file_copy_transfer_file(
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
-def test__file_copy_transfer_file_eof_error(
+def test_file_copy_transfer_file_eof_error(
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -332,7 +333,7 @@ def test__file_copy_transfer_file_eof_error(
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
-def test__file_copy_transfer_file_error(
+def test_file_copy_transfer_file_error(
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -358,7 +359,7 @@ def test__file_copy_transfer_file_error(
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
-def test__file_copy_transfer_file_does_not_transfer(
+def test_file_copy_transfer_file_does_not_transfer(
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -379,7 +380,7 @@ def test__file_copy_transfer_file_does_not_transfer(
 
 
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
-def test__get_ipv4_addresses(host, command_prefix, asa_show):
+def test_get_ipv4_addresses(host, command_prefix, asa_show):
     command = "show ip address"
     device = asa_show([f"{command.replace(' ', '_')}.txt"])
     actual = device._get_ipv4_addresses(host)
@@ -389,7 +390,7 @@ def test__get_ipv4_addresses(host, command_prefix, asa_show):
 
 
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
-def test__get_ipv6_addresses(host, command_prefix, asa_show):
+def test_get_ipv6_addresses(host, command_prefix, asa_show):
     command = "show ipv6 interface"
     device = asa_show([f"{command.replace(' ', '_')}.txt"])
     actual = device._get_ipv6_addresses(host)
@@ -402,14 +403,14 @@ def test__get_ipv6_addresses(host, command_prefix, asa_show):
 
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test__wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
+def test_wait_for_peer_reboot(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.side_effect = [STANDBY_READY, FAILED, FAILED, STANDBY_READY]
     asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
     assert mock_peer_redundancy_state.call_count == 4
 
 
 @mock.patch.object(ASADevice, "peer_redundancy_state", new_callable=mock.PropertyMock)
-def test__wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_device):
+def test_wait_for_peer_reboot_never_fail_error(mock_peer_redundancy_state, asa_device):
     mock_peer_redundancy_state.return_value = STANDBY_READY
     with pytest.raises(asa_module.RebootTimeoutError):
         asa_device._wait_for_peer_reboot([STANDBY_READY, COLD_STANDBY], 2)
