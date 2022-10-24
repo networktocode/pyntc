@@ -1,7 +1,7 @@
 # Pyntc
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/icon-pyntc.png" class="logo" height="200px">
+  <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/pyntc_logo.png" class="logo" height="200px">
   <br>
   <a href="https://github.com/networktocode/pyntc/actions"><img src="https://github.com/networktocode/pyntc/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://pyntc.readthedocs.io/en/latest"><img src="https://readthedocs.org/projects/pyntc/badge/"></a>
