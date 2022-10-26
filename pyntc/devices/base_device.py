@@ -4,8 +4,7 @@ import abc
 import importlib
 import warnings
 
-
-from pyntc.errors import NTCError, FeatureNotFoundError
+from pyntc.errors import FeatureNotFoundError, NTCError
 
 
 def fix_docs(cls):
@@ -25,12 +24,14 @@ def fix_docs(cls):
     return cls
 
 
-class BaseDevice(object):
+class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Base Device ABC."""
 
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, host, username, password, device_type=None, **kwargs):  # noqa: D403
+    def __init__(
+        self, host, username, password, device_type=None, **kwargs
+    ):  # noqa: D403  # pylint: disable=unused-argument
         """PyNTC base device implementation.
 
         Args:
@@ -239,7 +240,7 @@ class BaseDevice(object):
             ]
         }
         if self.device_type == "cisco_ios_ssh":
-            facts[self.device_type] = {"config_register": self.config_register}
+            facts[self.device_type] = {"config_register": self.config_register}  # pylint: disable=no-member
 
     @abc.abstractmethod
     def file_copy(self, src, dest=None, **kwargs):
@@ -333,7 +334,7 @@ class BaseDevice(object):
         """Rollback to a checkpoint file.
 
         Args:
-            filename (str): The filename of the checkpoint file to load into the running configuration.
+            checkpoint_file (str): The filename of the checkpoint file to load into the running configuration.
         """
         raise NotImplementedError
 
@@ -419,13 +420,13 @@ class BaseDevice(object):
         """Return a feature class based on the ``feature_name`` for the appropriate subclassed device type."""
         try:
             feature_module = importlib.import_module(
-                "pyntc.devices.system_features.%s.%s_%s" % (feature_name, self.device_type, feature_name)
+                f"pyntc.devices.system_features.{feature_name}.{self.device_type}_{feature_name}"
             )
             return feature_module.instance(self)
-        except ImportError:
-            raise FeatureNotFoundError(feature_name, self.device_type)
-        except AttributeError:
-            raise
+        except ImportError as import_err:
+            raise FeatureNotFoundError(feature_name, self.device_type) from import_err
+        except AttributeError as att_err:
+            raise AttributeError("Feature attribute error") from att_err
 
     def get_boot_options(self):
         """Get current boot variables like system image and kickstart image.
@@ -470,8 +471,6 @@ class BaseDevice(object):
         if self.vlans:
             self._vlans = None
 
-        return None
-
 
 class RebootTimerError(NTCError):
     """Reboot timer error class to notify user reboot timer is not supported."""
@@ -483,16 +482,12 @@ class RebootTimerError(NTCError):
         Args:
             device_type (str): Ex: cisco_nxos_nxapi, cisco_ios_ssh
         """
-        super().__init__("Reboot timer not supported on %s." % device_type)
+        super().__init__(f"Reboot timer not supported on {device_type}.")
 
 
 class RollbackError(NTCError):
     """Rollback error."""
 
-    pass
-
 
 class SetBootImageError(NTCError):
     """Set boot image error."""
-
-    pass
