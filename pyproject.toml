@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
+    # "Programming Language :: Python :: 3.10",
 ]
 include = [
     "LICENSE",
@@ -30,8 +30,8 @@ importlib-metadata = "4.13.0"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
-# develop branch because these lines are required for py3.10 to work. https://github.com/arista-eosplus/pyeapi/blob/236503162d1aa3ecc953678ec05380f1f605be02/pyeapi/api/abstract.py#L44
-pyeapi = {git = "https://github.com/arista-eosplus/pyeapi.git", rev = "develop"}
+# pyeapi doesn't support py3.10 yet in a release, and pypi doesn't allow direct dependencies. py3.10 to work. https://github.com/arista-eosplus/pyeapi/blob/236503162d1aa3ecc953678ec05380f1f605be02/pyeapi/api/abstract.py#L44
+pyeapi = "^0.8.4"
 pynxos = "^0.0.5"
 requests = "^2.28"
 scp = "^0.14"
