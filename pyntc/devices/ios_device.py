@@ -681,12 +681,8 @@ class IOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             if install_mode:
-                try:
-                    # Change boot statement to be boot system <flash>:packages.conf
-                    self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
-                    packages_conf_file_found = True
-                except NTCFileNotFoundError:
-                    packages_conf_file_found = False
+                # Change boot statement to be boot system <flash>:packages.conf
+                self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
 
                 # Get the current fast_cli to set it back later to whatever it is
                 current_fast_cli = self.fast_cli
@@ -698,8 +694,6 @@ class IOSDevice(BaseDevice):
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
                 os_version = self.os_version
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
-                    if not packages_conf_file_found:
-                        raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=self._get_file_system())
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
                     self.show(command, delay_factor=install_mode_delay_factor)
