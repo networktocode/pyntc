@@ -10,7 +10,7 @@ from pyntc.devices import IOSDevice
 from pyntc.devices import ios_device as ios_module
 
 
-BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE"
+BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
 DEVICE_FACTS = {
     "version": "15.1(3)T4",
@@ -224,9 +224,8 @@ class TestIOSDevice(unittest.TestCase):
     def test_boot_options_show_run(self, mock_boot):
         results = [
             ios_module.CommandError("show bootvar", "fail"),
-            ios_module.CommandError("show bootvar", "fail"),
-            f"boot system flash bootflash:/{BOOT_IMAGE}",
-            "Directory of bootflash:/",
+            ios_module.CommandError("show boot", "fail"),
+            "boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin",
         ]
         self.device.native.send_command.side_effect = results
         boot_options = self.device.boot_options
@@ -818,11 +817,11 @@ def test_send_command_timing(ios_native_send_command_timing):
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
-    device = ios_show(["dir_flash:.txt"])
+def test_set_boot_options_pass_standard(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin"])
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE)
-    mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
+    mock_config.assert_called_with(["no boot system", f"boot system flash:{BOOT_IMAGE}"])
     mock_file_system.assert_called_once()
     mock_config.assert_called_once()
     mock_save.assert_called_once()
@@ -833,8 +832,8 @@ def test_set_boot_options(mock_save, mock_boot_options, mock_config, mock_file_s
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options_pass_file_system(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
-    device = ios_show(["dir_flash:.txt"])
+def test_set_boot_options_pass_backslash(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot system flash:/c3560-advipservicesk9-mz.122-44.SE.bin"])
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
     mock_config.assert_called_with(["no boot system", f"boot system flash:/{BOOT_IMAGE}"])
@@ -844,28 +843,76 @@ def test_set_boot_options_pass_file_system(mock_save, mock_boot_options, mock_co
     mock_boot_options.assert_called_once()
 
 
+@mock.patch.object(IOSDevice, "_get_file_system")
 @mock.patch.object(IOSDevice, "config")
 @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "save")
-def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config, ios_show):
-    device = ios_show(["dir_flash:.txt"])
-    mock_config.side_effect = [
-        ios_module.CommandListError(
-            ["no boot system", "invalid boot command"],
-            "invalid boot command",
-            r"% Invalid command",
-        ),
-        "valid boot command",
-    ]
+def test_set_boot_options_pass_double_flash(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot system flash flash:c3560-advipservicesk9-mz.122-44.SE.bin"])
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
-    mock_config.assert_has_calls(
-        [
-            mock.call(["no boot system", f"boot system flash:/{BOOT_IMAGE}"]),
-            mock.call(["no boot system", f"boot system flash {BOOT_IMAGE}"]),
-        ]
-    )
+    mock_config.assert_called_with(["no boot system", f"boot system flash flash:{BOOT_IMAGE}"])
+    mock_file_system.assert_not_called()
+    mock_config.assert_called_once()
     mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_pass_with_space(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot system flash c3560-advipservicesk9-mz.122-44.SE.bin"])
+    mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+    device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+    mock_config.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+    mock_file_system.assert_not_called()
+    mock_config.assert_called_once()
+    mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_raise_commanderror(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot flash:c3560-advipservicesk9-mz.122-44.SE.bin"])
+    with pytest.raises(ios_module.CommandError) as err:
+        device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+
+    assert (
+        err.value.message
+        == "Command boot system flash was not successful: Unable to determine the boot system configuration syntax. Current config is {0}".format(
+            "boot flash:c3560-advipservicesk9-mz.122-44.SE.bin"
+        )
+    )
+    mock_config.assert_not_called()
+
+
+# @mock.patch.object(IOSDevice, "config")
+# @mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+# @mock.patch.object(IOSDevice, "save")
+# def test_set_boot_options_with_spaces(mock_save, mock_boot_options, mock_config, ios_show):
+#     device = ios_show(["dir_flash:.txt", ""])
+#     mock_config.side_effect = [
+#         ios_module.CommandListError(
+#             ["no boot system", "invalid boot command"],
+#             "invalid boot command",
+#             r"% Invalid command",
+#         ),
+#         "valid boot command",
+#     ]
+#     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+#     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+#     mock_config.assert_has_calls(
+#         [
+#             mock.call(["no boot system", f"boot system flash:/{BOOT_IMAGE}"]),
+#             mock.call(["no boot system", f"boot system flash {BOOT_IMAGE}"]),
+#         ]
+#     )
+#     mock_save.assert_called_once()
 
 
 @mock.patch.object(IOSDevice, "hostname", new_callable=mock.PropertyMock)
@@ -887,11 +934,11 @@ def test_set_boot_options_no_file(mock_hostname, ios_show):
 def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, ios_show):
     bad_image = "bad_image.bin"
     mock_boot_options.return_value = {"sys": bad_image}
-    device = ios_show(["dir_flash:.txt"])
+    device = ios_show(["dir_flash:.txt", "boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin"])
     with pytest.raises(ios_module.CommandError) as err:
         device.set_boot_options(BOOT_IMAGE, file_system="flash:")
 
-    assert err.value.command == f"boot system flash:/{BOOT_IMAGE}"
+    assert err.value.command == f"boot system flash:{BOOT_IMAGE}"
     assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"
 
 
@@ -973,7 +1020,7 @@ def test_install_os_install_mode_failed(
     with pytest.raises(ios_module.OSInstallError) as err:
         ios_device.install_os(image_name, install_mode=True)
 
-    assert err.value.message == "ntc-rtr01 was unable to boot into cat9k_iosxe.16.12.04.SPA.bin"
+    assert err.value.message == "ntc-rtr01 was unable to boot into packages.conf"
 
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
@@ -1097,7 +1144,7 @@ def test_install_os_install_mode_from_everest_failed(
     with pytest.raises(ios_module.OSInstallError) as err:
         ios_device.install_os(image_name, install_mode=True)
 
-    assert err.value.message == "ntc-rtr01 was unable to boot into cat9k_iosxe.16.12.04.SPA.bin"
+    assert err.value.message == "ntc-rtr01 was unable to boot into packages.conf"
 
     # Test the results
     mock_set_boot_options.assert_called_with("packages.conf")
@@ -1254,7 +1301,6 @@ def test_show_list(ios_native_send_command):
 def test_vlans(mock_show_vlan, mock_model, ios_show):
     mock_model.return_value = "WS-3750"
     device = ios_show(["show_vlan.txt"])
-    print(device)
     mock_show_vlan.return_value = [{"vlan_id": "1"}, {"vlan_id": "2"}, {"vlan_id": "3"}, {"vlan_id": "4"}]
     assert device.vlans == ["1", "2", "3", "4"]
 
