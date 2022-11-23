@@ -951,7 +951,7 @@ def test_set_boot_options_image_packages_conf_file(
 ):
     device = ios_show(["dir_flash:.txt"])
     mock_boot_options.return_value = {"sys": ios_module.INSTALL_MODE_FILE_NAME}
-    device.set_boot_options(ios_module.INSTALL_MODE_FILE_NAME, file_system="flash:")
+    device.set_boot_options(ios_module.INSTALL_MODE_FILE_NAME, file_system="flash:/")
     mock_config.assert_called_with(["no boot system", f"boot system flash:/{ios_module.INSTALL_MODE_FILE_NAME}"])
     mock_file_system.assert_not_called()
     mock_config.assert_called_once()
