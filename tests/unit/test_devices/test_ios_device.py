@@ -31,7 +31,15 @@ SHOW_BOOT_VARIABLE = (
     "Boot Mode = DEVICE\n"
     "iPXE Timeout = 0"
 )
-
+DEVICE_FACTS_BIS = {
+    "version": "15.1(3)T4",
+    "hostname": "rtr2811",
+    "uptime": "9 minutes",
+    "running_image": "c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin",
+    "hardware": "2811",
+    "serial": "",
+    "config_register": "0x2102",
+}
 SHOW_BOOT_PATH_LIST = (
     f"BOOT path-list      : {BOOT_IMAGE}\n"
     "Config file         : flash:/config.text\n"
@@ -258,6 +266,12 @@ class TestIOSDevice(unittest.TestCase):
         mock_raw_version_data.return_value = DEVICE_FACTS
         uptime_string = self.device.uptime_string
         assert uptime_string == "04:18:59:00"
+
+    @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
+    def test_uptime_nine_minutes_string(self, mock_raw_version_data):
+        mock_raw_version_data.return_value = DEVICE_FACTS_BIS
+        uptime_string = self.device.uptime_string
+        assert uptime_string == "00:00:09:00"
 
     def test_vendor(self):
         vendor = self.device.vendor
