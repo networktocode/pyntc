@@ -229,6 +229,9 @@ class IOSDevice(BaseDevice):
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
+    def _has_reload_happened_recently(self):
+        return re.search("^00:00:0\d:*", self.uptime_string) is not None
+
     def backup_running_config(self, filename):
         """Backup running configuration to filename specified.
 
@@ -707,6 +710,11 @@ class IOSDevice(BaseDevice):
                     # Set a higher delay factor and send it in
                     try:
                         self.show(command, delay_factor=install_mode_delay_factor)
+                        MAXIMUM_RETRIES = 10
+                        for _ in range(0, MAXIMUM_RETRIES):
+                            if self._has_reload_happened_recently():
+                                break
+                            time.sleep(60)
                     except IOError:
                         pass
                     except CommandError:
