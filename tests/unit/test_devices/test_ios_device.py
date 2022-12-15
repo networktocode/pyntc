@@ -1,6 +1,7 @@
 import unittest
 import mock
 import os
+import time
 
 import pytest
 
@@ -1253,6 +1254,51 @@ def test_install_os_install_mode_fast_cli_state(
     assert actual is True
     assert ios_device.fast_cli == fast_cli_setting
 
+@mock.patch.object(IOSDevice, "_has_reload_happened_recently")
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+@mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
+@mock.patch.object(time, "sleep")
+def test_install_os_install_mode_with_retries(
+    mock_sleep,
+    mock_fast_cli,
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    mock_has_reload_happened_recently,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_has_reload_happened_recently.side_effect = [False, False, True]
+    mock_image_booted.side_effect = [False, True]
+    mock_sleep.return_value = None
+    # Call the install os function
+    actual = ios_device.install_os(image_name, install_mode=True)
+
+    # Check the results
+    mock_set_boot_options.assert_called_with("packages.conf")
+    mock_show.assert_called_with(
+        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+    )
+    mock_reboot.assert_not_called()
+    mock_os_version.assert_called()
+    mock_image_booted.assert_called()
+    mock_wait_for_reboot.assert_called()
+    assert actual is True
+    # Assert that fast_cli value was retrieved, set to Fals, and set back to original value
+    assert mock_fast_cli.call_count == 3
 
 def test_show(ios_send_command):
     command = "show_ip_arp"
