@@ -98,7 +98,6 @@ class TestIOSDevice(unittest.TestCase):
         self.assertTrue(result)
         self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
-
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
         self.device.native.send_command.side_effect = None
@@ -1259,6 +1258,7 @@ def test_install_os_install_mode_fast_cli_state(
     assert actual is True
     assert ios_device.fast_cli == fast_cli_setting
 
+
 @mock.patch.object(IOSDevice, "_has_reload_happened_recently")
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -1304,6 +1304,7 @@ def test_install_os_install_mode_with_retries(
     assert actual is True
     # Assert that fast_cli value was retrieved, set to Fals, and set back to original value
     assert mock_fast_cli.call_count == 3
+
 
 def test_show(ios_send_command):
     command = "show_ip_arp"
