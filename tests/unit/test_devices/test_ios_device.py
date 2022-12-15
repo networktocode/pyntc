@@ -22,6 +22,15 @@ DEVICE_FACTS = {
     "serial": "",
     "config_register": "0x2102",
 }
+RECENT_UPTIME_DEVICE_FACTS = {
+    "version": "15.1(3)T4",
+    "hostname": "rtr2811",
+    "uptime": "9 minutes",
+    "running_image": "c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin",
+    "hardware": "2811",
+    "serial": "",
+    "config_register": "0x2102",
+}
 SHOW_BOOT_VARIABLE = (
     "Current Boot Variables:\n"
     "BOOT variable = flash:/cat3k_caa-universalk9.16.11.03a.SPA.bin;\n\n"
@@ -32,15 +41,8 @@ SHOW_BOOT_VARIABLE = (
     "Boot Mode = DEVICE\n"
     "iPXE Timeout = 0"
 )
-DEVICE_FACTS_BIS = {
-    "version": "15.1(3)T4",
-    "hostname": "rtr2811",
-    "uptime": "9 minutes",
-    "running_image": "c2800nm-adventerprisek9_ivs_li-mz.151-3.T4.bin",
-    "hardware": "2811",
-    "serial": "",
-    "config_register": "0x2102",
-}
+
+
 SHOW_BOOT_PATH_LIST = (
     f"BOOT path-list      : {BOOT_IMAGE}\n"
     "Config file         : flash:/config.text\n"
@@ -95,6 +97,7 @@ class TestIOSDevice(unittest.TestCase):
         result = self.device.save()
         self.assertTrue(result)
         self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
+
 
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
@@ -267,12 +270,14 @@ class TestIOSDevice(unittest.TestCase):
         mock_raw_version_data.return_value = DEVICE_FACTS
         uptime_string = self.device.uptime_string
         assert uptime_string == "04:18:59:00"
+        assert self.device._has_reload_happened_recently() is False
 
     @mock.patch.object(IOSDevice, "_raw_version_data", autospec=True)
     def test_uptime_nine_minutes_string(self, mock_raw_version_data):
-        mock_raw_version_data.return_value = DEVICE_FACTS_BIS
+        mock_raw_version_data.return_value = RECENT_UPTIME_DEVICE_FACTS
         uptime_string = self.device.uptime_string
         assert uptime_string == "00:00:09:00"
+        assert self.device._has_reload_happened_recently() is True
 
     def test_vendor(self):
         vendor = self.device.vendor
