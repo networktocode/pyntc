@@ -942,6 +942,23 @@ def test_set_boot_options_bad_boot(mock_save, mock_config, mock_boot_options, io
     assert err.value.cli_error_msg == f"Setting boot command did not yield expected results, found {bad_image}"
 
 
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_image_packages_conf_file(
+    mock_save, mock_boot_options, mock_config, mock_file_system, ios_show
+):
+    device = ios_show(["dir_flash:.txt"])
+    mock_boot_options.return_value = {"sys": ios_module.INSTALL_MODE_FILE_NAME}
+    device.set_boot_options(ios_module.INSTALL_MODE_FILE_NAME, file_system="flash:/")
+    mock_config.assert_called_with(["no boot system", f"boot system flash:/{ios_module.INSTALL_MODE_FILE_NAME}"])
+    mock_file_system.assert_not_called()
+    mock_config.assert_called_once()
+    mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
 #
 # TESTS FOR IOS INSTALL MODE METHOD
 #

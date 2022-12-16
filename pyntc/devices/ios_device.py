@@ -971,7 +971,7 @@ class IOSDevice(BaseDevice):
             file_system = self._get_file_system()
 
         file_system_files = self.show("dir {0}".format(file_system))
-        if re.search(image_name, file_system_files) is None:
+        if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
         if image_name == "packages.conf":
             command = "boot system {0}{1}".format(file_system, image_name)
