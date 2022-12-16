@@ -62,7 +62,7 @@ class TestASADevice:
         assert boot_options["sys"] is None
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": BOOT_IMAGE}
@@ -70,7 +70,7 @@ class TestASADevice:
             mock_cl.assert_called_with([f"boot system disk0:/{BOOT_IMAGE}"])
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options_dir(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": BOOT_IMAGE}
@@ -84,7 +84,7 @@ class TestASADevice:
             self.device.set_boot_options("bad_image.bin")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options_bad_boot(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": "bad_image.bin"}

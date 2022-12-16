@@ -1034,32 +1034,29 @@ class IOSDevice(BaseDevice):
             str: Output of command.
         """
         self.enable()
+        if isinstance(command, list):
+            responses = []
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    responses.append(self._send_command(command_instance))
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+
+            return responses
         return self._send_command(command, expect_string=expect_string, **netmiko_args)
 
     def show_list(self, commands):
-        """Run a list of commands on device.
+        """Send show commands in list format to a device.
+
+        DEPRECATED - Use the `show` method.
 
         Args:
-            commands (list): List of commands to run on device.
-
-        Raises:
-            CommandListError: Error if one of the commands is not able to be ran on the device.
-
-        Returns:
-            list: Responses from each command ran on device.
+            commands (list): List with multiple commands.
         """
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
+        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        return self.show(commands)
 
     @property
     def startup_config(self):
