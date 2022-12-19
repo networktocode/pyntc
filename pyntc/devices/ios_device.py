@@ -222,8 +222,8 @@ class IOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.open()
-                self.show("show version")
-                return
+                if self._has_reload_happened_recently():
+                    return
             except:  # noqa E722 # nosec
                 pass
 
@@ -710,11 +710,6 @@ class IOSDevice(BaseDevice):
                     # Set a higher delay factor and send it in
                     try:
                         self.show(command, delay_factor=install_mode_delay_factor)
-                        MAXIMUM_RETRIES = 10
-                        for _ in range(0, MAXIMUM_RETRIES):
-                            if self._has_reload_happened_recently():
-                                break
-                            time.sleep(60)
                     except IOError:
                         pass
                     except CommandError:
