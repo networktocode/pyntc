@@ -354,35 +354,37 @@ class ASADevice(BaseDevice):
             self._connected = False
 
     def config(self, command):
-        """
-        Send single command to device.
+        """Send configuration commands to a device.
 
         Args:
-            command (str): command to be sent to device.
-        """
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
-
-    def config_list(self, commands):
-        """
-        Send list of commands to device.
-
-        Args:
-            commands (list): list of commands to be set to device.
+            commands (str, list): String with single command, or list with multiple commands.
 
         Raises:
             CommandListError: Message stating which command failed and the response from the device.
         """
         self._enter_config()
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+        if isinstance(command, list):
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    self._send_command(command_instance)
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+        else:
+            self._send_command(command)
         self.native.exit_config_mode()
+
+    def config_list(self, commands):
+        """Send configuration commands in list format to a device.
+
+        DEPRECATED - Use the `config` method.
+
+        Args:
+            commands (list): List with multiple commands.
+        """
+        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+        self.config(commands)
 
     @property
     def connected_interface(self) -> str:
@@ -1002,7 +1004,7 @@ class ASADevice(BaseDevice):
         current_images = current_boot.splitlines()
         commands_to_exec = ["no {0}".format(image) for image in current_images]
         commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
-        self.config_list(commands_to_exec)
+        self.config(commands_to_exec)
 
         self.save()
         if self.boot_options["sys"] != image_name:
@@ -1023,33 +1025,28 @@ class ASADevice(BaseDevice):
             str: Output from running command on device.
         """
         self.enable()
+        if isinstance(command, list):
+            responses = []
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    responses.append(self._send_command(command_instance))
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+            return responses
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
-        """
-        Send list of commands to device.
+        """Send show commands in list format to a device.
+
+        DEPRECATED - Use the `show` method.
 
         Args:
-            commands (list): Commands to be sent to device.
-
-        Raises:
-            CommandListError: Failure running command on device.
-
-        Returns:
-            list: Output from each command sent.
+            commands (list): List with multiple commands.
         """
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
+        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+        return self.show(commands)
 
     @property
     def startup_config(self):
