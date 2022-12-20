@@ -230,7 +230,10 @@ class IOSDevice(BaseDevice):
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _has_reload_happened_recently(self):
-        return re.search(r"^00:00:0\d:*", self.uptime_string) is not None
+        if re.search(r"^00:00:0\d:*", self.uptime_string) is None:
+            self._uptime_string = None
+            return False
+        return True
 
     def backup_running_config(self, filename):
         """Backup running configuration to filename specified.
