@@ -222,12 +222,18 @@ class IOSDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 self.open()
-                self.show("show version")
-                return
+                if self._has_reload_happened_recently():
+                    return
             except:  # noqa E722 # nosec
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+
+    def _has_reload_happened_recently(self):
+        if re.search(r"^00:00:0\d:*", self.uptime_string) is None:
+            self._uptime_string = None
+            return False
+        return True
 
     def backup_running_config(self, filename):
         """Backup running configuration to filename specified.
