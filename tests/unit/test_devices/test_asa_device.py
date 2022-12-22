@@ -16,6 +16,25 @@ NEGOTIATION = "negotiation"
 FAILED = "failed"
 NOT_DETECTED = "not detected"
 COLD_STANDBY = "cold standby"
+VERSION_DATA = {
+    "version": "9.16(2)",
+    "device_mgr_version": "7.16(1)",
+    "image": "boot:/asa9162-smp-k8.bin",
+    "hostname": "ciscoasa",
+    "uptime": "2 hours 7 mins",
+    "hardware": "ASAv, 2048 MB RAM, CPU Lynnfield 3695 MHz",
+    "model": "",
+    "flash": "8192MB",
+    "interfaces": ["Management0/0", "GigabitEthernet0/0", "Internal-Data0/0"],
+    "license_mode": "Smart Licensing",
+    "license_state": "Unlicensed",
+    "max_intf": "",
+    "max_vlans": "50",
+    "failover": "Active/Active",
+    "cluster": "Disabled",
+    "serial": "9ANMLKTFC5B",
+    "last_mod": "cisco at 17:41:15.359 UTC Thu Dec 22 2022",
+}
 
 
 class TestASADevice:
@@ -819,3 +838,54 @@ def test_send_command_error(asa_send_command_timing):
     with pytest.raises(asa_module.CommandError):
         device._send_command(command)
     device.native.send_command_timing.assert_called()
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_uptime(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    uptime = asa_device.uptime
+    assert uptime == 7620
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_uptime_string(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    uptime_string = asa_device.uptime_string
+    assert uptime_string == "00:02:07:00"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_model(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    model = asa_device.model
+    assert model == "ASAv, 2048 MB RAM, CPU Lynnfield 3695 MHz"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_os_version(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    os_version = asa_device.os_version
+    assert os_version == "9.16(2)"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_serial_number(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    sn = asa_device.serial_number
+    assert sn == "9ANMLKTFC5B"
+
+
+@mock.patch.object(ASADevice, "_interfaces_detailed_list", autospec=True)
+def test_interfaces(mock_get_intf_list, asa_device):
+    expected = [{"interface": "Management0/0"}, {"interface": "GigabitEthernet0/0"}]
+    mock_get_intf_list.return_value = expected
+    interfaces = asa_device.interfaces
+    assert interfaces == ["Management0/0", "GigabitEthernet0/0"]
+
+
+@mock.patch.object(ASADevice, "_show_vlan", autospec=True)
+def test_vlan(mock_get_vlans, asa_device):
+    expected = [10, 20]
+    mock_get_vlans.return_value = expected
+    vlans = asa_device.vlans
+    assert vlans == [10, 20]

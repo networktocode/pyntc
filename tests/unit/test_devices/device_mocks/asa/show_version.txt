@@ -1,0 +1,51 @@
+Cisco Adaptive Security Appliance Software Version 9.16(2) 
+SSP Operating System Version 2.10(1.162)
+Device Manager Version 7.16(1)
+
+Compiled on Tue 17-Aug-21 16:32 GMT by builders
+System image file is "boot:/asa9162-smp-k8.bin"
+Config file at boot was "startup-config"
+
+ciscoasa up 2 hours 12 mins
+
+Hardware:   ASAv, 2048 MB RAM, CPU Lynnfield 3695 MHz,
+Internal ATA Compact Flash, 8192MB
+Slot 1: ATA Compact Flash, 8192MB
+BIOS Flash Firmware Hub @ 0x1, 0KB
+
+
+ 0: Ext: Management0/0       : address is 5254.0009.d178, irq 10
+ 1: Ext: GigabitEthernet0/0  : address is 5254.000a.06f3, irq 11
+ 2: Int: Internal-Data0/0    : address is 0000.0100.0001, irq 0
+
+License mode: Smart Licensing
+ASAv Platform License State: Unlicensed
+No active entitlement: no feature tier and no throughput level configured
+Firewall throughput limited to 100 Kbps
+
+Licensed features for this platform:
+Maximum VLANs                     : 50             
+Inside Hosts                      : Unlimited      
+Failover                          : Active/Active  
+Encryption-DES                    : Enabled        
+Encryption-3DES-AES               : Enabled        
+Security Contexts                 : 2              
+Carrier                           : Disabled       
+AnyConnect Premium Peers          : 2              
+AnyConnect Essentials             : Disabled       
+Other VPN Peers                   : 250            
+Total VPN Peers                   : 250            
+AnyConnect for Mobile             : Disabled       
+AnyConnect for Cisco VPN Phone    : Disabled       
+Advanced Endpoint Assessment      : Disabled       
+Shared License                    : Disabled       
+Total TLS Proxy Sessions          : 2              
+Botnet Traffic Filter             : Enabled        
+Cluster                           : Disabled       
+
+Serial Number: 9ANMLKTFC5B
+              
+Image type          : Release
+Key version         : A
+
+Configuration last modified by cisco at 17:47:47.639 UTC Thu Dec 22 2022

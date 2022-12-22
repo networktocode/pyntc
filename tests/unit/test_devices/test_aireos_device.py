@@ -1,10 +1,9 @@
 import json
-
-import pytest
 from unittest import mock
 
-from pyntc.devices import AIREOSDevice
+import pytest
 from pyntc.devices import aireos_device as aireos_module
+from pyntc.devices import AIREOSDevice
 
 
 @pytest.mark.parametrize(
@@ -121,6 +120,11 @@ def test_uptime_components(aireos_show):
     assert days == 3
     assert hours == 2
     assert minutes == 20
+
+
+def test_hostname(aireos_show):
+    device = aireos_show(["show_sysinfo_full.txt"])
+    assert device.hostname == "PYNTCHOST"
 
 
 @mock.patch.object(AIREOSDevice, "ap_image_stats", new_callable=mock.PropertyMock)

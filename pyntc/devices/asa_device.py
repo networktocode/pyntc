@@ -229,14 +229,13 @@ class ASADevice(BaseDevice):
 
     def _show_vlan(self):
         show_vlan_out = self.show("show vlan")
-        show_vlan_data = get_structured_data("cisco_ios_show_vlan.template", show_vlan_out)
 
-        return show_vlan_data
+        return show_vlan_out.split(",")
 
     def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
-        match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
+        match_minutes = re.search(r"(\d+) mins?", uptime_full_string)
 
         days = int(match_days.group(1)) if match_days else 0
         hours = int(match_hours.group(1)) if match_hours else 0
@@ -1059,6 +1058,111 @@ class ASADevice(BaseDevice):
         :return: Output of command 'show startup-config'.
         """
         return self.show("show startup-config")
+
+    @property
+    def uptime(self):
+        """Get uptime from device.
+
+        Returns:
+            int: Uptime in seconds.
+        """
+        if self._uptime is None:
+            version_data = self._raw_version_data()
+            uptime_full_string = version_data["uptime"]
+            self._uptime = self._uptime_to_seconds(uptime_full_string)
+
+        return self._uptime
+
+    @property
+    def uptime_string(self):
+        """Get uptime in format dd:hh:mm.
+
+        Returns:
+            str: Uptime of device.
+        """
+        if self._uptime_string is None:
+            version_data = self._raw_version_data()
+            uptime_full_string = version_data["uptime"]
+            self._uptime_string = self._uptime_to_string(uptime_full_string)
+
+        return self._uptime_string
+
+    @property
+    def hostname(self):
+        """Get hostname of device.
+
+        Returns:
+            str: Hostname of device.
+        """
+        version_data = self._raw_version_data()
+        if self._hostname is None:
+            self._hostname = version_data["hostname"]
+
+        return self._hostname
+
+    @property
+    def interfaces(self):
+        """
+        Get list of interfaces on device.
+
+        Returns:
+            list: List of interfaces on device.
+        """
+        if self._interfaces is None:
+            self._interfaces = list(x["interface"] for x in self._interfaces_detailed_list())
+
+        return self._interfaces
+
+    @property
+    def model(self):
+        """Get the device model.
+
+        Returns:
+            str: Device model.
+        """
+        version_data = self._raw_version_data()
+        if self._model is None:
+            self._model = version_data["hardware"]
+
+        return self._model
+
+    @property
+    def os_version(self):
+        """Get os version on device.
+
+        Returns:
+            str: OS version on device.
+        """
+        version_data = self._raw_version_data()
+        if self._os_version is None:
+            self._os_version = version_data["version"]
+
+        return self._os_version
+
+    @property
+    def serial_number(self):
+        """Get serial number of device.
+
+        Returns:
+            str: Serial number of device.
+        """
+        version_data = self._raw_version_data()
+        if self._serial_number is None:
+            self._serial_number = version_data["serial"]
+
+        return self._serial_number
+
+    @property
+    def vlans(self):
+        """Get vlan ids from device.
+
+        Returns:
+            list: List of vlans
+        """
+        if self._vlans is None:
+            self._vlans = self._show_vlan()
+
+        return self._vlans
 
 
 class RebootSignal(NTCError):

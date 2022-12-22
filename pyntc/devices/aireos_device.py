@@ -889,6 +889,15 @@ class AIREOSDevice(BaseDevice):
         """
         raise NotImplementedError
 
+    @property
+    def hostname(self):
+        """Retrieve hostname from sysinfo."""
+        sysinfo = self.show("show sysinfo")
+        re_hostname = r"^System\s+Name\.+\s*(.+?)\s*$"
+        hostname = re.search(re_hostname, sysinfo, re.M)
+        hostname_string = hostname.group(1)
+        return hostname_string
+
     def install_os(self, image_name, controller="both", save_config=True, disable_wlans=None, **vendor_specifics):
         """
         Install an operating system on the controller.
