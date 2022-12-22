@@ -95,7 +95,7 @@ class IOSDevice(BaseDevice):
             raise CommandError(command, command_response)
 
     def _enable(self):
-        log.warning("_enable() is deprecated; use enable().", DeprecationWarning)
+        log.warning("_enable() is deprecated; use enable().")
         self.enable()
         log.debug("Host %s: Device enabled", self.host)
 
@@ -425,7 +425,7 @@ class IOSDevice(BaseDevice):
             ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
             >>>
         """
-        log.warning("config_list() is deprecated; use config.", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config.")
         return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
@@ -1143,7 +1143,7 @@ class IOSDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
+        log.warning("show_list() is deprecated; use show().")
         return self.show(commands)
 
     @property

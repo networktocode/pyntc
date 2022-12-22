@@ -1,10 +1,9 @@
 import json
-
-import pytest
 from unittest import mock
 
-from pyntc.devices import AIREOSDevice
+import pytest
 from pyntc.devices import aireos_device as aireos_module
+from pyntc.devices import AIREOSDevice
 
 
 @pytest.mark.parametrize(

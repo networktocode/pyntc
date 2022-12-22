@@ -1,11 +1,13 @@
 """Module for using a Cisco WLC/AIREOS device over SSH."""  # pylint: disable=too-many-lines
 
+import json
 import os
 import re
 import signal
-import json
+import time
 
 from netmiko import ConnectHandler
+from pyntc import log
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -19,7 +21,6 @@ from pyntc.errors import (
     WLANDisableError,
     WLANEnableError,
 )
-from pyntc import log
 
 from .base_device import BaseDevice, fix_docs
 
@@ -120,8 +121,7 @@ class AIREOSDevice(BaseDevice):
 
         return all(boot_option[image_option] == image for boot_option in ap_boot_options.values())
 
-    @staticmethod
-    def _check_command_output_for_errors(command, command_response):
+    def _check_command_output_for_errors(self, command, command_response):
         """
         Check response from device to see if an error was reported.
 
@@ -583,20 +583,20 @@ class AIREOSDevice(BaseDevice):
                 command_responses.append(command_response)
                 self._check_command_output_for_errors(cmd, command_response)
         except TypeError as err:
-            log.error("Host %s: Netmiko Driver's {err.args[0]}", self.host, err.args[0])
+            log.error("Host %s: Netmiko Driver's %s", self.host, err.args[0])
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
             if not original_command_is_str:
                 log.error(
-                    "Host %s: Commands {entered_commands} returned the error {err.cli_error_msg}",
+                    "Host %s: Commands %s returned the error %s",
                     self.host,
                     entered_commands,
                     err.cli_error_msg,
                 )
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
             else:
-                log.error("Host %s: Commands {entered_commands} returned the error %s", self.host, entered_commands)
+                log.error("Host %s: Commands %s returned the error %s", self.host, entered_commands, err.cli_error_msg)
                 raise err
         # Don't let exception prevent exiting config mode
         finally:
@@ -609,7 +609,7 @@ class AIREOSDevice(BaseDevice):
             return command_responses[0]
 
         log.info(
-            "Host %s: List of config commands %s received responses {command_response}.",
+            "Host %s: List of config commands %s received responses %s.",
             self.host,
             command,
             command_response,
@@ -642,7 +642,7 @@ class AIREOSDevice(BaseDevice):
             >>> device.config_list(["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"])
             >>>
         """
-        log.warning("config_list() is deprecated; use config.", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config.")
         return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
@@ -694,7 +694,7 @@ class AIREOSDevice(BaseDevice):
         Returns:
             bool: True if the device is connected, else False.
         """
-        log.debug("Host %s: Connection status {self._connected}.", self.host, self._connected)
+        log.debug("Host %s: Connection status %s.", self.host, self._connected)
         return self._connected
 
     @connected.setter
@@ -744,14 +744,14 @@ class AIREOSDevice(BaseDevice):
             if not wlans_to_validate.issubset(post_disabled_wlans):
                 desired_wlans = wlans_to_validate.union(disabled_wlans)
                 log.error(
-                    "Host %s: WLANS not disabled, with desired WLANs {desired_wlans} and post disabled WLANs {post_disabled_wlans}",
+                    "Host %s: WLANS not disabled, with desired WLANs %s and post disabled WLANs %s",
                     self.host,
                     desired_wlans,
                     post_disabled_wlans,
                 )
                 raise WLANDisableError(self.host, desired_wlans, post_disabled_wlans)
 
-        log.info("Host %s: All WLANs with IDs {disabled_wlans} were disabled.", self.host, disabled_wlans)
+        log.info("Host %s: All WLANs with IDs %s were disabled.", self.host, disabled_wlans)
 
     @property
     def disabled_wlans(self):  # noqa: D403
@@ -777,7 +777,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         disabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Disabled"]
-        log.info("Host %s: Disabled WLAN IDs: {disabled_wlans}", self.host, disabled_wlans)
+        log.info("Host %s: Disabled WLAN IDs: %s", self.host, disabled_wlans)
         return disabled_wlans
 
     def enable(self):
@@ -794,7 +794,7 @@ class AIREOSDevice(BaseDevice):
         if self.native.check_config_mode():
             self.native.exit_config_mode()
 
-        log.debug("Host {self.host}: Device enabled.", self.host)
+        log.debug("Host %s: Device enabled.", self.host)
 
     def enable_wlans(self, wlan_ids):
         """
@@ -839,8 +839,7 @@ class AIREOSDevice(BaseDevice):
             if not wlans_to_validate.issubset(post_enabled_wlans):
                 desired_wlans = wlans_to_validate.union(enabled_wlans)
                 log.error(
-                    "Host %s: WLANS not enabled,\n"
-                    f"with desired WLANs {desired_wlans} and post enabled WLANs {post_enabled_wlans}",
+                    "Host %s: WLANS not enabled,\nwith desired WLANs %s and post enabled WLANs %s",
                     self.host,
                     desired_wlans,
                     post_enabled_wlans,
@@ -871,7 +870,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         enabled_wlans = [wlan_id for wlan_id, wlan_data in self.wlans.items() if wlan_data["status"] == "Enabled"]
-        log.info("Host %s: List of enabled WLAN IDs: {enabled_wlans}", self.host, enabled_wlans)
+        log.info("Host %s: List of enabled WLAN IDs: %s", self.host, enabled_wlans)
         return enabled_wlans
 
     def facts(self):
@@ -948,7 +947,7 @@ class AIREOSDevice(BaseDevice):
             )
         except CommandListError as error:
             log.error(
-                "Host %s: File transfer error {FileTransferError.default_message}\n\n{error.message}",
+                "Host %s: File transfer error %s\n\n%s",
                 self.host,
                 FileTransferError.default_message,
                 error.message,
@@ -961,7 +960,7 @@ class AIREOSDevice(BaseDevice):
                 response = self.show("y", auto_find_prompt=False, delay_factor=delay_factor)
         except CommandError as error:
             log.error(
-                "Host %s: File transfer error {FileTransferError.default_message}\n\n{error.message}",
+                "Host %s: File transfer error %s\n\n%s",
                 self.host,
                 FileTransferError.default_message,
                 error.message,
@@ -1385,7 +1384,7 @@ class AIREOSDevice(BaseDevice):
                 command_responses.append(command_response)
                 self._check_command_output_for_errors(cmd, command_response)
         except TypeError as err:
-            log.error("Host %s: Netmiko Driver's {err.args[0]}", self.host, err.args[0])
+            log.error("Host %s: Netmiko Driver's %s", self.host, err.args[0])
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:

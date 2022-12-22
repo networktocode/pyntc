@@ -1,30 +1,28 @@
 """Module for using an Arista EOS device over the eAPI."""
 
+import os
 import re
 import time
-import os
 
+from netmiko import ConnectHandler, FileTransfer
 from pyeapi import connect as eos_connect
 from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
-from netmiko import ConnectHandler
-from netmiko import FileTransfer
-
-from pyntc.utils import convert_list_by_key
-from .system_features.vlans.eos_vlans import EOSVlans
-from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
-from pyntc.errors import (
-    NTCError,
-    CommandError,
-    OSInstallError,
-    CommandListError,
-    FileTransferError,
-    RebootTimeoutError,
-    NTCFileNotFoundError,
-    FileSystemNotFoundError,
-)
 from pyntc import log
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    NTCError,
+    NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
+)
+from pyntc.utils import convert_list_by_key
 
+from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
+from .system_features.vlans.eos_vlans import EOSVlans
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
@@ -227,7 +225,7 @@ class EOSDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        log.warning("config_list() is deprecated; use config().", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config().")
         self.config(commands)
 
     def enable(self):
@@ -501,7 +499,7 @@ class EOSDevice(BaseDevice):
 
         """
         if kwargs.get("confirm"):
-            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.")
 
         if timer != 0:
             log.error("Host %s: Reboot time error.", self.host)
@@ -616,7 +614,7 @@ class EOSDevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
+        log.warning("show_list() is deprecated; use show().")
         self.show(commands)
 
     @property

@@ -63,7 +63,7 @@ class ASADevice(BaseDevice):
         log.init(host=host)
 
     def _enable(self):
-        log.warning("_enable() is deprecated; use enable().", DeprecationWarning)
+        log.warning("_enable() is deprecated; use enable().")
         self.enable()
         log.debug("Host %s: Device enabled", self.host)
 
@@ -249,7 +249,7 @@ class ASADevice(BaseDevice):
             response = self.native.send_command(command, expect_string=expect_string)
 
         if "% " in response or "Error:" in response:
-            log.error("Host %s: Error in %s with response: %s", self.host, response)
+            log.error("Host %s: Error in %s with response: %s", self.host, command, response)
             raise CommandError(command, response)
 
         log.info("Host %s: Command %s was executed successfully with response: %s", self.host, command, response)
@@ -330,7 +330,7 @@ class ASADevice(BaseDevice):
         while time.time() - start < timeout:
             if self.peer_redundancy_state == "failed":
                 log.error(
-                    "Host %s: Redundancy state for device {self.host} did not form properly to desired state: %s.",
+                    "Host %s: Redundancy state for device %s did not form properly to desired state: %s.",
                     self.host,
                     self.host,
                     self.peer_redundancy_state,
@@ -427,7 +427,7 @@ class ASADevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        log.warning("config_list() is deprecated; use config().", DeprecationWarning)
+        log.warning("config_list() is deprecated; use config().")
         self.config(commands)
 
     @property
@@ -885,7 +885,7 @@ class ASADevice(BaseDevice):
             >>>
         """
         if kwargs.get("confirm"):
-            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.")
 
         def handler(signum, frame):
             log.error("Host %s: Interrupting after reload.", self.host)
@@ -1132,7 +1132,7 @@ class ASADevice(BaseDevice):
         Args:
             commands (list): List with multiple commands.
         """
-        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
+        log.warning("show_list() is deprecated; use show().")
         return self.show(commands)
 
     @property
