@@ -6,12 +6,11 @@ import re
 import time
 import warnings
 
-import bigsuds
 import requests
 from f5.bigip import ManagementRoot
-
-from pyntc.errors import OSInstallError, FileTransferError, NTCFileNotFoundError, NotEnoughFreeSpaceError
 from pyntc import log
+from pyntc.errors import FileTransferError, NotEnoughFreeSpaceError, NTCFileNotFoundError, OSInstallError
+
 from .base_device import BaseDevice
 
 
@@ -31,7 +30,6 @@ class F5Device(BaseDevice):
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
-        self._open_soap()
         log.init(host=host)
 
     def _check_free_space(self, min_space=0):
@@ -78,7 +76,7 @@ class F5Device(BaseDevice):
     def _file_copy_local_file_exists(filepath):
         return os.path.isfile(filepath)
 
-    def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
+    def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
             m = hashlib.md5()  # nosec
             with open(filepath, "rb") as f:
@@ -132,9 +130,6 @@ class F5Device(BaseDevice):
 
         log.debug("Host %s: Free space is %s GB.", self.host, free_space)
         return free_space
-
-    def _get_hostname(self):
-        return self.soap_handler.Management.Device.get_hostname(self.devices)[0]
 
     def _get_images(self):
         images = self.api_handler.tm.sys.software.images.get_collection()
@@ -254,20 +249,6 @@ class F5Device(BaseDevice):
 
         log.debug("Host %s: Image %s does not match the checksum.", self.host, image_name)
         return False
-
-    def _open_soap(self):
-        """Create SOAP connection to device.
-
-        Raises:
-            RuntimeError: Error in created SOAP connection to device.
-        """
-        try:
-            self.soap_handler = bigsuds.BIGIP(hostname=self.host, username=self.username, password=self.password)
-            self.devices = self.soap_handler.Management.Device.get_list()
-            log.debug("Host %s: SOAP connection opened.", self.host)
-        except bigsuds.OperationFailed as err:
-            log.error("Host %s: ConfigSync API Error %s.", self.host, err)
-            raise RuntimeError
 
     def _reboot_to_volume(self, volume_name=None):
         """Request the reboot (activation) to a specified volume.
@@ -495,7 +476,8 @@ class F5Device(BaseDevice):
             str: Hostname.
         """
         if self._hostname is None:
-            self._hostname = self._get_hostname()
+            fqdn_split = self.fqdn.split(".")
+            self._hostname = fqdn_split[0]
 
         return self._hostname
 
@@ -531,7 +513,8 @@ class F5Device(BaseDevice):
             str: Fully qualified domain name.
         """
         if self._fqdn is None:
-            self._fqdn = self._get_hostname()
+            settings = self.api_handler.tm.sys.global_settings.load()
+            self._fqdn = settings.hostname
 
         return self._fqdn
 
@@ -679,7 +662,7 @@ class F5Device(BaseDevice):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
                 log.error("Host %s: File not found for image %s and volume %s.", self.host, image_name, volume)
-                raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
+                raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -767,7 +750,7 @@ class F5Device(BaseDevice):
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
             log.error("Host %s: File not found for image %s and volume %s.", self.host, image_name, volume)
-            raise NTCFileNotFoundError(hostname=self._get_hostname(), file=image_name, dir="/shared/images")
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
         log.info("Host %s: Image %s installed to volume %s.", self.host, image_name, volume)

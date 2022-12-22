@@ -1,29 +1,27 @@
-"""Module for using a Cisco WLC/AIREOS device over SSH."""
+"""Module for using a Cisco WLC/AIREOS device over SSH."""  # pylint: disable=too-many-lines
 
 import os
 import re
-import time
 import signal
 import json
 
 from netmiko import ConnectHandler
-
-from .base_device import BaseDevice, fix_docs
 from pyntc.errors import (
-    NTCError,
     CommandError,
-    OSInstallError,
-    WLANEnableError,
     CommandListError,
-    WLANDisableError,
-    FileTransferError,
-    RebootTimeoutError,
     DeviceNotActiveError,
+    FileTransferError,
+    NTCError,
     NTCFileNotFoundError,
+    OSInstallError,
     PeerFailedToFormError,
+    RebootTimeoutError,
+    WLANDisableError,
+    WLANEnableError,
 )
 from pyntc import log
 
+from .base_device import BaseDevice, fix_docs
 
 RE_FILENAME_FIND_VERSION = re.compile(r"^.+?(?P<version>\d+(?:-|_)\d+(?:-|_)\d+(?:-|_)\d+)\.", re.M)
 RE_AP_IMAGE_COUNT = re.compile(r"^[Tt]otal\s+number\s+of\s+APs\.+\s+(?P<count>\d+)\s*$", re.M)
@@ -70,7 +68,9 @@ class AIREOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host, username, password, secret="", port=22, confirm_active=True, **kwargs):  # noqa: D403
+    def __init__(  # nosec  # pylint: disable=too-many-arguments
+        self, host, username, password, secret="", port=22, confirm_active=True, **kwargs
+    ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco WLC.
 
@@ -118,9 +118,10 @@ class AIREOSDevice(BaseDevice):
         if ap_boot_options is None:
             ap_boot_options = self.ap_boot_options
 
-        return all([boot_option[image_option] == image for boot_option in ap_boot_options.values()])
+        return all(boot_option[image_option] == image for boot_option in ap_boot_options.values())
 
-    def _check_command_output_for_errors(self, command, command_response):
+    @staticmethod
+    def _check_command_output_for_errors(command, command_response):
         """
         Check response from device to see if an error was reported.
 
@@ -345,7 +346,7 @@ class AIREOSDevice(BaseDevice):
                 self.open()
                 log.debug("Host %s: Device rebooted.", self.host)
                 return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec # pylint: disable=bare-except
                 pass
 
         # TODO: Get proper hostname parameter
@@ -873,7 +874,6 @@ class AIREOSDevice(BaseDevice):
         log.info("Host %s: List of enabled WLAN IDs: {enabled_wlans}", self.host, enabled_wlans)
         return enabled_wlans
 
-    @property
     def facts(self):
         """
         Get facts from device.
@@ -953,7 +953,7 @@ class AIREOSDevice(BaseDevice):
                 FileTransferError.default_message,
                 error.message,
             )
-            raise FileTransferError(error.message)
+            raise FileTransferError(error.message) from error
 
         try:
             response = self.native.send_command_timing("transfer download start")
@@ -966,7 +966,7 @@ class AIREOSDevice(BaseDevice):
                 FileTransferError.default_message,
                 error.message,
             )
-            raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}")
+            raise FileTransferError(message=f"{FileTransferError.default_message}\n\n{error.message}") from error
         except:  # noqa E722
             log.error("Host %s: File transfer error %s", self.host, FileTransferError)
             raise FileTransferError
@@ -1606,5 +1606,3 @@ class AIREOSDevice(BaseDevice):
 
 class RebootSignal(NTCError):
     """Handles reboot interrupts."""
-
-    pass

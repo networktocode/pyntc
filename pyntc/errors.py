@@ -1,7 +1,10 @@
+"""pyntc custom exceptions."""
 import warnings
 
 
 class NTCError(Exception):
+    """Generic Error class for PyNTC."""
+
     def __init__(self, message):
         """
         Generic Error class for PyNTC.
@@ -12,12 +15,15 @@ class NTCError(Exception):
         self.message = message
 
     def __repr__(self):
+        """Representation of NTC error object."""
         return "%s: \n%s" % (self.__class__.__name__, self.message)
 
     __str__ = __repr__
 
 
 class UnsupportedDeviceError(NTCError):
+    """Error class for Unsupported Devices."""
+
     def __init__(self, vendor):
         """
         Error class for Unsupported Devices.
@@ -30,6 +36,8 @@ class UnsupportedDeviceError(NTCError):
 
 
 class DeviceNameNotFoundError(NTCError):
+    """Error for issues finding ``name`` in inventory file, ``filename``."""
+
     def __init__(self, name, filename):
         """
         Error for issues finding ``name`` in inventory file, ``filename``.
@@ -43,6 +51,8 @@ class DeviceNameNotFoundError(NTCError):
 
 
 class ConfFileNotFoundError(NTCError):
+    """Error for issues finding the config ``filename``."""
+
     def __init__(self, filename):
         """
         Error for issues finding the config ``filename``.
@@ -55,6 +65,8 @@ class ConfFileNotFoundError(NTCError):
 
 
 class CommandError(NTCError):
+    """Error for issuing ``command`` on device."""
+
     def __init__(self, command, message):
         """
         Error for issuing ``command`` on device.
@@ -70,9 +82,11 @@ class CommandError(NTCError):
 
 
 class CommandListError(NTCError):
+    """Error for issuing a ``command`` from a list of ``commands`` on device.."""
+
     def __init__(self, commands, command, message):
         """
-        Error for issuing a ``command`` from a list of ``commands`` on device..
+        Error for issuing a ``command`` from a list of ``commands`` on device.
 
         Args:
             commands (list): The list of commands that were to be sent to the device.
@@ -90,12 +104,15 @@ class CommandListError(NTCError):
 
 
 class DeviceNotActiveError(NTCError):
+    """Error for when the device is part of an HA cluster, and the device is not the active device."""
+
     def __init__(self, hostname, redundancy_state, peer_redundancy_state):
-        """
-        Error for when the device is part of an HA cluster, and the device is not the active device.
+        """Error for when the device is part of an HA cluster, and the device is not the active device.
 
         Args:
             hostname (str): The hostname of the device being validated.
+            redundancy_state (str): Current redundancy state.
+            peer_redundancy_state (str): Peer State.
         """
         message = (
             f"{hostname} is not the active device.\n\n"
@@ -106,6 +123,8 @@ class DeviceNotActiveError(NTCError):
 
 
 class FeatureNotFoundError(NTCError):
+    """Error for trying to use a PyNTC ``feature`` for an unsupported ``device_type``."""
+
     def __init__(self, feature, device_type):
         """
         Error for trying to use a PyNTC ``feature`` for an unsupported ``device_type``.
@@ -121,6 +140,8 @@ class FeatureNotFoundError(NTCError):
 
 
 class FileSystemNotFoundError(NTCError):
+    """Error for inability to identify the default file system on network device."""
+
     def __init__(self, hostname, command):
         """
         Error for inability to identify the default file system on network device.
@@ -134,6 +155,8 @@ class FileSystemNotFoundError(NTCError):
 
 
 class FileTransferError(NTCError):
+    """File Transfer Error."""
+
     default_message = (
         "An error occurred during transfer. "
         "Please make sure the local file exists and "
@@ -141,10 +164,17 @@ class FileTransferError(NTCError):
     )
 
     def __init__(self, message=None):
+        """File Transfer Error.
+
+        Args:
+            message (str, optional): Error message to pass. Defaults to None.
+        """
         super().__init__(message or self.default_message)
 
 
 class RebootTimeoutError(NTCError):
+    """Error for inability to log into device after waiting for max time for reboot to complete."""
+
     def __init__(self, hostname, wait_time):
         """
         Error for inability to log into device after waiting for max time for reboot to complete.
@@ -158,6 +188,8 @@ class RebootTimeoutError(NTCError):
 
 
 class WaitingRebootTimeoutError(NTCError):
+    """Error for device not rebooting after sending install mode upgrade command."""
+
     def __init__(self, hostname, wait_time):
         """
         Error for device not rebooting after sending install mode upgrade command.
@@ -173,6 +205,8 @@ class WaitingRebootTimeoutError(NTCError):
 
 
 class NotEnoughFreeSpaceError(NTCError):
+    """Error for not having enough free space to transfer a file."""
+
     def __init__(self, hostname, min_space):
         """
         Error for not having enough free space to transfer a file.
@@ -186,6 +220,8 @@ class NotEnoughFreeSpaceError(NTCError):
 
 
 class OSInstallError(NTCError):
+    """Error for failing to install an OS on a device."""
+
     def __init__(self, hostname, desired_boot):
         """
         Error for failing to install an OS on a device.
@@ -199,6 +235,8 @@ class OSInstallError(NTCError):
 
 
 class PeerFailedToFormError(NTCError):
+    """Error for failing to have High Availability Peer form after state change."""
+
     def __init__(self, hostname, desired_state, current_state):
         """
         Error for failing to have High Availability Peer form after state change.
@@ -216,6 +254,8 @@ class PeerFailedToFormError(NTCError):
 
 
 class NTCFileNotFoundError(NTCError):
+    """Error for not being able to find a file on a device."""
+
     def __init__(self, hostname, file, dir):
         """
         Error for not being able to find a file on a device.
@@ -232,6 +272,8 @@ class NTCFileNotFoundError(NTCError):
 
 
 class SocketClosedError(NTCError):
+    """Error for network device closing the socket connection during operation."""
+
     default_message = (
         "The device closed the connection during operation. Please make sure that you have remote access to the device."
     )
@@ -247,6 +289,8 @@ class SocketClosedError(NTCError):
 
 
 class WLANEnableError(NTCError):
+    """Error for not being able to enable WLAN."""
+
     def __init__(self, hostname, desired_wlans, actual_wlans):
         """
         Error for not being able to enable WLAN.
@@ -265,6 +309,8 @@ class WLANEnableError(NTCError):
 
 
 class WLANDisableError(NTCError):
+    """Error for not being able to disable WLAN."""
+
     def __init__(self, hostname, desired_wlans, actual_wlans):
         """
         Error for not being able to disable WLAN.

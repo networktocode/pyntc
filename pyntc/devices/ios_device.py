@@ -1,35 +1,33 @@
 """Module for using a Cisco IOS device over SSH."""
 
-import signal
 import os
 import re
+import signal
 import time
 
-from netmiko import ConnectHandler
-from netmiko import FileTransfer
-
-from pyntc.utils import get_structured_data
-from .base_device import BaseDevice, RollbackError, fix_docs
+from netmiko import ConnectHandler, FileTransfer
+from pyntc import log
 from pyntc.errors import (
-    NTCError,
     CommandError,
-    OSInstallError,
     CommandListError,
-    FileTransferError,
-    RebootTimeoutError,
     DeviceNotActiveError,
-    NTCFileNotFoundError,
     FileSystemNotFoundError,
+    FileTransferError,
+    NTCError,
+    NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
     SocketClosedError,
 )
-from pyntc import log
+from pyntc.utils import get_structured_data
 
+from .base_device import BaseDevice, fix_docs, RollbackError
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
     r"^Redundant\s+System\s+Information\s*:\s*\n^-.+-\s*\n(?P<info>.+?)\n"
     r"^Current\s+Processor\s+Information\s*:\s*\n^-.+-\s*\n(?P<self>.+?$)\n"
-    r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\d+\).+)",
+    r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\S+\).+)",
     re.DOTALL | re.MULTILINE,
 )
 RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
@@ -45,7 +43,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(
+    def __init__(  # nosec
         self, host, username, password, secret="", port=22, confirm_active=True, fast_cli=True, **kwargs
     ):  # noqa: D403
         """
@@ -240,12 +238,19 @@ class IOSDevice(BaseDevice):
                 self.open()
                 self.show("show version")
                 log.debug("Host %s: Device rebooted.", self.host)
-                return
+                if self._has_reload_happened_recently():
+                    return
             except:  # noqa E722 # nosec
                 pass
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+
+    def _has_reload_happened_recently(self):
+        if re.search(r"^00:00:0\d:*", self.uptime_string) is None:
+            self._uptime_string = None
+            return False
+        return True
 
     def backup_running_config(self, filename):
         """Backup running configuration to filename specified.
@@ -276,7 +281,7 @@ class IOSDevice(BaseDevice):
             except CommandError:
                 # Default to running config value
                 show_boot_out = self.show("show run | inc boot")
-                boot_path_regex = r"boot\s+system\s+(?:\S+\s+|)(\S+)\s*$"
+                boot_path_regex = r"boot\ssystem\s\S+(?::+|\s)(\S+.bin)"
                 log.error("Host %s: Command error 'show boot'.", self.host)
 
         match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
@@ -770,7 +775,10 @@ class IOSDevice(BaseDevice):
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
                         pass
-
+                    except CommandError:
+                        command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
+                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.reboot()
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
                 self.reboot()
@@ -781,7 +789,7 @@ class IOSDevice(BaseDevice):
             # Set FastCLI back to originally set when using install mode
             if install_mode:
                 self.fast_cli = current_fast_cli
-
+                image_name = INSTALL_MODE_FILE_NAME
             # Verify the OS level
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
@@ -1044,22 +1052,55 @@ class IOSDevice(BaseDevice):
             CommandError: Error if setting new image as boot variable fails.
         """
         file_system = vendor_specifics.get("file_system")
+        command = "boot system flash"
         if file_system is None:
             file_system = self._get_file_system()
 
         file_system_files = self.show("dir {0}".format(file_system))
-        if re.search(image_name, file_system_files) is None:
+        if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
-
-        try:
-            command = "boot system {0}/{1}".format(file_system, image_name)
+        if image_name == "packages.conf":
+            command = "boot system {0}{1}".format(file_system, image_name)
             self.config(["no boot system", command])
-        except CommandListError:  # TODO: Update to CommandError when deprecating config_list
-            file_system = file_system.replace(":", "")
-            command = "boot system {0} {1}".format(file_system, image_name)
-            self.config(["no boot system", command])
-            log.error("Host %s: Command list error for command %s.", self.host, command)
+        else:
+            show_boot_sys = self.show("show run | include boot system")
+            # Sample:
+            # boot system flash:/c3560-advipservicesk9-mz.122-44.SE.bin
+            # boot system flash0:/c3560-advipservicesk9-mz.122-44.SE.bin
+            if re.search(r"boot\ssystem\s\S+\:\/\S+", show_boot_sys):
+                command = "boot system {0}/{1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            # Sample:
+            # boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin
+            # boot system flash0:c3560-advipservicesk9-mz.122-44.SE.bin
+            elif re.search(r"boot\ssystem\s\S+\:\S+", show_boot_sys):
+                command = "boot system {0}{1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            # Sample:
+            # boot system flash flash:c3560-advipservicesk9-mz.122-44.SE.bin
+            # boot system flash flash0:c3560-advipservicesk9-mz.122-44.SE.bin
+            # boot system flash bootflash:c3560-advipservicesk9-mz.122-44.SE.bin
+            elif re.search(
+                r"boot\ssystem\s\S+\s\S+:\S+", show_boot_sys
+            ):  # TODO: Update to CommandError when deprecating config_list
+                command = "boot system flash {0}{1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            # Sample:
+            # boot system flash c3560-advipservicesk9-mz.122-44.SE.bin
+            elif re.search(
+                r"boot\ssystem\sflash\s\S+", show_boot_sys
+            ):  # TODO: Update to CommandError when deprecating config_list
+                file_system = file_system.replace(":", "")
+                command = "boot system {0} {1}".format(file_system, image_name)
+                self.config(["no boot system", command])
+            else:
+                raise CommandError(
+                    command=command,
+                    message="Unable to determine the boot system configuration syntax. Current config is {0}".format(
+                        show_boot_sys
+                    ),
+                )
 
         self.save()
         new_boot_options = self.boot_options["sys"]
@@ -1070,9 +1111,7 @@ class IOSDevice(BaseDevice):
                 message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
             )
 
-        log.info("Host %s: boot options have been set to %s", self.host, image_name)
-
-    def show(self, command, expect_string=None):
+    def show(self, command, expect_string=None, **netmiko_args):
         """Run command on device.
 
         Args:
@@ -1083,36 +1122,29 @@ class IOSDevice(BaseDevice):
             str: Output of command.
         """
         self.enable()
-        return self._send_command(command, expect_string=expect_string)
+        if isinstance(command, list):
+            responses = []
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    responses.append(self._send_command(command_instance))
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+
+            return responses
+        return self._send_command(command, expect_string=expect_string, **netmiko_args)
 
     def show_list(self, commands):
-        """Run a list of commands on device.
+        """Send show commands in list format to a device.
+
+        DEPRECATED - Use the `show` method.
 
         Args:
-            commands (list): List of commands to run on device.
-
-        Raises:
-            CommandListError: Error if one of the commands is not able to be ran on the device.
-
-        Returns:
-            list: Responses from each command ran on device.
+            commands (list): List with multiple commands.
         """
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-                log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
-            except CommandError as e:
-                log.error(
-                    "Host %s: Command list error for commands %s with message %s.", self.host, commands, e.message
-                )
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        return responses
+        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
+        return self.show(commands)
 
     @property
     def startup_config(self):

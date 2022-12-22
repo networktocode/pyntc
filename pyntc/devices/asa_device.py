@@ -5,26 +5,25 @@ import re
 import signal
 import time
 from collections import Counter
-from typing import List, Dict, Union, Optional, Iterable
-from ipaddress import ip_address, IPv4Address, IPv6Address, IPv4Interface, IPv6Interface
+from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
+from typing import Dict, Iterable, List, Optional, Union
 
 from netmiko import ConnectHandler
-from netmiko.cisco import CiscoAsaSSH, CiscoAsaFileTransfer
-
-from pyntc.utils import get_structured_data
-from .base_device import BaseDevice, fix_docs
-from pyntc.errors import (
-    NTCError,
-    CommandError,
-    OSInstallError,
-    CommandListError,
-    FileTransferError,
-    RebootTimeoutError,
-    NTCFileNotFoundError,
-    FileSystemNotFoundError,
-)
+from netmiko.cisco import CiscoAsaFileTransfer, CiscoAsaSSH
 from pyntc import log
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    NTCError,
+    NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
+)
+from pyntc.utils import get_structured_data
 
+from .base_device import BaseDevice, fix_docs
 
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
@@ -39,7 +38,7 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):
+    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):  # nosec
         """
         Pyntc Device constructor for Cisco ASA.
 
@@ -47,7 +46,7 @@ class ASADevice(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate to the device.
             password (str): The password to authenticate to the device.
-            secret (str, optional): The password to escalate privlege on the device. Defaults to "".
+            secret (str, optional): The password to escalate privilege on the device. Defaults to "".
             port (int, optional): Port used to establish connection. Defaults to 22.
         """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
@@ -398,43 +397,38 @@ class ASADevice(BaseDevice):
             log.debug("Host %s: Connection closed.", self.host)
 
     def config(self, command):
-        """
-        Send single command to device.
+        """Send configuration commands to a device.
 
         Args:
-            command (str): command to be sent to device.
-        """
-        self._enter_config()
-        self._send_command(command)
-        self.native.exit_config_mode()
-        log.info("Host %s: Device configured with command %s.", self.host, command)
-
-    def config_list(self, commands):
-        """
-        Send list of commands to device.
-
-        Args:
-            commands (list): list of commands to be set to device.
+            commands (str, list): String with single command, or list with multiple commands.
 
         Raises:
             CommandListError: Message stating which command failed and the response from the device.
         """
         self._enter_config()
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                self._send_command(command)
-            except CommandError as e:
-                log.error(
-                    "Host %s: Command error with commands: %s and error message %s",
-                    self.host,
-                    entered_commands,
-                    e.cli_error_msg,
-                )
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-        log.info("Host %s: Configured with commands: %s", self.host, entered_commands)
+        if isinstance(command, list):
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    self._send_command(command_instance)
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+        else:
+            self._send_command(command)
         self.native.exit_config_mode()
+        log.info("Host %s: Device configured with command %s.", self.host, command)
+
+    def config_list(self, commands):
+        """Send configuration commands in list format to a device.
+
+        DEPRECATED - Use the `config` method.
+
+        Args:
+            commands (list): List with multiple commands.
+        """
+        log.warning("config_list() is deprecated; use config().", DeprecationWarning)
+        self.config(commands)
 
     @property
     def connected_interface(self) -> str:
@@ -1093,7 +1087,7 @@ class ASADevice(BaseDevice):
         current_images = current_boot.splitlines()
         commands_to_exec = ["no {0}".format(image) for image in current_images]
         commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
-        self.config_list(commands_to_exec)
+        self.config(commands_to_exec)
 
         self.save()
         if self.boot_options["sys"] != image_name:
@@ -1118,40 +1112,28 @@ class ASADevice(BaseDevice):
         """
         self.enable()
         log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
+        if isinstance(command, list):
+            responses = []
+            entered_commands = []
+            for command_instance in command:
+                entered_commands.append(command_instance)
+                try:
+                    responses.append(self._send_command(command_instance))
+                except CommandError as e:
+                    raise CommandListError(entered_commands, command_instance, e.cli_error_msg)
+            return responses
         return self._send_command(command, expect_string=expect_string)
 
     def show_list(self, commands):
-        """
-        Send list of commands to device.
+        """Send show commands in list format to a device.
+
+        DEPRECATED - Use the `show` method.
 
         Args:
-            commands (list): Commands to be sent to device.
-
-        Raises:
-            CommandListError: Failure running command on device.
-
-        Returns:
-            list: Output from each command sent.
+            commands (list): List with multiple commands.
         """
-        self.enable()
-
-        responses = []
-        entered_commands = []
-        for command in commands:
-            entered_commands.append(command)
-            try:
-                responses.append(self._send_command(command))
-            except CommandError as e:
-                log.error(
-                    "Host %s: Command error for commands %s with message %s.",
-                    self.host,
-                    entered_commands,
-                    e.cli_error_msg,
-                )
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
-
-        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
-        return responses
+        log.warning("show_list() is deprecated; use show().", DeprecationWarning)
+        return self.show(commands)
 
     @property
     def startup_config(self):

@@ -3,20 +3,20 @@ import os
 import re
 import time
 
-from .base_device import BaseDevice, RollbackError, RebootTimerError, fix_docs
+from pyntc import log
 from pyntc.errors import (
     CommandError,
-    OSInstallError,
     CommandListError,
     FileTransferError,
-    RebootTimeoutError,
     NTCFileNotFoundError,
+    OSInstallError,
+    RebootTimeoutError,
 )
-from pyntc import log
-
 from pynxos.device import Device as NXOSNative
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pynxos.errors import CLIError
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+
+from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
 
 
 @fix_docs
@@ -39,8 +39,7 @@ class NXOSDevice(BaseDevice):
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(
-            host, username, password, transport=transport, timeout=timeout, port=port)
+        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
@@ -428,9 +427,15 @@ class NXOSDevice(BaseDevice):
             kickstart = file_system + kickstart
 
         image_name = file_system + image_name
-        self.native.timeout = 300
-        upgrade_result = self.native.set_boot_options(
-            image_name, kickstart=kickstart)
+        # Allow for user defined timeout to take precedence if its over 300 seconds, otherwise change to 300.
+        try:
+            native_timeout = int(self.native.timeout)
+        except (TypeError, ValueError):
+            native_timeout = 1
+
+        if native_timeout < 300:
+            self.native.timeout = 300
+        upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
         self.native.timeout = 30
 
         log.info("Host %s: boot options have been set to %s",

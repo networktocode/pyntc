@@ -1,23 +1,22 @@
 """Module for using a Juniper junOS device."""
+import hashlib
 import os
 import re
 import time
-import hashlib
-from tempfile import NamedTemporaryFile
 import warnings
+from tempfile import NamedTemporaryFile
 
 from jnpr.junos import Device as JunosNativeDevice
+from jnpr.junos.exception import ConfigLoadError
+from jnpr.junos.op.ethport import EthPortTable
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
-from jnpr.junos.utils.sw import SW as JunosNativeSW
 from jnpr.junos.utils.scp import SCP
-from jnpr.junos.op.ethport import EthPortTable
-from jnpr.junos.exception import ConfigLoadError
-
-from .tables.jnpr.loopback import LoopbackTable
-from .base_device import BaseDevice, fix_docs
-
+from jnpr.junos.utils.sw import SW as JunosNativeSW
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
+
+from .base_device import BaseDevice, fix_docs
+from .tables.jnpr.loopback import LoopbackTable
 
 
 @fix_docs
@@ -45,7 +44,7 @@ class JunosDevice(BaseDevice):
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
 
-    def _file_copy_local_md5(self, filepath, blocksize=2 ** 20):
+    def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
             m = hashlib.md5()  # nosec
             with open(filepath, "rb") as f:
@@ -174,6 +173,7 @@ class JunosDevice(BaseDevice):
 
         Args:
             commands (list): List with multiple commands.
+            format (str): The Junos format the commands are in.
         """
         warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
         self.config(commands, format=format)
@@ -467,8 +467,10 @@ class JunosDevice(BaseDevice):
         """Send show commands in list format to a device.
 
         DEPRECATED - Use the `show` method.
+
         Args:
             commands (list): List with multiple commands.
+            raw_text (bool): Return raw text or structured text.
         """
         warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
         return self.show(commands)
