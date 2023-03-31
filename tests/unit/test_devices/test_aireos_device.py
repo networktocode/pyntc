@@ -122,6 +122,11 @@ def test_uptime_components(aireos_show):
     assert minutes == 20
 
 
+def test_hostname(aireos_show):
+    device = aireos_show(["show_sysinfo_full.txt"])
+    assert device.hostname == "PYNTCHOST"
+
+
 @mock.patch.object(AIREOSDevice, "ap_image_stats", new_callable=mock.PropertyMock)
 def test_wait_for_ap_image_download(mock_ap_image_stats, aireos_device):
     mock_ap_image_stats.side_effect = [
