@@ -1,15 +1,14 @@
-import unittest
-import mock
 import os
 import time
+import unittest
 
+import mock
 import pytest
+from pyntc.devices import ios_device as ios_module
+from pyntc.devices import IOSDevice
+from pyntc.devices.base_device import RollbackError
 
 from .device_mocks.ios import send_command, send_command_expect
-from pyntc.devices.base_device import RollbackError
-from pyntc.devices import IOSDevice
-from pyntc.devices import ios_device as ios_module
-
 
 BOOT_IMAGE = "c3560-advipservicesk9-mz.122-44.SE.bin"
 BOOT_OPTIONS_PATH = "pyntc.devices.ios_device.IOSDevice.boot_options"
@@ -1309,14 +1308,15 @@ def test_install_os_install_mode_with_retries(
 
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
-    mock_show.assert_called_with(
+    mock_show.assert_any_call(
         f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
     )
+    mock_show.assert_any_call("show version")
     mock_reboot.assert_not_called()
     mock_os_version.assert_called()
     mock_image_booted.assert_called()
     assert actual is True
-    # Assert that fast_cli value was retrieved, set to Fals, and set back to original value
+    # Assert that fast_cli value was retrieved, set to False, and set back to original value
     assert mock_fast_cli.call_count == 3
 
 
