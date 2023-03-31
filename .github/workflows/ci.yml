@@ -188,8 +188,8 @@ jobs:
       - name: "Run Tests"
         run: "poetry run invoke pytest"
     needs:
-  # Remove everything but pylint once pylint is passing.
-  #     - "pylint"
+      # Remove everything but pylint once pylint is passing.
+      # - "pylint"
       - "bandit"
       - "pydocstyle"
       - "flake8"
