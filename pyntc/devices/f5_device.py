@@ -8,6 +8,7 @@ import warnings
 
 import requests
 from f5.bigip import ManagementRoot
+
 from pyntc import log
 from pyntc.errors import FileTransferError, NotEnoughFreeSpaceError, NTCFileNotFoundError, OSInstallError
 
@@ -708,7 +709,7 @@ class F5Device(BaseDevice):
         log.debug("Host %s: Reboot to volume %s succeeded.", self.host, volume)
 
     def rollback(self, checkpoint_file):
-        """Rollback to checkpoint configurtion file.
+        """Rollback to checkpoint configuration file.
 
         Args:
             checkpoint_file (str): Name of checkpoint file.
