@@ -3,6 +3,7 @@ from ipaddress import ip_address, ip_interface
 from unittest import mock
 
 import pytest
+
 from pyntc.devices import asa_device as asa_module
 from pyntc.devices import ASADevice
 
@@ -180,7 +181,7 @@ def test_bad_config(asa_device):
 
 def test_config_list(asa_device):
     commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
-    asa_device.config_list(commands)
+    asa_device.config(commands)
 
     for cmd in commands:
         asa_device.native.send_command_timing.assert_any_call(cmd)
@@ -193,7 +194,7 @@ def test_bad_config_list(asa_device):
     asa_device.native.send_command_timing.side_effect = results
 
     with pytest.raises(asa_module.CommandListError, match=commands[1]):
-        asa_device.config_list(commands)
+        asa_device.config(commands)
 
 
 def test_show(asa_device):
@@ -219,7 +220,7 @@ def test_show_list(asa_device):
     results = ["console 0", "security-level meh"]
     asa_device.native.send_command_timing.side_effect = results
 
-    result = asa_device.show_list(commands)
+    result = asa_device.show(commands)
     assert isinstance(result, list)
     assert "console" in result[0]
     assert "security-level" in result[1]
@@ -235,7 +236,7 @@ def test_bad_show_list(asa_device):
     asa_device.native.send_command_timing.side_effect = results
 
     with pytest.raises(asa_module.CommandListError, match="show badcommand"):
-        asa_device.show_list(commands)
+        asa_device.show(commands)
 
 
 def test_save(asa_device):

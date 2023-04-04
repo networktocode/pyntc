@@ -419,16 +419,16 @@ class ASADevice(BaseDevice):
         self.native.exit_config_mode()
         log.info("Host %s: Device configured with command %s.", self.host, command)
 
-    def config_list(self, commands):
-        """Send configuration commands in list format to a device.
+    # def config_list(self, commands):
+    #     """Send configuration commands in list format to a device.
 
-        DEPRECATED - Use the `config` method.
+    #     DEPRECATED - Use the `config` method.
 
-        Args:
-            commands (list): List with multiple commands.
-        """
-        log.warning("config_list() is deprecated; use config().")
-        self.config(commands)
+    #     Args:
+    #         commands (list): List with multiple commands.
+    #     """
+    #     log.warning("config_list() is deprecated; use config().")
+    #     self.config(commands)
 
     @property
     def connected_interface(self) -> str:
@@ -1124,16 +1124,16 @@ class ASADevice(BaseDevice):
             return responses
         return self._send_command(command, expect_string=expect_string)
 
-    def show_list(self, commands):
-        """Send show commands in list format to a device.
+    # def show_list(self, commands):
+    #     """Send show commands in list format to a device.
 
-        DEPRECATED - Use the `show` method.
+    #     DEPRECATED - Use the `show` method.
 
-        Args:
-            commands (list): List with multiple commands.
-        """
-        log.warning("show_list() is deprecated; use show().")
-        return self.show(commands)
+    #     Args:
+    #         commands (list): List with multiple commands.
+    #     """
+    #     log.warning("show_list() is deprecated; use show().")
+    #     return self.show(commands)
 
     @property
     def startup_config(self):

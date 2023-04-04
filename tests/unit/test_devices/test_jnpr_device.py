@@ -1,15 +1,13 @@
-import unittest
-import mock
 import os
-import pytest
-
+import unittest
 from tempfile import NamedTemporaryFile
+
+import mock
+import pytest
+from jnpr.junos.exception import ConfigLoadError
 
 from pyntc.devices import JunosDevice
 from pyntc.errors import CommandError, CommandListError
-
-from jnpr.junos.exception import ConfigLoadError
-
 
 DEVICE_FACTS = {
     "domain": "ntc.com",
@@ -78,7 +76,7 @@ class TestJnprDevice(unittest.TestCase):
     def test_config_list(self, mock_config):
         commands = ["set interfaces lo0", "set snmp community jason"]
 
-        self.device.config_list(commands, format="set")
+        self.device.config(commands, format="set")
         self.device.config.assert_called_with(commands, format="set")
 
     def test_bad_config_pass_string(self):
@@ -164,7 +162,7 @@ class TestJnprDevice(unittest.TestCase):
     def test_show_list(self, mock_show):
         commands = ["show vlans", "show snmp v3"]
 
-        self.device.show_list(commands)
+        self.device.show(commands)
         self.device.show.assert_called_with(commands)
 
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)

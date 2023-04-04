@@ -117,17 +117,17 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def config_list(self, commands):
-        """Send a list of configuration commands.
+    # @abc.abstractmethod
+    # def config_list(self, commands):
+    #     """Send a list of configuration commands.
 
-        Args:
-            commands (list): A list of commands to send to the device.
+    #     Args:
+    #         commands (list): A list of commands to send to the device.
 
-        Raises:
-            CommandListError: If there is a problem with one of the commands in the list.
-        """
-        raise NotImplementedError
+    #     Raises:
+    #         CommandListError: If there is a problem with one of the commands in the list.
+    #     """
+    #     raise NotImplementedError
 
     @property
     @abc.abstractmethod
@@ -391,20 +391,20 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def show_list(self, commands, raw_text=False):
-        """Send a list of non-configuration commands.
+    # @abc.abstractmethod
+    # def show_list(self, commands, raw_text=False):
+    #     """Send a list of non-configuration commands.
 
-        Args:
-            commands (list): A list of commands to send to the device.
+    #     Args:
+    #         commands (list): A list of commands to send to the device.
 
-        Keyword Args:
-            raw_text (bool): Whether to return raw text or structured data.
+    #     Keyword Args:
+    #         raw_text (bool): Whether to return raw text or structured data.
 
-        Returns:
-            A list of outputs for each show command
-        """
-        raise NotImplementedError
+    #     Returns:
+    #         A list of outputs for each show command
+    #     """
+    #     raise NotImplementedError
 
     @property
     @abc.abstractmethod

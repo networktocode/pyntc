@@ -13,6 +13,7 @@ from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
+
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 from .base_device import BaseDevice, fix_docs
@@ -166,17 +167,17 @@ class JunosDevice(BaseDevice):
             except ConfigLoadError as e:
                 raise CommandListError(commands, command, e.message)
 
-    def config_list(self, commands, format="set"):
-        """Send configuration commands in list format to a device.
+    # def config_list(self, commands, format="set"):
+    #     """Send configuration commands in list format to a device.
 
-        DEPRECATED - Use the `config` method.
+    #     DEPRECATED - Use the `config` method.
 
-        Args:
-            commands (list): List with multiple commands.
-            format (str): The Junos format the commands are in.
-        """
-        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
-        self.config(commands, format=format)
+    #     Args:
+    #         commands (list): List with multiple commands.
+    #         format (str): The Junos format the commands are in.
+    #     """
+    #     warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
+    #     self.config(commands, format=format)
 
     @property
     def connected(self):
@@ -463,17 +464,17 @@ class JunosDevice(BaseDevice):
             return responses[0]
         return responses
 
-    def show_list(self, commands, raw_text=True):
-        """Send show commands in list format to a device.
+    # def show_list(self, commands, raw_text=True):
+    #     """Send show commands in list format to a device.
 
-        DEPRECATED - Use the `show` method.
+    #     DEPRECATED - Use the `show` method.
 
-        Args:
-            commands (list): List with multiple commands.
-            raw_text (bool): Return raw text or structured text.
-        """
-        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
-        return self.show(commands)
+    #     Args:
+    #         commands (list): List with multiple commands.
+    #         raw_text (bool): Return raw text or structured text.
+    #     """
+    #     warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
+    #     return self.show(commands)
 
     @property
     def startup_config(self):

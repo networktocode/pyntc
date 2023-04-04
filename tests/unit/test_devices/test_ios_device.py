@@ -4,6 +4,7 @@ import unittest
 
 import mock
 import pytest
+
 from pyntc.devices import ios_device as ios_module
 from pyntc.devices import IOSDevice
 from pyntc.devices.base_device import RollbackError
@@ -90,7 +91,7 @@ class TestIOSDevice(unittest.TestCase):
         self.device.native.send_command.side_effect = results
 
         with self.assertRaisesRegex(ios_module.CommandListError, "show badcommand"):
-            self.device.show_list(commands)
+            self.device.show(commands)
 
     def test_save(self):
         result = self.device.save()
@@ -544,14 +545,14 @@ def test_config_pass_invalid_list_command(mock_enter_config, mock_check_for_erro
 @mock.patch.object(IOSDevice, "config")
 def test_config_list(mock_config, ios_device):
     config_commands = ["a", "b"]
-    ios_device.config_list(config_commands)
+    ios_device.config(config_commands)
     mock_config.assert_called_with(config_commands)
 
 
 @mock.patch.object(IOSDevice, "config")
 def test_config_list_pass_netmiko_args(mock_config, ios_device):
     config_commands = ["a", "b"]
-    ios_device.config_list(config_commands, strip_prompt=True)
+    ios_device.config(config_commands, strip_prompt=True)
     mock_config.assert_called_with(config_commands, strip_prompt=True)
 
 
@@ -1370,7 +1371,7 @@ def test_show_netmiko_args(ios_send_command):
 def test_show_list(ios_native_send_command):
     commands = ["show_version", "show_ip_arp"]
     device = ios_native_send_command([f"{commands[0]}.txt", f"{commands[1]}"])
-    device.show_list(commands)
+    device.show(commands)
     device.native.send_command.assert_has_calls(
         [mock.call(command_string="show_version"), mock.call(command_string="show_ip_arp")]
     )
