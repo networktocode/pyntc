@@ -1,13 +1,13 @@
 import unittest
-import mock
 
+import mock
 from pynxos.errors import CLIError
 
-from .device_mocks.nxos import show, show_list
+from pyntc.devices.base_device import RebootTimerError, RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
-from pyntc.devices.base_device import RollbackError, RebootTimerError
 from pyntc.errors import CommandError, CommandListError, FileTransferError, NTCFileNotFoundError
 
+from .device_mocks.nxos import show, show_list
 
 BOOT_IMAGE = "n9000-dk9.9.2.1.bin"
 KICKSTART_IMAGE = "n9000-kickstart.9.2.1.bin"
@@ -53,7 +53,7 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_config_list(self):
         commands = ["interface eth 1/1", "no shutdown"]
-        result = self.device.config_list(commands)
+        result = self.device.config(commands)
 
         self.assertIsNone(result)
         self.device.native.config_list.assert_called_with(commands)
@@ -63,7 +63,7 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.native.config_list.side_effect = CLIError(commands[1], "Invalid command.")
 
         with self.assertRaisesRegex(CommandListError, commands[1]):
-            self.device.config_list(commands)
+            self.device.config(commands)
 
     def test_show(self):
         command = "show cdp neighbors"
@@ -90,7 +90,7 @@ class TestNXOSDevice(unittest.TestCase):
     def test_show_list(self):
         commands = ["show hostname", "show clock"]
 
-        result = self.device.show_list(commands)
+        result = self.device.show(commands)
         self.assertIsInstance(result, list)
 
         self.assertIn("hostname", result[0])
@@ -101,7 +101,7 @@ class TestNXOSDevice(unittest.TestCase):
     def test_bad_show_list(self):
         commands = ["show badcommand", "show clock"]
         with self.assertRaisesRegex(CommandListError, "show badcommand"):
-            self.device.show_list(commands)
+            self.device.show(commands)
 
     def test_save(self):
         result = self.device.save()

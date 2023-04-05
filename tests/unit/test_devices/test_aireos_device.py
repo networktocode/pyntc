@@ -2,6 +2,7 @@ import json
 from unittest import mock
 
 import pytest
+
 from pyntc.devices import aireos_device as aireos_module
 from pyntc.devices import AIREOSDevice
 
@@ -378,14 +379,14 @@ def test_config_pass_invalid_list_command(mock_enter_config, mock_check_for_erro
 @mock.patch.object(AIREOSDevice, "config")
 def test_config_list(mock_config, aireos_device):
     config_commands = ["a", "b"]
-    aireos_device.config_list(config_commands)
+    aireos_device.config(config_commands)
     mock_config.assert_called_with(config_commands)
 
 
 @mock.patch.object(AIREOSDevice, "config")
 def test_config_list_pass_netmiko_args(mock_config, aireos_device):
     config_commands = ["a", "b"]
-    aireos_device.config_list(config_commands, strip_prompt=True)
+    aireos_device.config(config_commands, strip_prompt=True)
     mock_config.assert_called_with(config_commands, strip_prompt=True)
 
 
@@ -1427,7 +1428,7 @@ def test_show_pass_invalid_list_command(mock_check_for_errors, aireos_send_comma
 @mock.patch.object(AIREOSDevice, "show")
 def test_show_list(mock_show, aireos_device):
     commands = ["a", "b"]
-    aireos_device.show_list(commands)
+    aireos_device.show(commands)
     mock_show.assert_called_with(commands)
 
 
@@ -1435,14 +1436,14 @@ def test_show_list(mock_show, aireos_device):
 def test_show_list_pass_netmiko_args(mock_show, aireos_device):
     commands = ["a", "b"]
     netmiko_args = {"auto_find_prompt": False}
-    aireos_device.show_list(commands, **netmiko_args)
+    aireos_device.show(commands, **netmiko_args)
     mock_show.assert_called_with(commands, auto_find_prompt=False)
 
 
 @mock.patch.object(AIREOSDevice, "show")
 def test_show_list_pass_expect_string(mock_show, aireos_device):
     commands = ["a", "b"]
-    aireos_device.show_list(commands, expect_string="Continue?")
+    aireos_device.show(commands, expect_string="Continue?")
     mock_show.assert_called_with(commands, expect_string="Continue?")
 
 
@@ -1450,7 +1451,7 @@ def test_show_list_pass_expect_string(mock_show, aireos_device):
 def test_show_list_pass_netmiko_args_and_expect_string(mock_show, aireos_device):
     commands = ["a", "b"]
     netmiko_args = {"auto_find_prompt": False}
-    aireos_device.show_list(commands, expect_string="Continue?", **netmiko_args)
+    aireos_device.show(commands, expect_string="Continue?", **netmiko_args)
     mock_show.assert_called_with(commands, expect_string="Continue?", auto_find_prompt=False)
 
 

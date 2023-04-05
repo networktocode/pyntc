@@ -3,6 +3,10 @@ import os
 import re
 import time
 
+from pynxos.device import Device as NXOSNative
+from pynxos.errors import CLIError
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+
 from pyntc import log
 from pyntc.errors import (
     CommandError,
@@ -12,9 +16,6 @@ from pyntc.errors import (
     OSInstallError,
     RebootTimeoutError,
 )
-from pynxos.device import Device as NXOSNative
-from pynxos.errors import CLIError
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 
 from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
 
@@ -102,33 +103,24 @@ class NXOSDevice(BaseDevice):
         """Send configuration command.
 
         Args:
-            command (str): command to be sent to the device.
+            command (str, list): command to be sent to the device.
 
         Raises:
             CommandError: Error if command is not succesfully ran on device.
         """
+        if isinstance(command, list):
+            try:
+                self.native.config_list(command)
+                log.info("Host %s: Configured with commands: %s", self.host, command)
+            except CLIError as e:
+                log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
+                raise CommandListError(command, e.command, str(e))
         try:
             self.native.config(command)
             log.info("Host %s: Device configured with command %s.", self.host, command)
         except CLIError as e:
             log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
             raise CommandError(command, str(e))
-
-    def config_list(self, commands):
-        """Send a list of configuration commands.
-
-        Args:
-            commands (list): A list of commands.
-
-        Raises:
-            CommandListError: Error if any of the commands in the list fail running on the device.
-        """
-        try:
-            self.native.config_list(commands)
-            log.info("Host %s: Configured with commands: %s", self.host, commands)
-        except CLIError as e:
-            log.error("Host %s: Command error with commands: %s and error message %s", self.host, commands, str(e))
-            raise CommandListError(commands, e.command, str(e))
 
     @property
     def uptime(self):
@@ -161,7 +153,7 @@ class NXOSDevice(BaseDevice):
         """Get list of interfaces.
 
         Returns:
-          list: List of interfaces.
+            list: List of interfaces.
         """
         if self._interfaces is None:
             self._interfaces = self.native.facts.get("interfaces")
@@ -440,32 +432,20 @@ class NXOSDevice(BaseDevice):
         Returns:
             str: Results of the command ran.
         """
+        log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
+        if isinstance(command, list):
+            try:
+                log.debug("Host %s: Successfully executed command 'show' with commands %s.", self.host, command)
+                return self.native.show_list(command, raw_text=raw_text)
+            except CLIError as e:
+                log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
+                raise CommandListError(command, e.command, str(e))
         try:
             log.debug("Host %s: Successfully executed command 'show'.", self.host)
             return self.native.show(command, raw_text=raw_text)
         except CLIError as e:
             log.error("Host %s: Command error %s.", self.host, str(e))
             raise CommandError(command, str(e))
-
-    def show_list(self, commands, raw_text=False):
-        """Send a list of non-configuration commands.
-
-        Args:
-            commands (str): A list of commands to be sent to the device.
-            raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
-
-        Raises:
-            CommandListError: Error message stating which command failed.
-
-        Returns:
-            list: Outputs of all the commands ran on the device.
-        """
-        try:
-            log.debug("Host %s: Successfully executed command 'show' with commands %s.", self.host, commands)
-            return self.native.show_list(commands, raw_text=raw_text)
-        except CLIError as e:
-            log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
-            raise CommandListError(commands, e.command, str(e))
 
     @property
     def startup_config(self):

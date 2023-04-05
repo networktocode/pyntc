@@ -6,6 +6,7 @@ import signal
 import time
 
 from netmiko import ConnectHandler, FileTransfer
+
 from pyntc import log
 from pyntc.errors import (
     CommandError,
@@ -397,36 +398,6 @@ class IOSDevice(BaseDevice):
 
         log.info("Host %s: Device configured with command responses %s.", self.host, command_responses)
         return command_responses
-
-    def config_list(self, commands, **netmiko_args):  # noqa: D401
-        r"""
-        DEPRECATED - Use the `config` method.
-
-        Send config commands to device.
-
-        By default, entering and exiting config mode is handled automatically.
-        To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-        This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
-
-        Args:
-            commands (list): The commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
-
-        Returns:
-            list: Each command's input and output from sending the command in ``commands``.
-
-        Raises:
-            TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
-            CommandListError: When one of the commands reports an error on the device.
-
-        Example:
-            >>> device = IOSDevice(**connection_args)
-            >>> device.config_list(["interface Gig0/1", "description x-connect"])
-            ['host(config)#interface Gig0/1\nhost(config-if)#, 'description x-connect\nhost(config-if)#']
-            >>>
-        """
-        log.warning("config_list() is deprecated; use config.")
-        return self.config(commands, **netmiko_args)
 
     def confirm_is_active(self):
         """
@@ -1134,17 +1105,6 @@ class IOSDevice(BaseDevice):
 
             return responses
         return self._send_command(command, expect_string=expect_string, **netmiko_args)
-
-    def show_list(self, commands):
-        """Send show commands in list format to a device.
-
-        DEPRECATED - Use the `show` method.
-
-        Args:
-            commands (list): List with multiple commands.
-        """
-        log.warning("show_list() is deprecated; use show().")
-        return self.show(commands)
 
     @property
     def startup_config(self):

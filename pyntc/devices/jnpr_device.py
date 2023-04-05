@@ -13,6 +13,7 @@ from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
+
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 from .base_device import BaseDevice, fix_docs
@@ -144,12 +145,12 @@ class JunosDevice(BaseDevice):
         """Send configuration commands to a device.
 
         Args:
-             commands (str, list): String with single command, or list with multiple commands.
+            commands (str, list): String with single command, or list with multiple commands.
 
         Raises:
-             ConfigLoadError: Issue with loading the command.
-             CommandError: Issue with the command provided, if its a single command, passed in as a string.
-             CommandListError: Issue with a command in the list provided.
+            ConfigLoadError: Issue with loading the command.
+            CommandError: Issue with the command provided, if its a single command, passed in as a string.
+            CommandListError: Issue with a command in the list provided.
         """
         if isinstance(commands, str):
             try:
@@ -165,18 +166,6 @@ class JunosDevice(BaseDevice):
                 self.cu.commit()
             except ConfigLoadError as e:
                 raise CommandListError(commands, command, e.message)
-
-    def config_list(self, commands, format="set"):
-        """Send configuration commands in list format to a device.
-
-        DEPRECATED - Use the `config` method.
-
-        Args:
-            commands (list): List with multiple commands.
-            format (str): The Junos format the commands are in.
-        """
-        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
-        self.config(commands, format=format)
 
     @property
     def connected(self):
@@ -462,18 +451,6 @@ class JunosDevice(BaseDevice):
         if original_commands_is_str:
             return responses[0]
         return responses
-
-    def show_list(self, commands, raw_text=True):
-        """Send show commands in list format to a device.
-
-        DEPRECATED - Use the `show` method.
-
-        Args:
-            commands (list): List with multiple commands.
-            raw_text (bool): Return raw text or structured text.
-        """
-        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
-        return self.show(commands)
 
     @property
     def startup_config(self):
