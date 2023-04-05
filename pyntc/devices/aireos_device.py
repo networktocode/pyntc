@@ -617,35 +617,6 @@ class AIREOSDevice(BaseDevice):
         )
         return command_responses
 
-    # def config_list(self, commands, **netmiko_args):  # noqa: D401
-    #     """
-    #     DEPRECATED - Use the `config` method.
-
-    #     Send config commands to device.
-
-    #     By default, entering and exiting config mode is handled automatically.
-    #     To disable entering and exiting config mode, pass `enter_config_mode` and `exit_config_mode` in ``**netmiko_args``.
-    #     This supports all arguments supported by Netmiko's `send_config_set` method using ``netmiko_args``.
-
-    #     Args:
-    #         commands (list): The commands to send to the device.
-    #         **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
-
-    #     Returns:
-    #         list: Each command's input and ouput from sending the command in ``commands``.
-
-    #     Raises:
-    #         TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
-    #         CommandListError: When one of the commands reports an error on the device.
-
-    #     Example:
-    #         >>> device = AIREOSDevice(**connection_args)
-    #         >>> device.config_list(["interface hostname virtual wlc1.site.com", "config interface vlan airway 20"])
-    #         >>>
-    #     """
-    #     log.warning("config_list() is deprecated; use config.")
-    #     return self.config(commands, **netmiko_args)
-
     def confirm_is_active(self):
         """
         Confirm that the device is either standalone or the active device in a high availability cluster.
@@ -1425,38 +1396,6 @@ class AIREOSDevice(BaseDevice):
             command_responses,
         )
         return command_responses
-
-    # def show_list(self, commands, **netmiko_args):  # noqa: D401
-    #     """
-    #     DEPRECATED - Use the `show` method.
-
-    #     Send operational commands to the device.
-
-    #     Args:
-    #         commands (list): The list of commands to send to the device.
-    #         **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command``.
-
-    #     Returns:
-    #         list: The data returned from the device for all commands.
-
-    #     Raises:
-    #         TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
-    #         CommandListError: When the returned data indicates one of the commands failed.
-
-    #     Example:
-    #         >>> device = AIREOSDevice(**connection_args)
-    #         >>> command_data = device._send_command(["show sysinfo", "show boot"])
-    #         >>> print(command_data[0])
-    #         Product Version.....8.2.170.0
-    #         System Up Time......3 days 2 hrs 20 mins 30 sec
-    #         ...
-    #         >>> print(command_data[1])
-    #         Primary Boot Image............................... 8.2.170.0 (default) (active)
-    #         Backup Boot Image................................ 8.5.110.0
-    #         >>>
-    #     """
-    #     log.warning("show_list() is deprecated; use show.")
-    #     return self.show(commands, **netmiko_args)
 
     @property
     def startup_config(self):

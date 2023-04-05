@@ -218,17 +218,6 @@ class EOSDevice(BaseDevice):
                 raise CommandError(commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
 
-    # def config_list(self, commands):
-    #     """Send configuration commands in list format to a device.
-
-    #     DEPRECATED - Use the `config` method.
-
-    #     Args:
-    #         commands (list): List with multiple commands.
-    #     """
-    #     log.warning("config_list() is deprecated; use config().")
-    #     self.config(commands)
-
     def enable(self):
         """Ensure device is in enable mode.
 
@@ -606,17 +595,6 @@ class EOSDevice(BaseDevice):
                 raise CommandError(e.commands, e.message)
             log.error("Host %s: Command list error for commands %s with message %s.", self.host, commands, e.message)
             raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
-
-    # def show_list(self, commands):
-    #     """Send show commands in list format to a device.
-
-    #     DEPRECATED - Use the `show` method.
-
-    #     Args:
-    #         commands (list): List with multiple commands.
-    #     """
-    #     log.warning("show_list() is deprecated; use show().")
-    #     self.show(commands)
 
     @property
     def startup_config(self):
