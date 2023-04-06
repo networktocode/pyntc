@@ -283,12 +283,17 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Open a connection to the device."""
         raise NotImplementedError
 
-    def reboot(self, timer=0):
-        """Reboot the device.
+    def reboot(self, wait_for_reload=False):
+        """Reload a device.
 
         Args:
-            confirm(bool): if False, this method has no effect.
-            timer(int): number of seconds to wait before rebooting.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+
+        Raises:
+            RebootTimeoutError: When the device is still unreachable after the timeout period.
+
+        Raises:
+            NotImplementedError: _description_
         """
         raise NotImplementedError
 

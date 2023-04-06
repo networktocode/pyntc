@@ -14,10 +14,9 @@ from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
 
+from pyntc.devices.base_device import BaseDevice, fix_docs
+from pyntc.devices.tables.jnpr.loopback import LoopbackTable
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
-
-from .base_device import BaseDevice, fix_docs
-from .tables.jnpr.loopback import LoopbackTable
 
 
 @fix_docs
@@ -342,12 +341,12 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Example:
             >>> device = JunosDevice(**connection_args)
@@ -358,7 +357,10 @@ class JunosDevice(BaseDevice):
             warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         self.sw = JunosNativeSW(self.native)
-        self.sw.reboot(in_min=timer)
+        self.sw.reboot(in_min=0)
+        if wait_for_reload:
+            time.sleep(10)
+            self._wait_for_device_reboot()
 
     def rollback(self, filename):
         """Rollback to a specific configuration file.

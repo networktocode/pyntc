@@ -2,12 +2,13 @@
 
 import os
 import re
-import signal
 import time
 
 from netmiko import ConnectHandler, FileTransfer
+from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -21,8 +22,6 @@ from pyntc.errors import (
     SocketClosedError,
 )
 from pyntc.utils import get_structured_data
-
-from .base_device import BaseDevice, fix_docs, RollbackError
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
@@ -238,7 +237,7 @@ class IOSDevice(BaseDevice):
             try:
                 self.open()
                 self.show("show version")
-                log.debug("Host %s: Device rebooted.", self.host)
+                log.debug("Host %s: Device reboot Completed.", self.host)
                 if self._has_reload_happened_recently():
                     return
             except:  # noqa E722 # nosec
@@ -755,6 +754,7 @@ class IOSDevice(BaseDevice):
                 self.reboot()
 
             # Wait for the reboot to finish
+            # TODO: This was moved into reboot method as well, should cause issues running again, but should be removed in future versions.
             self._wait_for_device_reboot(timeout=timeout)
 
             # Set FastCLI back to originally set when using install mode
@@ -870,13 +870,13 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Processor redundancy state %s.", self.host, processor_redundancy_state)
         return processor_redundancy_state
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """Reboot device.
 
         Reload the controller or controller pair.
 
         Args:
-            timer (int): The time to wait before reloading.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -884,31 +884,23 @@ class IOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
-        def handler(signum, frame):
-            log.error("Host %s: Reboot signal error interrupting after reload.", self.host)
-            raise RebootSignal
-
-        signal.signal(signal.SIGALRM, handler)
-        signal.alarm(10)
-
         try:
-            if timer > 0:
-                first_response = self.native.send_command_timing("reload in %d" % timer)
-            else:
-                first_response = self.native.send_command_timing("reload")
+            first_response = self.native.send_command_timing("reload")
 
             if "System configuration" in first_response:
                 self.native.send_command_timing("no")
 
-            self.native.send_command_timing("\n")
-        except RebootSignal:
-            log.error("Host %s: Reboot signal error.", self.host)
-            signal.alarm(0)
-
-        signal.alarm(0)
-        log.info("Host %s: Device rebooted.", self.host)
-        # else:
-        #     print("Need to confirm reboot with confirm=True")
+            try:
+                self.native.send_command_timing("\n", read_timeout=10)
+            except ReadTimeout as expected_exception:
+                log.info("Host %s: Device rebooted.", self.host)
+                log.info("Hit expected exception during reload: %s", expected_exception.__class__)
+            if wait_for_reload:
+                time.sleep(10)
+                self._wait_for_device_reboot()
+        except Exception as err:
+            log.error(err)
+            log.error(err.__class__)
 
     @property
     def redundancy_mode(self):

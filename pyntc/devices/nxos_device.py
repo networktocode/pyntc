@@ -8,6 +8,7 @@ from pynxos.errors import CLIError
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -16,8 +17,6 @@ from pyntc.errors import (
     OSInstallError,
     RebootTimeoutError,
 )
-
-from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
 
 
 @fix_docs
@@ -41,6 +40,7 @@ class NXOSDevice(BaseDevice):
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
+        self.native.show("terminal dont-ask")
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
@@ -115,12 +115,13 @@ class NXOSDevice(BaseDevice):
             except CLIError as e:
                 log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
                 raise CommandListError(command, e.command, str(e))
-        try:
-            self.native.config(command)
-            log.info("Host %s: Device configured with command %s.", self.host, command)
-        except CLIError as e:
-            log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
-            raise CommandError(command, str(e))
+        else:
+            try:
+                self.native.config(command)
+                log.info("Host %s: Device configured with command %s.", self.host, command)
+            except CLIError as e:
+                log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
+                raise CommandError(command, str(e))
 
     @property
     def uptime(self):
@@ -306,12 +307,12 @@ class NXOSDevice(BaseDevice):
         """Implements ``pass``."""
         pass
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimerError: When the device is still unreachable after the timeout period.
@@ -324,11 +325,10 @@ class NXOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
-        if timer != 0:
-            log.error("Host %s: Reboot time error for device type %s.", self.host, self.device_type)
-            raise RebootTimerError(self.device_type)
-
         self.native.reboot(confirm=True)
+        if wait_for_reload:
+            time.sleep(10)
+            self._wait_for_device_reboot()
         log.info("Host %s: Device rebooted.", self.host)
 
     def rollback(self, filename):
