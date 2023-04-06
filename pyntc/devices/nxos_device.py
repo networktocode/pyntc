@@ -115,12 +115,13 @@ class NXOSDevice(BaseDevice):
             except CLIError as e:
                 log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
                 raise CommandListError(command, e.command, str(e))
-        try:
-            self.native.config(command)
-            log.info("Host %s: Device configured with command %s.", self.host, command)
-        except CLIError as e:
-            log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
-            raise CommandError(command, str(e))
+        else:
+            try:
+                self.native.config(command)
+                log.info("Host %s: Device configured with command %s.", self.host, command)
+            except CLIError as e:
+                log.error("Host %s: Command error with commands: %s and error message %s", self.host, command, str(e))
+                raise CommandError(command, str(e))
 
     @property
     def uptime(self):
