@@ -112,6 +112,7 @@ nav:
           - v0.18: "admin/release_notes/version_0_18.md"
           - v0.19: "admin/release_notes/version_0_19.md"
           - v0.20: "admin/release_notes/version_0_20.md"
+          - v1.0: "admin/release_notes/version_1_0.md"
   - Developer Guide:
       - Extending the Library: "dev/extending.md"
       - Contributing to the Library: "dev/contributing.md"

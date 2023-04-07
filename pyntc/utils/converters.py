@@ -1,7 +1,9 @@
 """Provides methods for manipulating and converting data."""
 
 
-def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklist=[]):
+def convert_dict_by_key(
+    original, key_map, fill_in=False, whitelist=[], blacklist=[]
+):  # pylint: disable=dangerous-default-value
     """Use a key map to convert a dictionary to desired keys.
 
     Args:
@@ -41,7 +43,9 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
     return converted
 
 
-def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], blacklist=[]):
+def convert_list_by_key(
+    original_list, key_map, fill_in=False, whitelist=[], blacklist=[]
+):  # pylint: disable=dangerous-default-value
     """Apply a list conversion for all items in original_list.
 
     Args:

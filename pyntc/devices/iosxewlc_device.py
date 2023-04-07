@@ -1,12 +1,9 @@
 """Module for using a Cisco IOSXE WLC device over SSH."""
 import time
 
-from .ios_device import IOSDevice
-from pyntc.errors import (
-    RebootTimeoutError,
-    OSInstallError,
-    WaitingRebootTimeoutError,
-)
+from pyntc import log
+from pyntc.devices.ios_device import IOSDevice
+from pyntc.errors import OSInstallError, RebootTimeoutError, WaitingRebootTimeoutError
 
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
@@ -14,15 +11,18 @@ INSTALL_MODE_FILE_NAME = "packages.conf"
 class IOSXEWLCDevice(IOSDevice):
     """Cisco IOSXE WLC Device Implementation."""
 
+    log.init()
+
     def _wait_for_device_start_reboot(self, timeout=600):
         start = time.time()
         while time.time() - start < timeout:
             try:
                 self.open()
                 self.show("show version")
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 return
 
+        log.error("Host %s: Wait reboot timeout error with timeout %s", self.host, timeout)
         raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _wait_for_device_reboot(self, timeout=5400):
@@ -31,10 +31,12 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.open()
                 self.show("show version")
+                log.debug("Host %s: Device rebooted.", self.host)
                 return
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 pass
 
+        log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def install_os(self, image_name, install_mode_delay_factor=20, **vendor_specifics):
@@ -81,10 +83,13 @@ class IOSXEWLCDevice(IOSDevice):
 
             # Verify the OS level
             if not self._image_booted(image_name):
+                log.error("Host %s: OS install error for image %s", self.host, image_name)
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
+            log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
+        log.info("Host %s: OS image %s not installed.", self.host, image_name)
         return False
 
     def show(self, command, expect_string=None, **netmiko_args):
@@ -98,4 +103,5 @@ class IOSXEWLCDevice(IOSDevice):
             str: Output of command.
         """
         self.enable()
+        log.debug("Host %s: Successfully executed command 'show'.", self.host)
         return self._send_command(command, expect_string=expect_string, **netmiko_args)

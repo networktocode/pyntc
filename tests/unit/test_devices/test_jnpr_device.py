@@ -1,15 +1,13 @@
-import unittest
-import mock
 import os
-import pytest
-
+import unittest
 from tempfile import NamedTemporaryFile
+
+import mock
+import pytest
+from jnpr.junos.exception import ConfigLoadError
 
 from pyntc.devices import JunosDevice
 from pyntc.errors import CommandError, CommandListError
-
-from jnpr.junos.exception import ConfigLoadError
-
 
 DEVICE_FACTS = {
     "domain": "ntc.com",
@@ -63,7 +61,7 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_called_with(command, format="set")
+        self.device.cu.load.assert_called_with(command, format_type="set")
         self.device.cu.commit.assert_called_with()
 
     def test_config_pass_list(self):
@@ -71,15 +69,15 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(commands)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_has_calls(mock.call(command, format="set") for command in commands)
+        self.device.cu.load.assert_has_calls(mock.call(command, format_type="set") for command in commands)
         self.device.cu.commit.assert_called_with()
 
     @mock.patch.object(JunosDevice, "config")
     def test_config_list(self, mock_config):
         commands = ["set interfaces lo0", "set snmp community jason"]
 
-        self.device.config_list(commands, format="set")
-        self.device.config.assert_called_with(commands, format="set")
+        self.device.config(commands, format_type="set")
+        self.device.config.assert_called_with(commands, format_type="set")
 
     def test_bad_config_pass_string(self):
         command = "asdf poknw"
@@ -164,7 +162,7 @@ class TestJnprDevice(unittest.TestCase):
     def test_show_list(self, mock_show):
         commands = ["show vlans", "show snmp v3"]
 
-        self.device.show_list(commands)
+        self.device.show(commands)
         self.device.show.assert_called_with(commands)
 
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
@@ -216,10 +214,6 @@ class TestJnprDevice(unittest.TestCase):
     def test_reboot(self):
         self.device.reboot()
         self.device.sw.reboot.assert_called_with(in_min=0)
-
-    def test_reboot_timer(self):
-        self.device.reboot(timer=2)
-        self.device.sw.reboot.assert_called_with(in_min=2)
 
     @mock.patch("pyntc.devices.jnpr_device.JunosDevice.running_config", new_callable=mock.PropertyMock)
     def test_backup_running_config(self, mock_run):

@@ -14,7 +14,7 @@ def vlan_not_in_range_error(vlan_id, lower=1, upper=4094):
 class BaseVlans(BaseFeature):
     """Subclass for base vlan feature."""
 
-    pass
+    pass  # pylint: disable=unnecessary-pass
 
 
 class VlanNotInRangeError(NTCError):
@@ -31,4 +31,4 @@ class VlanNotInRangeError(NTCError):
             lower (int): lower vlan range.
             upper (int): upper vlan range.
         """
-        super().__init__("Vlan Id must be in range %s-%s" % (lower, upper))
+        super().__init__(f"Vlan Id must be in range {lower}-{upper}")

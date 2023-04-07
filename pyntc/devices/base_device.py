@@ -1,6 +1,5 @@
 """The module contains the base class that all device classes must inherit from."""
 
-import abc
 import importlib
 import warnings
 
@@ -26,8 +25,6 @@ def fix_docs(cls):
 
 class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Base Device ABC."""
-
-    __metaclass__ = abc.ABCMeta
 
     def __init__(
         self, host, username, password, device_type=None, **kwargs
@@ -67,10 +64,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    ####################
-    # ABSTRACT METHODS #
-    ####################
-    @abc.abstractmethod
     def backup_running_config(self, filename):
         """Save a local copy of the running config.
 
@@ -80,7 +73,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def boot_options(self):
         """Get current boot variables.
 
@@ -91,7 +83,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def checkpoint(self, filename):
         """Save a checkpoint of the running configuration to the device.
 
@@ -100,12 +91,10 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def close(self):
         """Close the connection to the device."""
         raise NotImplementedError
 
-    @abc.abstractmethod
     def config(self, command):
         """Send a configuration command.
 
@@ -117,20 +106,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def config_list(self, commands):
-        """Send a list of configuration commands.
-
-        Args:
-            commands (list): A list of commands to send to the device.
-
-        Raises:
-            CommandListError: If there is a problem with one of the commands in the list.
-        """
-        raise NotImplementedError
-
     @property
-    @abc.abstractmethod
     def uptime(self):
         """Uptime integer property, part of device facts.
 
@@ -140,7 +116,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def os_version(self):
         """Operating System string property, part of device facts.
 
@@ -150,7 +125,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def interfaces(self):
         """Interfaces list of strings property, part of device facts.
 
@@ -160,7 +134,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def hostname(self):
         """Host name string property, part of device facts.
 
@@ -170,7 +143,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def fqdn(self):
         """
         Get FQDN of the device.
@@ -181,7 +153,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def uptime_string(self):
         """Uptime string string property, part of device facts.
 
@@ -191,7 +162,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def serial_number(self):
         """
         Get serial number of the device.
@@ -202,7 +172,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def model(self):
         """Model string property, part of device facts.
 
@@ -212,7 +181,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def vlans(self):
         """Vlans lost of strings property, part of device facts.
 
@@ -242,7 +210,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         if self.device_type == "cisco_ios_ssh":
             facts[self.device_type] = {"config_register": self.config_register}  # pylint: disable=no-member
 
-    @abc.abstractmethod
     def file_copy(self, src, dest=None, **kwargs):
         """Send a local file to the device.
 
@@ -259,7 +226,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         """Check if a remote file exists.
 
@@ -281,7 +247,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             True if the remote file exists, False if it doesn't.
         """
 
-    @abc.abstractmethod
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name.
 
@@ -314,22 +279,24 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def open(self):
         """Open a connection to the device."""
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def reboot(self, timer=0):
-        """Reboot the device.
+    def reboot(self, wait_for_reload=False):
+        """Reload a device.
 
         Args:
-            confirm(bool): if False, this method has no effect.
-            timer(int): number of seconds to wait before rebooting.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+
+        Raises:
+            RebootTimeoutError: When the device is still unreachable after the timeout period.
+
+        Raises:
+            NotImplementedError: _description_
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def rollback(self, checkpoint_file):
         """Rollback to a checkpoint file.
 
@@ -339,12 +306,10 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     @property
-    @abc.abstractmethod
     def running_config(self):
         """Return the running configuration of the device."""
         raise NotImplementedError
 
-    @abc.abstractmethod
     def save(self, filename=None):
         """Save a device's running configuration.
 
@@ -355,7 +320,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def set_boot_options(self, image_name, **vendor_specifics):
         """Set boot variables like system image and kickstart image.
 
@@ -376,7 +340,6 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def show(self, command, raw_text=False):
         """Send a non-configuration command.
 
@@ -391,30 +354,10 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def show_list(self, commands, raw_text=False):
-        """Send a list of non-configuration commands.
-
-        Args:
-            commands (list): A list of commands to send to the device.
-
-        Keyword Args:
-            raw_text (bool): Whether to return raw text or structured data.
-
-        Returns:
-            A list of outputs for each show command
-        """
-        raise NotImplementedError
-
     @property
-    @abc.abstractmethod
     def startup_config(self):
         """Return the startup configuration of the device."""
         raise NotImplementedError
-
-    #################################
-    # Inherited implemented methods #
-    #################################
 
     def feature(self, feature_name):
         """Return a feature class based on the ``feature_name`` for the appropriate subclassed device type."""

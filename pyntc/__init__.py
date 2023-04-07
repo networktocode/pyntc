@@ -1,4 +1,4 @@
-"""Kickoff functions for getting instancs of device objects."""
+"""Kickoff functions for getting instance of device objects."""
 
 import os
 import warnings

@@ -17,7 +17,7 @@ def get_structured_data(template_name, rawtxt):
         list: A dict per entry returned by TextFSM.
     """
     template_file = get_template(template_name)
-    with open(template_file) as template:
+    with open(template_file, encoding="utf-8") as template:
         fsm = textfsm.TextFSM(template)
         table = fsm.ParseText(rawtxt)
 
