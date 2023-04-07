@@ -4,6 +4,10 @@ import re
 import time
 import warnings
 
+from pynxos.device import Device as NXOSNative
+from pynxos.errors import CLIError
+from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -12,9 +16,6 @@ from pyntc.errors import (
     OSInstallError,
     RebootTimeoutError,
 )
-from pynxos.device import Device as NXOSNative
-from pynxos.errors import CLIError
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 
 from .base_device import BaseDevice, RebootTimerError, RollbackError, fix_docs
 
@@ -55,7 +56,7 @@ class NXOSDevice(BaseDevice):
                 self.refresh_facts()
                 if self.uptime < 180:
                     return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -87,7 +88,7 @@ class NXOSDevice(BaseDevice):
 
     def close(self):  # noqa: D401
         """Implements ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def config(self, command):
         """Send configuration command.
@@ -100,8 +101,8 @@ class NXOSDevice(BaseDevice):
         """
         try:
             self.native.config(command)
-        except CLIError as e:
-            raise CommandError(command, str(e))
+        except CLIError as err:
+            raise CommandError(command, str(err))
 
     def config_list(self, commands):
         """Send a list of configuration commands.
@@ -114,8 +115,8 @@ class NXOSDevice(BaseDevice):
         """
         try:
             self.native.config_list(commands)
-        except CLIError as e:
-            raise CommandListError(commands, e.command, str(e))
+        except CLIError as err:
+            raise CommandListError(commands, err.command, str(err))
 
     @property
     def uptime(self):
@@ -227,14 +228,14 @@ class NXOSDevice(BaseDevice):
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
             try:
-                file_copy = self.native.file_copy(src, dest, file_system=file_system)
+                file_copy = self.native.file_copy(src, dest, file_system=file_system)  # pylint: disable=assignment-from-no-return
                 if not self.file_copy_remote_exists(src, dest, file_system):
                     raise FileTransferError(
                         message="Attempted file copy, but could not validate file existed after transfer"
                     )
                 return file_copy
-            except NXOSFileTransferError as e:
-                print(str(e))
+            except NXOSFileTransferError as err:
+                print(str(err))
                 raise FileTransferError
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
@@ -278,7 +279,7 @@ class NXOSDevice(BaseDevice):
 
     def open(self):  # noqa: D401
         """Implements ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def reboot(self, timer=0, **kwargs):
         """
@@ -315,7 +316,7 @@ class NXOSDevice(BaseDevice):
         try:
             self.native.rollback(filename)
         except CLIError:
-            raise RollbackError("Rollback unsuccessful, %s may not exist." % filename)
+            raise RollbackError(f"Rollback unsuccessful, {filename} may not exist.")
 
     @property
     def running_config(self):
@@ -351,13 +352,13 @@ class NXOSDevice(BaseDevice):
         if file_system is None:
             file_system = "bootflash:"
 
-        file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
+        file_system_files = self.show(f"dir {file_system}", raw_text=True)
         if re.search(image_name, file_system_files) is None:
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
 
         if kickstart is not None:
             if re.search(kickstart, file_system_files) is None:
-                raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, dir=file_system)
+                raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, directory=file_system)
 
             kickstart = file_system + kickstart
 
@@ -370,7 +371,7 @@ class NXOSDevice(BaseDevice):
 
         if native_timeout < 300:
             self.native.timeout = 300
-        upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)
+        upgrade_result = self.native.set_boot_options(image_name, kickstart=kickstart)  # pylint: disable=assignment-from-no-return
         self.native.timeout = 30
 
         return upgrade_result
@@ -398,8 +399,8 @@ class NXOSDevice(BaseDevice):
         """
         try:
             return self.native.show(command, raw_text=raw_text)
-        except CLIError as e:
-            raise CommandError(command, str(e))
+        except CLIError as err:
+            raise CommandError(command, str(err))
 
     def show_list(self, commands, raw_text=False):
         """Send a list of non-configuration commands.
@@ -416,8 +417,8 @@ class NXOSDevice(BaseDevice):
         """
         try:
             return self.native.show_list(commands, raw_text=raw_text)
-        except CLIError as e:
-            raise CommandListError(commands, e.command, str(e))
+        except CLIError as err:
+            raise CommandListError(commands, err.command, str(err))
 
     @property
     def startup_config(self):
