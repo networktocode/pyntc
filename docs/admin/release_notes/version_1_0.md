@@ -10,7 +10,7 @@
 
 ### Changed
 - [280](https://github.com/networktocode/pyntc/pull/280) Changed from relative imports to absolute imports.
-- [282](https://github.com/networktocode/pyntc/pull/282) Update full code base to pass pylint and other static code checkers.
+- [282](https://github.com/networktocode/pyntc/pull/282) Update initial pass at pylint.
 
 ### Deprecated
 
