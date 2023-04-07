@@ -1,12 +1,12 @@
 """Module for using a Cisco IOSXE WLC device over SSH."""
 import time
 
-from .ios_device import IOSDevice
 from pyntc.errors import (
     RebootTimeoutError,
     OSInstallError,
     WaitingRebootTimeoutError,
 )
+from .ios_device import IOSDevice
 
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
@@ -20,7 +20,7 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.open()
                 self.show("show version")
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 return
 
         raise WaitingRebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -32,7 +32,7 @@ class IOSXEWLCDevice(IOSDevice):
                 self.open()
                 self.show("show version")
                 return
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
