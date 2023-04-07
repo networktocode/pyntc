@@ -1,7 +1,7 @@
 """Define base feature set."""
 
 
-class BaseFeature(object):
+class BaseFeature:
     """Base feature sets."""
 
     def config(self, vlan_id, **params):

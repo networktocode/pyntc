@@ -13,6 +13,8 @@ from pyntc import log
 from pyntc.devices.base_device import BaseDevice
 from pyntc.errors import FileTransferError, NotEnoughFreeSpaceError, NTCFileNotFoundError, OSInstallError
 
+# TODO: Check in on soap_handler in the F5Device, many instances of no-member. Is this broken?
+
 
 class F5Device(BaseDevice):
     """F5 LTM Device Implementation."""
@@ -45,7 +47,8 @@ class F5Device(BaseDevice):
 
         if not free_space:
             raise ValueError("Could not get free space")
-        elif free_space >= min_space:
+
+        if free_space >= min_space:
             return
         elif free_space < min_space:
             log.error("Host %s: Not enough free space for min space requirement %s.", self.host, min_space)
@@ -78,17 +81,17 @@ class F5Device(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()  # nosec
-            with open(filepath, "rb") as f:
-                buf = f.read(blocksize)
+            md5_check = hashlib.md5()  # nosec
+            with open(filepath, "rb") as file_name:
+                buf = file_name.read(blocksize)
                 while buf:
-                    m.update(buf)
-                    buf = f.read(blocksize)
-            return m.hexdigest()
+                    md5_check.update(buf)
+                    buf = file_name.read(blocksize)
+            return md5_check.hexdigest()
 
     def _file_copy_remote_md5(self, filepath):
         md5sum_result = None
-        md5sum_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "md5sum {}"'.format(filepath))
+        md5sum_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs=f'-c "md5sum {filepath}"')
         if md5sum_output:
             md5sum_result = md5sum_output.commandResult
             md5sum_result = md5sum_result.split()[0]
@@ -138,35 +141,35 @@ class F5Device(BaseDevice):
         return images
 
     def _get_interfaces_list(self):
-        interfaces = self.soap_handler.Networking.Interfaces.get_list()
+        interfaces = self.soap_handler.Networking.Interfaces.get_list()  # pylint: disable=no-member
         log.debug("Host %s: List of interfaces %s.", self.host, interfaces)
         return interfaces
 
     def _get_model(self):
-        model = self.soap_handler.System.SystemInfo.get_marketing_name()
+        model = self.soap_handler.System.SystemInfo.get_marketing_name()  # pylint: disable=no-member
         log.debug("Host %s: Model name %s.", self.host, model)
         return model
 
     def _get_serial_number(self):
-        system_information = self.soap_handler.System.SystemInfo.get_system_information()
+        system_information = self.soap_handler.System.SystemInfo.get_system_information()  # pylint: disable=no-member
         chassis_serial = system_information.get("chassis_serial")
 
         log.debug("Host %s: Serial number %s.", self.host, chassis_serial)
         return chassis_serial
 
     def _get_uptime(self):
-        uptime = self.soap_handler.System.SystemInfo.get_uptime()
+        uptime = self.soap_handler.System.SystemInfo.get_uptime()  # pylint: disable=no-member
         log.debug("Host %s: Uptime %s.", self.host, uptime)
         return uptime
 
     def _get_version(self):
-        version = self.soap_handler.System.SystemInfo.get_version()
+        version = self.soap_handler.System.SystemInfo.get_version()  # pylint: disable=no-member
         log.debug("Host %s: Version %s.", self.host, version)
         return version
 
     def _get_vlans(self):
-        rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()
-        rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(rd_list)
+        rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()  # pylint: disable=no-member
+        rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(rd_list)  # pylint: disable=no-member
 
         log.debug("Host %s: List of vlans %s.", self.host, rd_vlan_list)
         return rd_vlan_list
@@ -277,13 +280,11 @@ class F5Device(BaseDevice):
             image_filepath (str): Name of file.
         """
         image_filename = os.path.basename(image_filepath)
-        _URI = "https://{hostname}/mgmt/cm/autodeploy/software-image-uploads/{filename}".format(
-            hostname=self.host, filename=image_filename
-        )
+        upload_uri = f"https://{self.host}/mgmt/cm/autodeploy/software-image-uploads/{image_filename}"
         chunk_size = 512 * 1024
         size = os.path.getsize(image_filepath)
         headers = {"Content-Type": "application/octet-stream"}
-        requests.packages.urllib3.disable_warnings()
+        requests.packages.urllib3.disable_warnings()  # pylint: disable=no-member
         start = 0
 
         with open(image_filepath, "rb") as fileobj:
@@ -295,10 +296,14 @@ class F5Device(BaseDevice):
                 end = fileobj.tell()
                 if end < chunk_size:
                     end = size
-                content_range = "{}-{}/{}".format(start, end - 1, size)
+                content_range = f"{start}-{end - 1}/{size}"
                 headers["Content-Range"] = content_range
                 requests.post(
-                    _URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False  # nosec
+                    upload_uri,
+                    auth=(self.username, self.password),
+                    data=payload,
+                    headers=headers,
+                    verify=False,  # nosec
                 )
 
                 start += len(payload)
@@ -359,8 +364,9 @@ class F5Device(BaseDevice):
                 volume = self.api_handler.tm.sys.software.volumes.volume.load(name=volume_name)
                 if hasattr(volume, "active") and volume.active is True:
                     return True
+
                 log.debug("Host %s: Reboot successfull.", self.host)
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 log.error("Host %s: Error while rebooting.", self.host)
                 pass
         log.debug("Host %s: Reboot not successfull.", self.host)
@@ -387,7 +393,7 @@ class F5Device(BaseDevice):
                 if self.image_installed(image_name=image_name, volume=volume):
                     log.info("Host %s: Image %s installed on volume %s.", self.host, image_name, volume)
                     return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         log.error("Host %s: OS install error with image %s and volume %s.", self.host, image_name, volume)
@@ -429,7 +435,7 @@ class F5Device(BaseDevice):
 
     def close(self):
         """Implement ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def config(self, command):
         """Send command to device.
@@ -662,7 +668,7 @@ class F5Device(BaseDevice):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
                 log.error("Host %s: File not found for image %s and volume %s.", self.host, image_name, volume)
-                raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
+                raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -674,7 +680,7 @@ class F5Device(BaseDevice):
 
     def open(self):
         """Implement ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def reboot(self, wait_for_reload=False, volume=None, **kwargs):
         """
@@ -704,7 +710,7 @@ class F5Device(BaseDevice):
 
         if not self._wait_for_device_reboot(volume_name=volume):
             log.error("Host %s: Reboot to volume %s failed.", self.host, volume)
-            raise RuntimeError
+            raise RuntimeError(f"Reboot to volume {volume} failed")
         log.debug("Host %s: Reboot to volume %s succeeded.", self.host, volume)
 
     def rollback(self, checkpoint_file):
@@ -718,7 +724,7 @@ class F5Device(BaseDevice):
         """
         raise NotImplementedError
 
-    def running_config(self):
+    def running_config(self):  # pylint: disable=invalid-overridden-method
         """Get running configuration.
 
         Raises:
@@ -750,7 +756,7 @@ class F5Device(BaseDevice):
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
             log.error("Host %s: File not found for image %s and volume %s.", self.host, image_name, volume)
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
         log.info("Host %s: Image %s installed to volume %s.", self.host, image_name, volume)
@@ -767,7 +773,7 @@ class F5Device(BaseDevice):
         """
         raise NotImplementedError
 
-    def startup_config(self):
+    def startup_config(self):  # pylint: disable=invalid-overridden-method
         """Get startup configuration.
 
         Raises:

@@ -61,7 +61,7 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(command)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_called_with(command, format="set")
+        self.device.cu.load.assert_called_with(command, format_type="set")
         self.device.cu.commit.assert_called_with()
 
     def test_config_pass_list(self):
@@ -69,15 +69,15 @@ class TestJnprDevice(unittest.TestCase):
         result = self.device.config(commands)
 
         self.assertIsNone(result)
-        self.device.cu.load.assert_has_calls(mock.call(command, format="set") for command in commands)
+        self.device.cu.load.assert_has_calls(mock.call(command, format_type="set") for command in commands)
         self.device.cu.commit.assert_called_with()
 
     @mock.patch.object(JunosDevice, "config")
     def test_config_list(self, mock_config):
         commands = ["set interfaces lo0", "set snmp community jason"]
 
-        self.device.config(commands, format="set")
-        self.device.config.assert_called_with(commands, format="set")
+        self.device.config(commands, format_type="set")
+        self.device.config.assert_called_with(commands, format_type="set")
 
     def test_bad_config_pass_string(self):
         command = "asdf poknw"

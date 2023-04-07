@@ -19,7 +19,7 @@ class IOSXEWLCDevice(IOSDevice):
             try:
                 self.open()
                 self.show("show version")
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 return
 
         log.error("Host %s: Wait reboot timeout error with timeout %s", self.host, timeout)
@@ -33,7 +33,7 @@ class IOSXEWLCDevice(IOSDevice):
                 self.show("show version")
                 log.debug("Host %s: Device rebooted.", self.host)
                 return
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 pass
 
         log.error("Host %s: Device timed out while rebooting.", self.host)

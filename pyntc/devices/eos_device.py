@@ -24,6 +24,7 @@ from pyntc.errors import (
 )
 from pyntc.utils import convert_list_by_key
 
+
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -76,9 +77,9 @@ class EOSDevice(BaseDevice):
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
-        log.debug("Host %s: File copy instance %s.", self.host, fc)
-        return fc
+        file_copy = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
+        log.debug("Host %s: File copy instance %s.", self.host, file_copy)
+        return file_copy
 
     def _get_file_system(self):
         """Determine the default file system or directory for device.
@@ -121,13 +122,13 @@ class EOSDevice(BaseDevice):
         log.debug("Host %s: interfaces detailed list %s.", self.host, interface_status_list)
         return interface_status_list
 
-    def _parse_response(self, response, raw_text):
+    def _parse_response(self, response, raw_text):  # pylint: disable=no-self-use
         if raw_text:
             return list(x["result"]["output"] for x in response)
-        else:
-            return list(x["result"] for x in response)
 
-    def _uptime_to_string(self, uptime):
+        return list(x["result"] for x in response)
+
+    def _uptime_to_string(self, uptime):  # pylint: disable=no-self-use
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
 
@@ -139,7 +140,7 @@ class EOSDevice(BaseDevice):
 
         seconds = uptime
 
-        return "%02d:%02d:%02d:%02d" % (days, hours, mins, seconds)
+        return f"{days:02d}:{hours:02d}:{mins:02d}:{seconds:02d}"
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
@@ -148,7 +149,7 @@ class EOSDevice(BaseDevice):
                 self.show("show hostname")
                 log.debug("Host %s: Device rebooted.", self.host)
                 return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
@@ -161,8 +162,8 @@ class EOSDevice(BaseDevice):
         Args:
             filename (str): The name of the file that will be saved.
         """
-        with open(filename, "w") as f:
-            f.write(self.running_config)
+        with open(filename, "w", encoding="utf-8") as file_name:
+            file_name.write(self.running_config)
 
         log.debug("Host %s: Running config backed up to %s.", self.host, self.running_config)
 
@@ -185,16 +186,11 @@ class EOSDevice(BaseDevice):
             checkpoint_file (str): Checkpoint file name.
         """
         log.debug("Host %s: checkpoint is %s.", self.host, checkpoint_file)
-        self.show("copy running-config %s" % checkpoint_file)
+        self.show(f"copy running-config {checkpoint_file}")
 
     def close(self):
-        """Create a checkpoint file of the running config.
-
-        Args:
-            checkpoint_file (str): Name of the checkpoint file.
-        """
-        log.info("Host %s: Device configured.", self.host)
-        pass
+        """Not implemented. Just ``passes``."""
+        pass  # pylint: disable=unnecessary-pass
 
     def config(self, commands):
         """Send configuration commands to a device.
@@ -376,18 +372,18 @@ class EOSDevice(BaseDevice):
             file_system = self._get_file_system()
 
         if not self.file_copy_remote_exists(src, dest, file_system):
-            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            file_copy = self._file_copy_instance(src, dest, file_system=file_system)
 
             try:
-                fc.enable_scp()
-                fc.establish_scp_conn()
-                fc.transfer_file()
+                file_copy.enable_scp()
+                file_copy.establish_scp_conn()
+                file_copy.transfer_file()
                 log.info("Host %s: File %s transferred successfully.", self.host, src)
             except:  # noqa E722
                 log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
                 raise FileTransferError
             finally:
-                fc.close_scp_chan()
+                file_copy.close_scp_chan()
 
             if not self.file_copy_remote_exists(src, dest, file_system):
                 log.error(
@@ -413,8 +409,8 @@ class EOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
-        if fc.check_file_exists() and fc.compare_md5():
+        filecopy = self._file_copy_instance(src, dest, file_system=file_system)
+        if filecopy.check_file_exists() and filecopy.compare_md5():
             log.debug("Host %s: File %s already exists on remote.", self.host, src)
             return True
 
@@ -452,12 +448,12 @@ class EOSDevice(BaseDevice):
         """Open ssh connection with Netmiko ConnectHandler to be used with FileTransfer."""
         if self._connected:
             try:
-                self.native_ssh.find_prompt()
-            except Exception:
+                self.native_ssh.find_prompt()  # pylint: disable=access-member-before-definition
+            except Exception:  # pylint: disable=broad-except
                 self._connected = False
 
         if not self._connected:
-            self.native_ssh = ConnectHandler(
+            self.native_ssh = ConnectHandler(  # pylint: disable=attribute-defined-outside-init
                 device_type="arista_eos",
                 ip=self.host,
                 username=self.username,
@@ -505,11 +501,11 @@ class EOSDevice(BaseDevice):
             RollbackError: When rollback is unsuccessful.
         """
         try:
-            self.show("configure replace %s force" % rollback_to)
+            self.show(f"configure replace {rollback_to} force")
             log.info("Host %s: Rollback to %s.", self.host, rollback_to)
         except (CommandError, CommandListError):
             log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, rollback_to)
-            raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
+            raise RollbackError(f"Rollback unsuccessful. {rollback_to} may not exist.")
 
     @property
     def running_config(self):
@@ -528,7 +524,7 @@ class EOSDevice(BaseDevice):
             str: Running configuration.
         """
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
-        self.show("copy running-config %s" % filename)
+        self.show(f"copy running-config {filename}")
         return True
 
     def set_boot_options(self, image_name, **vendor_specifics):
@@ -545,16 +541,16 @@ class EOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        file_system_files = self.show("dir {0}".format(file_system), raw_text=True)
+        file_system_files = self.show(f"dir {file_system}", raw_text=True)
         if re.search(image_name, file_system_files) is None:
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
 
-        self.show("install source {0}{1}".format(file_system, image_name))
+        self.show(f"install source {file_system}{image_name}")
         if self.boot_options["sys"] != image_name:
             log.error("Host %s: Setting boot command did not yield expected results", self.host)
             raise CommandError(
-                command="install source {0}".format(image_name),
+                command=f"install source {image_name}",
                 message="Setting install source did not yield expected results",
             )
 
@@ -586,12 +582,12 @@ class EOSDevice(BaseDevice):
                 return response_list[0]
             log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, response_list)
             return response_list
-        except EOSCommandError as e:
+        except EOSCommandError as err:
             if original_commands_is_str:
-                log.error("Host %s: Command error for command %s with message %s.", self.host, commands, e.message)
-                raise CommandError(e.commands, e.message)
-            log.error("Host %s: Command list error for commands %s with message %s.", self.host, commands, e.message)
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+                log.error("Host %s: Command error for command %s with message %s.", self.host, commands, err.message)
+                raise CommandError(err.commands, err.message)
+            log.error("Host %s: Command list error for commands %s with message %s.", self.host, commands, err.message)
+            raise CommandListError(commands, err.commands[len(err.commands) - 1], err.message)
 
     @property
     def startup_config(self):
@@ -607,4 +603,4 @@ class EOSDevice(BaseDevice):
 class RebootSignal(NTCError):
     """Error for sending reboot signal."""
 
-    pass
+    pass  # pylint: disable=unnecessary-pass

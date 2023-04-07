@@ -5,7 +5,7 @@ import warnings
 class NTCError(Exception):
     """Generic Error class for PyNTC."""
 
-    def __init__(self, message):
+    def __init__(self, message):  # pylint: disable=super-init-not-called
         """
         Generic Error class for PyNTC.
 
@@ -16,7 +16,7 @@ class NTCError(Exception):
 
     def __repr__(self):
         """Representation of NTC error object."""
-        return "%s: \n%s" % (self.__class__.__name__, self.message)
+        return f"{self.__class__.__name__}: \n{self.message}"
 
     __str__ = __repr__
 
@@ -31,7 +31,7 @@ class UnsupportedDeviceError(NTCError):
         Args:
             vendor (str): The name of the deice's vendor to present in the error.
         """
-        message = "%s is not a supported vendor." % vendor
+        message = f"{vendor} is not a supported vendor."
         super().__init__(message)
 
 
@@ -46,7 +46,7 @@ class DeviceNameNotFoundError(NTCError):
             name (str): The hostname that failed the lookup.
             filename (str): The name of the file used for inventory.
         """
-        message = "Name %s not found in %s. The file may not exist." % (name, filename)
+        message = f"Name {name} not found in {filename}. The file may not exist."
         super().__init__(message)
 
 
@@ -60,7 +60,7 @@ class ConfFileNotFoundError(NTCError):
         Args:
             filename (str): The name of the file used for config settings.
         """
-        message = "NTC Configuration file %s could not be found." % filename
+        message = f"NTC Configuration file {filename} could not be found."
         super().__init__(message)
 
 
@@ -77,7 +77,7 @@ class CommandError(NTCError):
         """
         self.command = command
         self.cli_error_msg = message
-        message = "Command %s was not successful: %s" % (command, message)
+        message = f"Command {command} was not successful: {message}"
         super().__init__(message)
 
 
@@ -96,10 +96,10 @@ class CommandListError(NTCError):
         warnings.warn("This will raise CommandError in the future", FutureWarning)
         self.commands = commands
         self.command = command
-        message = "\nCommand %s failed with message: %s" % (command, message)
+        message = f"\nCommand {command} failed with message: {message}"
         message += "\nCommand List: \n"
-        for command in commands:
-            message += "\t%s\n" % command
+        for command in commands:  # pylint: disable=redefined-argument-from-local
+            message += f"\t{command}\n"
         super().__init__(message)
 
 
@@ -135,7 +135,7 @@ class FeatureNotFoundError(NTCError):
 
         TODO: Remove this Exception when VLAN feature is removed.
         """
-        message = "%s feature not found for %s device type." % (feature, device_type)
+        message = f"{feature} feature not found for {device_type} device type."
         super().__init__(message)
 
 
@@ -150,7 +150,7 @@ class FileSystemNotFoundError(NTCError):
             hostname (str): The hostname of the device that failed.
             command (str): The command used to detect the default file system.
         """
-        message = 'Unable to parse "{0}" command to identify the default file system on {1}.'.format(command, hostname)
+        message = f'Unable to parse "{command}" command to identify the default file system on {hostname}.'
         super().__init__(message)
 
 
@@ -183,7 +183,7 @@ class RebootTimeoutError(NTCError):
             hostname (str): The hostname of the device that did not boot back up.
             wait_time (int): The amount of time waiting before considering the reboot failed.
         """
-        message = "Unable to reconnect to {0} after {1} seconds".format(hostname, wait_time)
+        message = f"Unable to reconnect to {hostname} after {wait_time} seconds"
         super().__init__(message)
 
 
@@ -198,9 +198,7 @@ class WaitingRebootTimeoutError(NTCError):
             hostname (str): The hostname of the device that did not boot back up.
             wait_time (int): The amount of time waiting before considering the reboot failed.
         """
-        message = "{0} has not rebooted in {1} seconds after issuing install mode upgrade command".format(
-            hostname, wait_time
-        )
+        message = f"{hostname} has not rebooted in {wait_time} seconds after issuing install mode upgrade command"
         super().__init__(message)
 
 
@@ -215,7 +213,7 @@ class NotEnoughFreeSpaceError(NTCError):
             hostname (str): The hostname of the device that did not boot back up.
             min_space (str): The minimum amount of space required to transfer the file.
         """
-        message = "{0} does not meet the minimum disk space requirements of {1}".format(hostname, min_space)
+        message = f"{hostname} does not meet the minimum disk space requirements of {min_space}"
         super().__init__(message)
 
 
@@ -230,7 +228,7 @@ class OSInstallError(NTCError):
             hostname (str): The hostname of the device that failed to install OS.
             desired_boot (str): The OS that was attempted to be installed.
         """
-        message = "{0} was unable to boot into {1}".format(hostname, desired_boot)
+        message = f"{hostname} was unable to boot into {desired_boot}"
         super().__init__(message)
 
 
@@ -256,18 +254,17 @@ class PeerFailedToFormError(NTCError):
 class NTCFileNotFoundError(NTCError):
     """Error for not being able to find a file on a device."""
 
-    def __init__(self, hostname, file, dir):
-        """
-        Error for not being able to find a file on a device.
+    def __init__(self, hostname, file, directory):
+        """Error for not being able to find a file on a device.
 
         Args:
             hostname (str): The hostname of the device that did not have the ``file``.
             file (str): The name of the file that could not be found.
-            dir (str): The directory on the network device where the file was searched for.
+            directory (str): The directory on the network device where the file was searched for.
 
         TODO: Rename ``dir`` arg as that is a reserved name in python.
         """
-        message = "{0} was not found in {1} on {2}".format(file, dir, hostname)
+        message = f"{file} was not found in {directory} on {hostname}"
         super().__init__(message)
 
 

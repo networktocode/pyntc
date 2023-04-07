@@ -70,7 +70,7 @@ class IOSDevice(BaseDevice):
         self.open(confirm_active=confirm_active)
         log.init(host=host)
 
-    def _check_command_output_for_errors(self, command, command_response):
+    def _check_command_output_for_errors(self, command, command_response):  # pylint: disable=no-self-use
         """
         Check response from device to see if an error was reported.
 
@@ -108,9 +108,9 @@ class IOSDevice(BaseDevice):
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = FileTransfer(self.native, src, dest, file_system=file_system)
-        log.debug("Host %s: File copy instance %s.", self.host, fc)
-        return fc
+        file_copy = FileTransfer(self.native, src, dest, file_system=file_system)
+        log.debug("Host %s: File copy instance %s.", self.host, file_copy)
+        return file_copy
 
     def _get_file_system(self):
         """Determine the default file system or directory for device.
@@ -207,7 +207,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_data)
         return show_vlan_data
 
-    def _uptime_components(self, uptime_full_string):
+    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
@@ -229,7 +229,7 @@ class IOSDevice(BaseDevice):
 
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes = self._uptime_components(uptime_full_string)
-        return "%02d:%02d:%02d:00" % (days, hours, minutes)
+        return f"{days:02d}:{hours:02d}:{minutes:02d}:00"
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
@@ -240,7 +240,7 @@ class IOSDevice(BaseDevice):
                 log.debug("Host %s: Device reboot Completed.", self.host)
                 if self._has_reload_happened_recently():
                     return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
@@ -258,8 +258,8 @@ class IOSDevice(BaseDevice):
         Args:
             filename (str): Filename to save running configuration to.
         """
-        with open(filename, "w") as f:
-            f.write(self.running_config)
+        with open(filename, "w", encoding="utf-8") as file_name:
+            file_name.write(self.running_config)
 
     @property
     def boot_options(self):
@@ -383,8 +383,7 @@ class IOSDevice(BaseDevice):
                     err.cli_error_msg,
                 )
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
-            else:
-                raise err
+            raise err
         # Don't let exception prevent exiting config mode
         finally:
             # Ignore None or invalid args passed for exit_config_mode
@@ -644,18 +643,18 @@ class IOSDevice(BaseDevice):
             file_system = self._get_file_system()
 
         if not self.file_copy_remote_exists(src, dest, file_system):
-            fc = self._file_copy_instance(src, dest, file_system=file_system)
+            file_copy = self._file_copy_instance(src, dest, file_system=file_system)
             #        if not self.fc.verify_space_available():
             #            raise FileTransferError('Not enough space available.')
 
             try:
-                fc.enable_scp()
-                fc.establish_scp_conn()
-                fc.transfer_file()
+                file_copy.enable_scp()
+                file_copy.establish_scp_conn()
+                file_copy.transfer_file()
                 log.info("Host %s: File %s transferred successfully.", self.host, src)
             except OSError as error:
                 # compare hashes
-                if not fc.compare_md5():
+                if not file_copy.compare_md5():
                     log.error("Host %s: Socket closed error %s", self.host, error)
                     raise SocketClosedError(message=error)
                 log.error("Host %s: OS error  %s", self.host, error)
@@ -663,7 +662,7 @@ class IOSDevice(BaseDevice):
                 log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
                 raise FileTransferError
             finally:
-                fc.close_scp_chan()
+                file_copy.close_scp_chan()
 
             # Ensure connection to device is still open after long transfers
             self.open()
@@ -692,8 +691,8 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
-        if fc.check_file_exists() and fc.compare_md5():
+        file_copy = self._file_copy_instance(src, dest, file_system=file_system)
+        if file_copy.check_file_exists() and file_copy.compare_md5():
             log.debug("Host %s: File %s already exists on remote.", self.host, src)
             return True
 
@@ -817,7 +816,7 @@ class IOSDevice(BaseDevice):
         if self.connected:
             try:
                 self.native.find_prompt()
-            except:  # noqa E722
+            except:  # noqa E722  # pylint: disable=bare-except
                 self._connected = False
 
         if not self.connected:
@@ -967,11 +966,11 @@ class IOSDevice(BaseDevice):
             RollbackError: Error if unable to rollback to configuration.
         """
         try:
-            self.show("configure replace %s%s force" % (self._get_file_system(), rollback_to))
+            self.show(f"configure replace {self._get_file_system()}{rollback_to} force")
             log.info("Host %s: Rollback to %s.", self.host, rollback_to)
         except CommandError:
             log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, rollback_to)
-            raise RollbackError("Rollback unsuccessful. %s may not exist." % rollback_to)
+            raise RollbackError(f"Rollback unsuccessful. {rollback_to} may not exist.")
 
     @property
     def running_config(self):
@@ -992,7 +991,7 @@ class IOSDevice(BaseDevice):
         Returns:
             bool: True if save is succesfull.
         """
-        command = "copy running-config %s" % filename
+        command = f"copy running-config {filename}"
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
         # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
@@ -1019,12 +1018,12 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        file_system_files = self.show("dir {0}".format(file_system))
+        file_system_files = self.show(f"dir {file_system}")
         if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
         if image_name == "packages.conf":
-            command = "boot system {0}{1}".format(file_system, image_name)
+            command = f"boot system {file_system}{image_name}"
             self.config(["no boot system", command])
         else:
             show_boot_sys = self.show("show run | include boot system")
@@ -1071,7 +1070,7 @@ class IOSDevice(BaseDevice):
             log.error("Host %s: Setting boot command did not yield expected results", self.host)
             raise CommandError(
                 command=command,
-                message="Setting boot command did not yield expected results, found {0}".format(new_boot_options),
+                message=f"Setting boot command did not yield expected results, found {new_boot_options}",
             )
 
     def show(self, command, expect_string=None, **netmiko_args):
@@ -1110,4 +1109,6 @@ class IOSDevice(BaseDevice):
 
 
 class RebootSignal(NTCError):  # noqa: D101
-    pass
+    """RebootSignal."""
+
+    pass  # pylint: disable=unnecessary-pass
