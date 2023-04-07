@@ -328,7 +328,7 @@ class F5Device(BaseDevice):
         uptime = uptime % 60
         seconds = uptime
 
-        return f"{days:02d}:{hours:02d}:{mins:02d}:{seconds:02d}"
+        return "%02d:%02d:%02d:%02d" % (days, hours, mins, seconds)
 
     def _volume_exists(self, volume_name):
         """Check if volume exist.

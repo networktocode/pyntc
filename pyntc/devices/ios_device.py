@@ -1021,9 +1021,9 @@ class IOSDevice(BaseDevice):
         file_system_files = self.show(f"dir {file_system}")
         if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir=file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
         if image_name == "packages.conf":
-            command = f"boot system {file_system}/{image_name}"
+            command = f"boot system {file_system}{image_name}"
             self.config(["no boot system", command])
         else:
             show_boot_sys = self.show("show run | include boot system")
