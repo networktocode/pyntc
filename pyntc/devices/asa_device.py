@@ -73,18 +73,18 @@ class ASADevice(BaseDevice):
         self.enable()
 
         if not self.file_copy_remote_exists(src, dest, file_system):
-            fc: CiscoAsaFileTransfer = self._file_copy_instance(src, dest, file_system)
+            file_copy: CiscoAsaFileTransfer = self._file_copy_instance(src, dest, file_system)
 
             try:
-                fc.establish_scp_conn()
-                fc.transfer_file()
+                file_copy.establish_scp_conn()
+                file_copy.transfer_file()
             # Allow EOFErrors to be caught and only raise an error if the file is not actually on the device
             except EOFError:
                 self.open()
             except Exception:
                 raise FileTransferError
             finally:
-                fc.close_scp_chan()
+                file_copy.close_scp_chan()
 
             if not self.file_copy_remote_exists(src, dest, file_system):
                 raise FileTransferError(
@@ -97,8 +97,8 @@ class ASADevice(BaseDevice):
         if dest is None:
             dest = os.path.basename(src)
 
-        fc = CiscoAsaFileTransfer(self.native, src, dest, file_system=file_system)
-        return fc
+        file_copy = CiscoAsaFileTransfer(self.native, src, dest, file_system=file_system)
+        return file_copy
 
     def _get_file_system(self):
         """Determine the default file system or directory for device.
@@ -233,7 +233,7 @@ class ASADevice(BaseDevice):
 
         return show_vlan_data
 
-    def _uptime_components(self, uptime_full_string):
+    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
@@ -255,7 +255,7 @@ class ASADevice(BaseDevice):
 
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes = self._uptime_components(uptime_full_string)
-        return "%02d:%02d:%02d:00" % (days, hours, minutes)
+        return f"{days:02d}:{hours:02d}:{minutes:02d}:00"
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
@@ -263,7 +263,7 @@ class ASADevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec   # pylint: disable=bare-except
                 pass
 
         # TODO: Get proper hostname parameter
@@ -315,8 +315,8 @@ class ASADevice(BaseDevice):
         Args:
             filename (str): Name of backup file.
         """
-        with open(filename, "w") as f:
-            f.write(self.running_config)
+        with open(filename, "w", encoding="utf-8") as file_name:
+            file_name.write(self.running_config)
 
     @property
     def boot_options(self):
@@ -380,8 +380,8 @@ class ASADevice(BaseDevice):
             entered_commands.append(command)
             try:
                 self._send_command(command)
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+            except CommandError as err:
+                raise CommandListError(entered_commands, command, err.cli_error_msg)
         self.native.exit_config_mode()
 
     @property
@@ -456,7 +456,7 @@ class ASADevice(BaseDevice):
         device.save()
 
     @property
-    def facts(self):
+    def facts(self):  # pylint: disable=invalid-overridden-method
         """Implement this once facts re-factor is done."""
         return {}
 
@@ -500,7 +500,7 @@ class ASADevice(BaseDevice):
         self.enable_scp()
         self._file_copy(src, dest, file_system)
         if peer:
-            self.peer_device._file_copy(src, dest, file_system)
+            self.peer_device._file_copy(src, dest, file_system)  # pylint: disable=protected-access
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
@@ -527,8 +527,8 @@ class ASADevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        fc = self._file_copy_instance(src, dest, file_system=file_system)
-        if fc.check_file_exists() and fc.compare_md5():
+        file_copy = self._file_copy_instance(src, dest, file_system=file_system)
+        if file_copy.check_file_exists() and file_copy.compare_md5():
             return True
         return False
 
@@ -578,12 +578,12 @@ class ASADevice(BaseDevice):
             >>>
         """
         try:
-            ip = ip_address(self.host)
+            ip_add = ip_address(self.host)
         except ValueError:
             # Assume hostname was used, and retrieve resolved IP from paramiko transport
-            ip = ip_address(self.native.remote_conn.transport.getpeername()[0])
+            ip_add = ip_address(self.native.remote_conn.transport.getpeername()[0])
 
-        return ip
+        return ip_add
 
     @property
     def ipv4_addresses(self) -> Dict[str, List[IPv4Address]]:
@@ -661,7 +661,7 @@ class ASADevice(BaseDevice):
         if self._connected:
             try:
                 self.native.find_prompt()
-            except:  # noqa E722
+            except:  # noqa E722  pylint: disable=bare-except
                 self._connected = False
 
         if not self._connected:
@@ -820,7 +820,7 @@ class ASADevice(BaseDevice):
 
         try:
             if timer > 0:
-                first_response = self.show("reload in %d" % timer)
+                first_response = self.show(f"reload in {timer}")
             else:
                 first_response = self.show("reload")
 
@@ -963,7 +963,7 @@ class ASADevice(BaseDevice):
         Returns:
             bool: True if configuration saved succesfully.
         """
-        command = "copy running-config %s" % filename
+        command = f"copy running-config {filename}"
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
         # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
@@ -990,24 +990,24 @@ class ASADevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        file_system_files = self.show("dir {0}".format(file_system))
+        file_system_files = self.show(f"dir {file_system}")
         if re.search(image_name, file_system_files) is None:
             raise NTCFileNotFoundError(
                 # TODO: Update to use hostname
                 hostname=self.host,
                 file=image_name,
-                dir=file_system,
+                directory=file_system,
             )
 
         current_images = current_boot.splitlines()
-        commands_to_exec = ["no {0}".format(image) for image in current_images]
-        commands_to_exec.append("boot system {0}/{1}".format(file_system, image_name))
+        commands_to_exec = [f"no {image}" for image in current_images]
+        commands_to_exec.append(f"boot system {file_system}/{image_name}")
         self.config_list(commands_to_exec)
 
         self.save()
         if self.boot_options["sys"] != image_name:
             raise CommandError(
-                command="boot system {0}/{1}".format(file_system, image_name),
+                command=f"boot system {file_system}/{image_name}",
                 message="Setting boot command did not yield expected results",
             )
 
@@ -1046,8 +1046,8 @@ class ASADevice(BaseDevice):
             entered_commands.append(command)
             try:
                 responses.append(self._send_command(command))
-            except CommandError as e:
-                raise CommandListError(entered_commands, command, e.cli_error_msg)
+            except CommandError as err:
+                raise CommandListError(entered_commands, command, err.cli_error_msg)
 
         return responses
 
@@ -1064,4 +1064,4 @@ class ASADevice(BaseDevice):
 class RebootSignal(NTCError):
     """Not implemented."""
 
-    pass
+    pass  # pylint: disable=unnecessary-pass
