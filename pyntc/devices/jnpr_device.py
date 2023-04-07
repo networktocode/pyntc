@@ -8,7 +8,7 @@ from tempfile import NamedTemporaryFile
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.exception import ConfigLoadError
-from jnpr.junos.op.ethport import EthPortTable
+from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
@@ -16,7 +16,7 @@ from jnpr.junos.utils.sw import SW as JunosNativeSW
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 from .base_device import BaseDevice, fix_docs
-from .tables.jnpr.loopback import LoopbackTable
+from .tables.jnpr.loopback import LoopbackTable # pylint: disable=no-name-in-module
 
 
 @fix_docs
@@ -37,22 +37,22 @@ class JunosDevice(BaseDevice):
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
         self.open()
-        self.cu = JunosNativeConfig(self.native)
-        self.fs = JunosNativeFS(self.native)
-        self.sw = JunosNativeSW(self.native)
+        self.cu = JunosNativeConfig(self.native)  # pylint: disable=invalid-name
+        self.fs = JunosNativeFS(self.native)  # pylint: disable=invalid-name
+        self.sw = JunosNativeSW(self.native)  # pylint: disable=invalid-name
 
-    def _file_copy_local_file_exists(self, filepath):
+    def _file_copy_local_file_exists(self, filepath):  # pylint: disable=no-self-use
         return os.path.isfile(filepath)
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()  # nosec
-            with open(filepath, "rb") as f:
-                buf = f.read(blocksize)
+            md5_hash = hashlib.md5()  # nosec
+            with open(filepath, "rb") as file_name:
+                buf = file_name.read(blocksize)
                 while buf:
-                    m.update(buf)
-                    buf = f.read(blocksize)
-            return m.hexdigest()
+                    md5_hash.update(buf)
+                    buf = file_name.read(blocksize)
+            return md5_hash.hexdigest()
 
     def _file_copy_remote_md5(self, filename):
         return self.fs.checksum(filename)
@@ -72,7 +72,7 @@ class JunosDevice(BaseDevice):
     def _image_booted(self, image_name, **vendor_specifics):
         raise NotImplementedError
 
-    def _uptime_components(self, uptime_full_string):
+    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
@@ -96,7 +96,7 @@ class JunosDevice(BaseDevice):
 
     def _uptime_to_string(self, uptime_full_string):
         days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
-        return "%02d:%02d:%02d:%02d" % (days, hours, minutes, seconds)
+        return f"{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
@@ -104,7 +104,7 @@ class JunosDevice(BaseDevice):
             try:
                 self.open()
                 return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -115,8 +115,8 @@ class JunosDevice(BaseDevice):
         Args:
             filename (str): Name used for backup file.
         """
-        with open(filename, "w") as f:
-            f.write(self.running_config)
+        with open(filename, "w", encoding="utf-8") as file_name:
+            file_name.write(self.running_config)
 
     @property
     def boot_options(self):
@@ -140,7 +140,7 @@ class JunosDevice(BaseDevice):
         if self.connected:
             self.native.close()
 
-    def config(self, commands, format="set"):
+    def config(self, commands, format_type="set"):
         """Send configuration commands to a device.
 
         Args:
@@ -153,20 +153,20 @@ class JunosDevice(BaseDevice):
         """
         if isinstance(commands, str):
             try:
-                self.cu.load(commands, format=format)
+                self.cu.load(commands, format_type=format_type)
                 self.cu.commit()
-            except ConfigLoadError as e:
-                raise CommandError(commands, e.message)
+            except ConfigLoadError as err:
+                raise CommandError(commands, err.message)
         else:
             try:
                 for command in commands:
-                    self.cu.load(command, format=format)
+                    self.cu.load(command, format_type=format_type)
 
                 self.cu.commit()
-            except ConfigLoadError as e:
-                raise CommandListError(commands, command, e.message)
+            except ConfigLoadError as err:
+                raise CommandListError(commands, command, err.message)
 
-    def config_list(self, commands, format="set"):
+    def config_list(self, commands, format_type="set"):
         """Send configuration commands in list format to a device.
 
         DEPRECATED - Use the `config` method.
@@ -176,7 +176,7 @@ class JunosDevice(BaseDevice):
             format (str): The Junos format the commands are in.
         """
         warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
-        self.config(commands, format=format)
+        self.config(commands, format_type=format_type)
 
     @property
     def connected(self):
@@ -379,7 +379,7 @@ class JunosDevice(BaseDevice):
         """
         self.native.timeout = 60
 
-        temp_file = NamedTemporaryFile()
+        temp_file = NamedTemporaryFile()  # pylint: disable=consider-using-with
 
         with SCP(self.native) as scp:
             scp.get(filename, local_path=temp_file.name)
@@ -416,7 +416,7 @@ class JunosDevice(BaseDevice):
             self.cu.commit()
             return
 
-        temp_file = NamedTemporaryFile()
+        temp_file = NamedTemporaryFile()  # pylint: disable=consider-using-with
         temp_file.write(self.show("show config"))
         temp_file.flush()
 
