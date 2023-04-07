@@ -507,7 +507,6 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, rollback_to)
             raise RollbackError(f"Rollback unsuccessful. {rollback_to} may not exist.")
 
-
     @property
     def running_config(self):
         """Return running config.

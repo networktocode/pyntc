@@ -1110,4 +1110,5 @@ class IOSDevice(BaseDevice):
 
 class RebootSignal(NTCError):  # noqa: D101
     """RebootSignal."""
+
     pass  # pylint: disable=unnecessary-pass

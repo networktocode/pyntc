@@ -146,7 +146,7 @@ class F5Device(BaseDevice):
         return interfaces
 
     def _get_model(self):
-        model = self.soap_handler.System.SystemInfo.get_marketing_name() # pylint: disable=no-member
+        model = self.soap_handler.System.SystemInfo.get_marketing_name()  # pylint: disable=no-member
         log.debug("Host %s: Model name %s.", self.host, model)
         return model
 
@@ -299,7 +299,11 @@ class F5Device(BaseDevice):
                 content_range = f"{start}-{end - 1}/{size}"
                 headers["Content-Range"] = content_range
                 requests.post(
-                    upload_uri, auth=(self.username, self.password), data=payload, headers=headers, verify=False  # nosec
+                    upload_uri,
+                    auth=(self.username, self.password),
+                    data=payload,
+                    headers=headers,
+                    verify=False,  # nosec
                 )
 
                 start += len(payload)

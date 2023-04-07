@@ -113,7 +113,6 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
 
-
     def _get_file_system(self):
         """Determine the default file system or directory for device.
 
