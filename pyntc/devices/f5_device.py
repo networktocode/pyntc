@@ -10,9 +10,8 @@ import requests
 from f5.bigip import ManagementRoot
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice
 from pyntc.errors import FileTransferError, NotEnoughFreeSpaceError, NTCFileNotFoundError, OSInstallError
-
-from .base_device import BaseDevice
 
 
 class F5Device(BaseDevice):
@@ -677,13 +676,13 @@ class F5Device(BaseDevice):
         """Implement ``pass``."""
         pass
 
-    def reboot(self, timer=0, volume=None, **kwargs):
+    def reboot(self, wait_for_reload=False, volume=None, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
             volume (str, optional): Active volume to reboot. Defaults to None.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RuntimeError: If device is unreachable after timeout period, raise an error.

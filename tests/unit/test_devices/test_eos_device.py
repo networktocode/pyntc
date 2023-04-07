@@ -6,7 +6,7 @@ import mock
 import pytest
 
 from pyntc.devices import EOSDevice
-from pyntc.devices.base_device import RebootTimerError, RollbackError
+from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
@@ -280,10 +280,6 @@ class TestEOSDevice(unittest.TestCase):
     def test_reboot(self):
         self.device.reboot()
         self.device.native.enable.assert_called_with(["reload now"], encoding="json")
-
-    def test_reboot_with_timer(self):
-        with self.assertRaises(RebootTimerError):
-            self.device.reboot(timer=3)
 
     def test_boot_options(self):
         boot_options = self.device.boot_options

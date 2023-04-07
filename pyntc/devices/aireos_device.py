@@ -3,12 +3,13 @@
 import json
 import os
 import re
-import signal
 import time
 
 from netmiko import ConnectHandler
+from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -22,8 +23,6 @@ from pyntc.errors import (
     WLANDisableError,
     WLANEnableError,
 )
-
-from .base_device import BaseDevice, fix_docs
 
 RE_FILENAME_FIND_VERSION = re.compile(r"^.+?(?P<version>\d+(?:-|_)\d+(?:-|_)\d+(?:-|_)\d+)\.", re.M)
 RE_AP_IMAGE_COUNT = re.compile(r"^[Tt]otal\s+number\s+of\s+APs\.+\s+(?P<count>\d+)\s*$", re.M)
@@ -1137,12 +1136,12 @@ class AIREOSDevice(BaseDevice):
         log.debug("Host %s: Peer redundancy state: %s.", self.host, peer_redundancy_state)
         return peer_redundancy_state
 
-    def reboot(self, timer=0, controller="self", save_config=True, **kwargs):
+    def reboot(self, wait_for_reload=False, controller="self", save_config=True, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int): The time to wait before reloading.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
             controller (str): Which controller(s) to reboot (only applies to HA pairs).
             save_config (bool): Whether the configuration should be saved before reload.
 
@@ -1157,39 +1156,33 @@ class AIREOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
-        def handler(signum, frame):
-            log.error("Host %s: Interrupting after reload.", self.host)
-            raise RebootSignal
-
-        signal.signal(signal.SIGALRM, handler)
-
         if self.redundancy_mode != "sso disabled":
             reboot_command = f"reset system {controller}"
         else:
             reboot_command = "reset system"
 
-        if timer:
-            reboot_command += f" in {timer}"
-
         if save_config:
             self.save()
 
-        signal.alarm(20)
         try:
             response = self.native.send_command_timing(reboot_command)
-            if "save" in response:
-                if not save_config:
-                    response = self.native.send_command_timing("n")
-                else:
-                    response = self.native.send_command_timing("y")
-            if "reset" in response:
-                self.native.send_command_timing("y")
-        except RebootSignal:
-            signal.alarm(0)
-
-        signal.alarm(0)
-
-        log.info("Host %s: Device rebooted.", self.host)
+            try:
+                if "save" in response:
+                    if not save_config:
+                        response = self.native.send_command_timing("n")
+                    else:
+                        response = self.native.send_command_timing("y")
+                if "reset" in response:
+                    self.native.send_command_timing("y")
+            except ReadTimeout as expected_exception:
+                log.info("Host %s: Device rebooted.", self.host)
+                log.info("Hit expected exception during reload: %s", expected_exception.__class__)
+            if wait_for_reload:
+                time.sleep(10)
+                self._wait_for_device_reboot()
+        except Exception as err:
+            log.error(err)
+            log.error(err.__class__)
 
     @property
     def redundancy_mode(self):

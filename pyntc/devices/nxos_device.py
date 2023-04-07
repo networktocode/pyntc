@@ -6,8 +6,10 @@ import time
 from pynxos.device import Device as NXOSNative
 from pynxos.errors import CLIError
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
+from requests.exceptions import ReadTimeout
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -16,8 +18,6 @@ from pyntc.errors import (
     OSInstallError,
     RebootTimeoutError,
 )
-
-from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
 
 
 @fix_docs
@@ -52,14 +52,13 @@ class NXOSDevice(BaseDevice):
         log.info("Host %s: Image %s not booted successfully.", self.host, image_name)
         return False
 
-    def _wait_for_device_reboot(self, timeout=600):
+    def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
         while time.time() - start < timeout:
             try:
-                self.refresh_facts()
-                if self.uptime < 180:
-                    log.debug("Host %s: Device rebooted.", self.host)
-                    return
+                self.native.show("show hostname")
+                log.debug("Host %s: Device rebooted.", self.host)
+                return
             except:  # noqa E722 # nosec
                 pass
 
@@ -288,6 +287,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             bool: True if new image is boot option on device. Otherwise, false.
         """
+        self.native.show("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
@@ -307,12 +307,12 @@ class NXOSDevice(BaseDevice):
         """Implements ``pass``."""
         pass
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimerError: When the device is still unreachable after the timeout period.
@@ -324,12 +324,16 @@ class NXOSDevice(BaseDevice):
         """
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
-
-        if timer != 0:
-            log.error("Host %s: Reboot time error for device type %s.", self.host, self.device_type)
-            raise RebootTimerError(self.device_type)
-
-        self.native.reboot(confirm=True)
+        try:
+            self.native.show_list(["terminal dont-ask", "reload"])
+            # The native reboot is not always properly disabling confirmation. Above is more consistent.
+            # self.native.reboot(confirm=True)
+        except ReadTimeout as expected_exception:
+            log.info("Host %s: Device rebooted.", self.host)
+            log.info("Hit expected exception during reload: %s", expected_exception.__class__)
+        if wait_for_reload:
+            time.sleep(10)
+            self._wait_for_device_reboot()
         log.info("Host %s: Device rebooted.", self.host)
 
     def rollback(self, filename):

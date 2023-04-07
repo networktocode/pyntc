@@ -10,6 +10,8 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -21,9 +23,6 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import convert_list_by_key
-
-from .base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
-from .system_features.vlans.eos_vlans import EOSVlans
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
@@ -472,12 +471,12 @@ class EOSDevice(BaseDevice):
 
         log.debug("Host %s: Connection to controller was opened successfully.", self.host)
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -491,12 +490,10 @@ class EOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
-        if timer != 0:
-            log.error("Host %s: Reboot time error.", self.host)
-            raise RebootTimerError(self.device_type)
-
         self.show("reload now")
         log.info("Host %s: Device rebooted.", self.host)
+        if wait_for_reload:
+            self._wait_for_device_reboot()
 
     def rollback(self, rollback_to):
         """Rollback device configuration.
@@ -505,7 +502,7 @@ class EOSDevice(BaseDevice):
             rollback_to (str): Name of file to revert configuration to.
 
         Raises:
-            RollbackError: When rollback is unsuccesful.
+            RollbackError: When rollback is unsuccessful.
         """
         try:
             self.show("configure replace %s force" % rollback_to)

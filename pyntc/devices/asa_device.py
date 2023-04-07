@@ -2,7 +2,6 @@
 
 import os
 import re
-import signal
 import time
 from collections import Counter
 from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
@@ -10,8 +9,10 @@ from typing import Dict, Iterable, List, Optional, Union
 
 from netmiko import ConnectHandler
 from netmiko.cisco import CiscoAsaFileTransfer, CiscoAsaSSH
+from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
+from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -23,8 +24,6 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import get_structured_data
-
-from .base_device import BaseDevice, fix_docs
 
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
@@ -858,12 +857,12 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: Peer redundancy state: %s.", self.host, peer_redundancy_state)
         return peer_redundancy_state.lower()
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -876,29 +875,23 @@ class ASADevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
-        def handler(signum, frame):
-            log.error("Host %s: Interrupting after reload.", self.host)
-            raise RebootSignal
-
-        signal.signal(signal.SIGALRM, handler)
-        signal.alarm(10)
-
         try:
-            if timer > 0:
-                first_response = self.show("reload in %d" % timer)
-            else:
-                first_response = self.show("reload")
+            first_response = self.show("reload")
 
             if "System configuration" in first_response:
                 self.native.send_command_timing("no")
 
-            self.native.send_command_timing("\n")
-        except RebootSignal:
-            signal.alarm(0)
-
-        signal.alarm(0)
-
-        log.info("Host %s: Device rebooted.", self.host)
+            try:
+                self.native.send_command_timing("\n", read_timeout=10)
+            except ReadTimeout as expected_exception:
+                log.info("Host %s: Device rebooted.", self.host)
+                log.info("Hit expected exception during reload: %s", expected_exception.__class__)
+            if wait_for_reload:
+                time.sleep(10)
+                self._wait_for_device_reboot()
+        except Exception as err:
+            log.error(err)
+            log.error(err.__class__)
 
     def reboot_standby(self, acceptable_states: Optional[Iterable[str]] = None, timeout: Optional[int] = None) -> None:
         """

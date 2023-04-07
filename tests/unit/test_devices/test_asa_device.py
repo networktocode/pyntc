@@ -251,11 +251,6 @@ def test_reboot(asa_device):
     asa_device.native.send_command_timing.assert_any_call("reload")
 
 
-def test_reboot_with_timer(asa_device):
-    asa_device.reboot(timer=5)
-    asa_device.native.send_command_timing.assert_any_call("reload in 5")
-
-
 def test_reboot_confirm_deprecated(asa_device):
     asa_device.reboot(confirm=True)
     asa_device.native.send_command_timing.assert_any_call("reload")

@@ -1,13 +1,9 @@
 """Module for using a Cisco IOSXE WLC device over SSH."""
 import time
 
-from .ios_device import IOSDevice
-from pyntc.errors import (
-    RebootTimeoutError,
-    OSInstallError,
-    WaitingRebootTimeoutError,
-)
 from pyntc import log
+from pyntc.devices.ios_device import IOSDevice
+from pyntc.errors import OSInstallError, RebootTimeoutError, WaitingRebootTimeoutError
 
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
