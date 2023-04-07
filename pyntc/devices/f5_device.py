@@ -12,6 +12,8 @@ from f5.bigip import ManagementRoot
 from pyntc.errors import OSInstallError, FileTransferError, NTCFileNotFoundError, NotEnoughFreeSpaceError
 from .base_device import BaseDevice
 
+# TODO: Check in on soap_handler in the F5Device, many instances of no-member. Is this broken?
+
 
 class F5Device(BaseDevice):
     """F5 LTM Device Implementation."""
@@ -43,9 +45,11 @@ class F5Device(BaseDevice):
 
         if not free_space:
             raise ValueError("Could not get free space")
-        elif free_space >= min_space:
+
+        if free_space >= min_space:
             return
-        elif free_space < min_space:
+
+        if free_space < min_space:
             raise NotEnoughFreeSpaceError(hostname=self.host, min_space=min_space)
 
     def _check_md5sum(self, filename, checksum):
@@ -60,10 +64,7 @@ class F5Device(BaseDevice):
         """
         md5sum = self._file_copy_remote_md5(filename)
 
-        if checksum == md5sum:
-            return True
-        else:
-            return False
+        return checksum == md5sum
 
     @staticmethod
     def _file_copy_local_file_exists(filepath):
@@ -71,17 +72,17 @@ class F5Device(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            m = hashlib.md5()  # nosec
-            with open(filepath, "rb") as f:
-                buf = f.read(blocksize)
+            md5_check = hashlib.md5()  # nosec
+            with open(filepath, "rb") as file_name:
+                buf = file_name.read(blocksize)
                 while buf:
-                    m.update(buf)
-                    buf = f.read(blocksize)
-            return m.hexdigest()
+                    md5_check.update(buf)
+                    buf = file_name.read(blocksize)
+            return md5_check.hexdigest()
 
     def _file_copy_remote_md5(self, filepath):
         md5sum_result = None
-        md5sum_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "md5sum {}"'.format(filepath))
+        md5sum_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs=f'-c "md5sum {filepath}"')
         if md5sum_output:
             md5sum_result = md5sum_output.commandResult
             md5sum_result = md5sum_result.split()[0]
@@ -128,27 +129,27 @@ class F5Device(BaseDevice):
         return images
 
     def _get_interfaces_list(self):
-        interfaces = self.soap_handler.Networking.Interfaces.get_list()
+        interfaces = self.soap_handler.Networking.Interfaces.get_list()  # pylint: disable=no-member
         return interfaces
 
     def _get_model(self):
-        return self.soap_handler.System.SystemInfo.get_marketing_name()
+        return self.soap_handler.System.SystemInfo.get_marketing_name()  # pylint: disable=no-member
 
     def _get_serial_number(self):
-        system_information = self.soap_handler.System.SystemInfo.get_system_information()
+        system_information = self.soap_handler.System.SystemInfo.get_system_information()  # pylint: disable=no-member
         chassis_serial = system_information.get("chassis_serial")
 
         return chassis_serial
 
     def _get_uptime(self):
-        return self.soap_handler.System.SystemInfo.get_uptime()
+        return self.soap_handler.System.SystemInfo.get_uptime()  # pylint: disable=no-member
 
     def _get_version(self):
-        return self.soap_handler.System.SystemInfo.get_version()
+        return self.soap_handler.System.SystemInfo.get_version()  # pylint: disable=no-member
 
     def _get_vlans(self):
-        rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()
-        rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(rd_list)
+        rd_list = self.soap_handler.Networking.RouteDomainV2.get_list()  # pylint: disable=no-member
+        rd_vlan_list = self.soap_handler.Networking.RouteDomainV2.get_vlan(rd_list)  # pylint: disable=no-member
 
         return rd_vlan_list
 
@@ -167,7 +168,7 @@ class F5Device(BaseDevice):
             bool: True if booted volume is equal to active volume. Otherwise, false.
         """
         volume = vendor_specifics.get("volume")
-        return True if self._get_active_volume() == volume else False
+        return self._get_active_volume() == volume
 
     def _image_exists(self, image_name):
         """Check if image exists on the device.
@@ -185,10 +186,7 @@ class F5Device(BaseDevice):
         else:
             return None
 
-        if image_name in all_images:
-            return True
-        else:
-            return False
+        return image_name in all_images
 
     def _image_install(self, image_name, volume):
         """Request installation of the image on a volume.
@@ -247,13 +245,11 @@ class F5Device(BaseDevice):
             image_filepath (str): Name of file.
         """
         image_filename = os.path.basename(image_filepath)
-        _URI = "https://{hostname}/mgmt/cm/autodeploy/software-image-uploads/{filename}".format(
-            hostname=self.host, filename=image_filename
-        )
+        upload_uri = f"https://{self.host}/mgmt/cm/autodeploy/software-image-uploads/{image_filename}"
         chunk_size = 512 * 1024
         size = os.path.getsize(image_filepath)
         headers = {"Content-Type": "application/octet-stream"}
-        requests.packages.urllib3.disable_warnings()
+        requests.packages.urllib3.disable_warnings()  # pylint: disable=no-member
         start = 0
 
         with open(image_filepath, "rb") as fileobj:
@@ -265,10 +261,10 @@ class F5Device(BaseDevice):
                 end = fileobj.tell()
                 if end < chunk_size:
                     end = size
-                content_range = "{}-{}/{}".format(start, end - 1, size)
+                content_range = f"{start}-{end - 1}/{size}"
                 headers["Content-Range"] = content_range
                 requests.post(
-                    _URI, auth=(self.username, self.password), data=payload, headers=headers, verify=False  # nosec
+                    upload_uri, auth=(self.username, self.password), data=payload, headers=headers, verify=False  # nosec
                 )
 
                 start += len(payload)
@@ -291,7 +287,7 @@ class F5Device(BaseDevice):
         uptime = uptime % 60
         seconds = uptime
 
-        return "%02d:%02d:%02d:%02d" % (days, hours, mins, seconds)
+        return f"{days:02d}:{hours:02d}:{mins:02d}:{seconds:02d}"
 
     def _volume_exists(self, volume_name):
         """Check if volume exist.
@@ -326,7 +322,7 @@ class F5Device(BaseDevice):
                 volume = self.api_handler.tm.sys.software.volumes.volume.load(name=volume_name)
                 if hasattr(volume, "active") and volume.active is True:
                     return True
-            except Exception:  # noqa E722 # nosec
+            except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 pass
         return False
 
@@ -350,7 +346,7 @@ class F5Device(BaseDevice):
             try:
                 if self.image_installed(image_name=image_name, volume=volume):
                     return
-            except:  # noqa E722 # nosec
+            except:  # noqa E722 # nosec  # pylint: disable=bare-except
                 pass
 
         raise OSInstallError(hostname=self.hostname, desired_boot=volume)
@@ -390,7 +386,7 @@ class F5Device(BaseDevice):
 
     def close(self):
         """Implement ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def config(self, command):
         """Send command to device.
@@ -554,8 +550,8 @@ class F5Device(BaseDevice):
 
         if not self._image_match(image_name=file_basename, checksum=local_md5sum):
             return False
-        else:
-            return True
+
+        return True
 
     def image_installed(self, image_name, volume):
         """Check if image is installed on specified volume.
@@ -611,7 +607,7 @@ class F5Device(BaseDevice):
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)
             if not self._image_exists(image_name):
-                raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
+                raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory="/shared/images")
             self._image_install(image_name=image_name, volume=volume)
             self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -621,7 +617,7 @@ class F5Device(BaseDevice):
 
     def open(self):
         """Implement ``pass``."""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     def reboot(self, timer=0, volume=None, **kwargs):
         """
@@ -650,7 +646,7 @@ class F5Device(BaseDevice):
         self._reboot_to_volume(volume_name=volume_name)
 
         if not self._wait_for_device_reboot(volume_name=volume):
-            raise RuntimeError("Reboot to volume {} failed".format(volume))
+            raise RuntimeError(f"Reboot to volume {volume} failed")
 
     def rollback(self, checkpoint_file):
         """Rollback to checkpoint configurtion file.
@@ -663,7 +659,7 @@ class F5Device(BaseDevice):
         """
         raise NotImplementedError
 
-    def running_config(self):
+    def running_config(self):  # pylint: disable=invalid-overridden-method
         """Get running configuration.
 
         Raises:
@@ -694,7 +690,7 @@ class F5Device(BaseDevice):
         volume = vendor_specifics.get("volume")
         self._check_free_space(min_space=6)
         if not self._image_exists(image_name):
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, dir="/shared/images")
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory="/shared/images")
         self._image_install(image_name=image_name, volume=volume)
         self._wait_for_image_installed(image_name=image_name, volume=volume)
 
@@ -710,7 +706,7 @@ class F5Device(BaseDevice):
         """
         raise NotImplementedError
 
-    def startup_config(self):
+    def startup_config(self):  # pylint: disable=invalid-overridden-method
         """Get startup configuration.
 
         Raises:
