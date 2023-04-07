@@ -105,6 +105,7 @@ no-docstring-rgx="^(_|test_|Meta$)"
 disable = """,
     arguments-differ,
     arguments-renamed,
+    attribute-defined-outside-init,
     bad-continuation,
     consider-iterating-dictionary,
     inconsistent-return-statements,
