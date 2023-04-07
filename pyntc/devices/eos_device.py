@@ -78,7 +78,7 @@ class EOSDevice(BaseDevice):
             dest = os.path.basename(src)
 
         file_copy = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
-        log.debug("Host %s: File copy instance %s.", self.host, fc)
+        log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
 
     def _get_file_system(self):
@@ -584,10 +584,10 @@ class EOSDevice(BaseDevice):
             return response_list
         except EOSCommandError as err:
             if original_commands_is_str:
-                log.error("Host %s: Command error for command %s with message %s.", self.host, commands, e.message)
-                raise CommandError(e.commands, e.message)
-            log.error("Host %s: Command list error for commands %s with message %s.", self.host, commands, e.message)
-            raise CommandListError(commands, e.commands[len(e.commands) - 1], e.message)
+                log.error("Host %s: Command error for command %s with message %s.", self.host, commands, err.message)
+                raise CommandError(err.commands, err.message)
+            log.error("Host %s: Command list error for commands %s with message %s.", self.host, commands, err.message)
+            raise CommandListError(commands, err.commands[len(err.commands) - 1], err.message)
 
     @property
     def startup_config(self):

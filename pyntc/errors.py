@@ -255,13 +255,12 @@ class NTCFileNotFoundError(NTCError):
     """Error for not being able to find a file on a device."""
 
     def __init__(self, hostname, file, directory):
-        """
-        Error for not being able to find a file on a device.
+        """Error for not being able to find a file on a device.
 
         Args:
             hostname (str): The hostname of the device that did not have the ``file``.
             file (str): The name of the file that could not be found.
-            dir (str): The directory on the network device where the file was searched for.
+            directory (str): The directory on the network device where the file was searched for.
 
         TODO: Rename ``dir`` arg as that is a reserved name in python.
         """
