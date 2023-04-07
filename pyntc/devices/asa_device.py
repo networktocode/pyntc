@@ -2,7 +2,6 @@
 
 import os
 import re
-import signal
 import time
 from collections import Counter
 from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface

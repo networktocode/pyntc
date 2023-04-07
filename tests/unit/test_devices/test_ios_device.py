@@ -219,10 +219,6 @@ class TestIOSDevice(unittest.TestCase):
         self.device.reboot()
         self.device.native.send_command_timing.assert_any_call("reload")
 
-    def test_reboot_with_timer(self):
-        self.device.reboot(timer=5)
-        self.device.native.send_command_timing.assert_any_call("reload in 5")
-
     @mock.patch.object(IOSDevice, "_get_file_system", return_value="bootflash:")
     def test_boot_options_show_bootvar(self, mock_boot):
         self.device.native.send_command.side_effect = None

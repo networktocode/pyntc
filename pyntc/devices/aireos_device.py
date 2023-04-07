@@ -1172,8 +1172,8 @@ class AIREOSDevice(BaseDevice):
                         response = self.native.send_command_timing("n")
                     else:
                         response = self.native.send_command_timing("y")
-                    if "reset" in response:
-                        self.native.send_command_timing("y")
+                if "reset" in response:
+                    self.native.send_command_timing("y")
             except ReadTimeout as expected_exception:
                 log.info("Host %s: Device rebooted.", self.host)
                 log.info("Hit expected exception during reload: %s", expected_exception.__class__)

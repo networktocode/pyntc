@@ -10,7 +10,7 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
+from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import (
     CommandError,

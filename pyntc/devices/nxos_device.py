@@ -8,7 +8,7 @@ from pynxos.errors import CLIError
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RebootTimerError, RollbackError
+from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -40,7 +40,6 @@ class NXOSDevice(BaseDevice):
         self.transport = transport
         self.timeout = timeout
         self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
-        self.native.show("terminal dont-ask")
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
@@ -288,6 +287,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             bool: True if new image is boot option on device. Otherwise, false.
         """
+        self.native.show("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
@@ -324,7 +324,7 @@ class NXOSDevice(BaseDevice):
         """
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
-
+        self.native.show("terminal dont-ask")
         self.native.reboot(confirm=True)
         if wait_for_reload:
             time.sleep(10)

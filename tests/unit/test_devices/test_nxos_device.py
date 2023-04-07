@@ -3,7 +3,7 @@ import unittest
 import mock
 from pynxos.errors import CLIError
 
-from pyntc.devices.base_device import RebootTimerError, RollbackError
+from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
 from pyntc.errors import CommandError, CommandListError, FileTransferError, NTCFileNotFoundError
 
@@ -153,11 +153,8 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_reboot(self):
         self.device.reboot()
+        self.device.native.show.assert_called_with("terminal dont-ask")
         self.device.native.reboot.assert_called_with(confirm=True)
-
-    def test_reboot_with_timer(self):
-        with self.assertRaises(RebootTimerError):
-            self.device.reboot(timer=3)
 
     def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}

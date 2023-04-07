@@ -1173,9 +1173,8 @@ def test_re_redundancy_state(filename, expected, aireos_mock_path):
     assert actual == expected
 
 
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
 @mock.patch.object(AIREOSDevice, "save")
-def test_reboot_confirm(mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path):
+def test_reboot_confirm(mock_save, aireos_send_command_timing, aireos_redundancy_mode_path):
     device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso enabled"
@@ -1184,9 +1183,8 @@ def test_reboot_confirm(mock_save, mock_reboot, aireos_send_command_timing, aire
     mock_save.assert_called()
 
 
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
 @mock.patch.object(AIREOSDevice, "save")
-def test_reboot_confirm_deprecation(mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path):
+def test_reboot_confirm_deprecation(mock_save, aireos_send_command_timing, aireos_redundancy_mode_path):
     device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso enabled"
@@ -1195,24 +1193,20 @@ def test_reboot_confirm_deprecation(mock_save, mock_reboot, aireos_send_command_
     mock_save.assert_called()
 
 
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
 @mock.patch.object(AIREOSDevice, "save")
-def test_reboot_confirm_args(mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path):
+def test_reboot_confirm_args(mock_save, aireos_send_command_timing, aireos_redundancy_mode_path):
     device = aireos_send_command_timing(
         ["reset_system_save.txt", "reset_system_confirm.txt", "reset_system_restart.txt"]
     )
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso enabled"
-        device.reboot(timer="00:00:10", controller="both", save_config=False)
-    device.native.send_command_timing.assert_has_calls(
-        [mock.call("reset system both in 00:00:10"), mock.call("n"), mock.call("y")]
-    )
+        device.reboot(controller="both", save_config=False)
+    device.native.send_command_timing.assert_has_calls([mock.call("reset system both"), mock.call("n"), mock.call("y")])
     mock_save.assert_not_called()
 
 
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
 @mock.patch.object(AIREOSDevice, "save")
-def test_reboot_confirm_standalone(mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path):
+def test_reboot_confirm_standalone(mock_save, aireos_send_command_timing, aireos_redundancy_mode_path):
     device = aireos_send_command_timing(["reset_system_confirm.txt", "reset_system_restart.txt"])
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso disabled"
@@ -1221,20 +1215,15 @@ def test_reboot_confirm_standalone(mock_save, mock_reboot, aireos_send_command_t
     mock_save.assert_called()
 
 
-@mock.patch("pyntc.devices.aireos_device.RebootSignal")
 @mock.patch.object(AIREOSDevice, "save")
-def test_reboot_confirm_standalone_args(
-    mock_save, mock_reboot, aireos_send_command_timing, aireos_redundancy_mode_path
-):
+def test_reboot_confirm_standalone_args(mock_save, aireos_send_command_timing, aireos_redundancy_mode_path):
     device = aireos_send_command_timing(
         ["reset_system_save.txt", "reset_system_confirm.txt", "reset_system_restart.txt"]
     )
     with mock.patch(aireos_redundancy_mode_path, new_callable=mock.PropertyMock) as redundnacy_mode:
         redundnacy_mode.return_value = "sso disabled"
-        device.reboot(timer="00:00:10", controller="both", save_config=False)
-    device.native.send_command_timing.assert_has_calls(
-        [mock.call("reset system in 00:00:10"), mock.call("n"), mock.call("y")]
-    )
+        device.reboot(controller="both", save_config=False)
+    device.native.send_command_timing.assert_has_calls([mock.call("reset system"), mock.call("n"), mock.call("y")])
     mock_save.assert_not_called()
 
 
