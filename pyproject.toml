@@ -93,7 +93,7 @@ exclude = '''
 '''
 
 [tool.pylint.master]
-ignore=".venv"
+ignore=[".venv", "tests"]
 
 [tool.pylint.basic]
 # No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.
@@ -105,7 +105,12 @@ no-docstring-rgx="^(_|test_|Meta$)"
 disable = """,
     line-too-long,
     bad-continuation,
-    consider-iterating-dictionary
+    consider-iterating-dictionary,
+    arguments-differ,
+    arguments-renamed,
+    too-many-arguments,
+    too-many-public-methods,
+    raise-missing-from,
     """
 
 [tool.pylint.miscellaneous]

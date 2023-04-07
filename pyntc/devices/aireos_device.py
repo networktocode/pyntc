@@ -993,7 +993,7 @@ class AIREOSDevice(BaseDevice):
         if self.connected:
             try:
                 self.native.find_prompt()
-            except:  # noqa E722
+            except:  # noqa E722  pylint: disable=bare-except
                 self._connected = False
 
         if not self.connected:
@@ -1103,8 +1103,8 @@ class AIREOSDevice(BaseDevice):
             'sso enabled'
             >>>
         """
-        ha = self.show("show redundancy summary")
-        ha_mode = re.search(r"^\s*Redundancy\s+Mode\s*=\s*(.+?)\s*$", ha, re.M)
+        high_availability = self.show("show redundancy summary")
+        ha_mode = re.search(r"^\s*Redundancy\s+Mode\s*=\s*(.+?)\s*$", high_availability, re.M)
         return ha_mode.group(1).lower()
 
     @property
@@ -1261,8 +1261,8 @@ class AIREOSDevice(BaseDevice):
         except CommandError as err:
             if not original_command_is_str:
                 raise CommandListError(entered_commands, cmd, err.cli_error_msg)
-            else:
-                raise err
+
+            raise err
 
         # TODO: Remove this when deprecating config_list method
         if original_command_is_str:
@@ -1312,13 +1312,13 @@ class AIREOSDevice(BaseDevice):
         """
         raise NotImplementedError
 
-    def transfer_image_to_ap(self, image, timeout=None):
+    def transfer_image_to_ap(self, image):
         """
         Transfer ``image`` file to all APs connected to the WLC.
 
         Args:
             image (str): The image that should be sent to the APs.
-            timeout (int): The max time to wait for all APs to download the image.
+            timeout (int): Removed, The max time to wait for all APs to download the image.
 
         Returns:
             bool: True if AP images are transferred or swapped, False otherwise.
@@ -1421,7 +1421,7 @@ class AIREOSDevice(BaseDevice):
             >>>
         """
         days, hours, minutes = self._uptime_components()
-        return "%02d:%02d:%02d:00" % (days, hours, minutes)
+        return f"{days:02d}:{hours:02d}:{minutes:02d}:00"
 
     @property
     def wlans(self):
