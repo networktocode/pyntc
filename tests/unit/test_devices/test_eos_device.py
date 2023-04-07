@@ -1,16 +1,17 @@
-import unittest
-import mock
 import os
-import pytest
 import time
+import unittest
 
-from .device_mocks.eos import enable, config
-from .device_mocks.eos import send_command, send_command_expect
+import mock
+import pytest
+
 from pyntc.devices import EOSDevice
-from pyntc.devices.base_device import RollbackError, RebootTimerError
+from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
+
+from .device_mocks.eos import config, enable, send_command, send_command_expect
 
 
 class TestEOSDevice(unittest.TestCase):
@@ -44,7 +45,7 @@ class TestEOSDevice(unittest.TestCase):
     @mock.patch.object(EOSDevice, "config")
     def test_config_list(self, mock_config):
         commands = ["interface Eth1", "no shutdown"]
-        self.device.config_list(commands)
+        self.device.config(commands)
         self.device.config.assert_called_with(commands)
 
     def test_bad_config_pass_string(self):
@@ -149,7 +150,7 @@ class TestEOSDevice(unittest.TestCase):
     @mock.patch.object(EOSDevice, "show")
     def test_show_list(self, mock_config):
         commands = ["show hostname", "show clock"]
-        self.device.show_list(commands)
+        self.device.show(commands)
         self.device.show.assert_called_with(commands)
 
     def test_save(self):
@@ -279,10 +280,6 @@ class TestEOSDevice(unittest.TestCase):
     def test_reboot(self):
         self.device.reboot()
         self.device.native.enable.assert_called_with(["reload now"], encoding="json")
-
-    def test_reboot_with_timer(self):
-        with self.assertRaises(RebootTimerError):
-            self.device.reboot(timer=3)
 
     def test_boot_options(self):
         boot_options = self.device.boot_options

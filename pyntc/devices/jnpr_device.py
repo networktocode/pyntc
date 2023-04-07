@@ -13,10 +13,10 @@ from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
-from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
-from .base_device import BaseDevice, fix_docs
-from .tables.jnpr.loopback import LoopbackTable # pylint: disable=no-name-in-module
+from pyntc.devices.base_device import BaseDevice, fix_docs
+from pyntc.devices.tables.jnpr.loopback import LoopbackTable
+from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 
 @fix_docs
@@ -144,12 +144,12 @@ class JunosDevice(BaseDevice):
         """Send configuration commands to a device.
 
         Args:
-             commands (str, list): String with single command, or list with multiple commands.
+            commands (str, list): String with single command, or list with multiple commands.
 
         Raises:
-             ConfigLoadError: Issue with loading the command.
-             CommandError: Issue with the command provided, if its a single command, passed in as a string.
-             CommandListError: Issue with a command in the list provided.
+            ConfigLoadError: Issue with loading the command.
+            CommandError: Issue with the command provided, if its a single command, passed in as a string.
+            CommandListError: Issue with a command in the list provided.
         """
         if isinstance(commands, str):
             try:
@@ -165,18 +165,6 @@ class JunosDevice(BaseDevice):
                 self.cu.commit()
             except ConfigLoadError as err:
                 raise CommandListError(commands, command, err.message)
-
-    def config_list(self, commands, format_type="set"):
-        """Send configuration commands in list format to a device.
-
-        DEPRECATED - Use the `config` method.
-
-        Args:
-            commands (list): List with multiple commands.
-            format (str): The Junos format the commands are in.
-        """
-        warnings.warn("config_list() is deprecated; use config().", DeprecationWarning)
-        self.config(commands, format_type=format_type)
 
     @property
     def connected(self):
@@ -353,12 +341,12 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, timer=0, **kwargs):
+    def reboot(self, wait_for_reload=False, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            timer (int, optional): The time to wait before reloading. Defaults to 0.
+            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Example:
             >>> device = JunosDevice(**connection_args)
@@ -369,7 +357,10 @@ class JunosDevice(BaseDevice):
             warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
         self.sw = JunosNativeSW(self.native)
-        self.sw.reboot(in_min=timer)
+        self.sw.reboot(in_min=0)
+        if wait_for_reload:
+            time.sleep(10)
+            self._wait_for_device_reboot()
 
     def rollback(self, filename):
         """Rollback to a specific configuration file.
@@ -462,18 +453,6 @@ class JunosDevice(BaseDevice):
         if original_commands_is_str:
             return responses[0]
         return responses
-
-    def show_list(self, commands, raw_text=True):
-        """Send show commands in list format to a device.
-
-        DEPRECATED - Use the `show` method.
-
-        Args:
-            commands (list): List with multiple commands.
-            raw_text (bool): Return raw text or structured text.
-        """
-        warnings.warn("show_list() is deprecated; use show().", DeprecationWarning)
-        return self.show(commands)
 
     @property
     def startup_config(self):

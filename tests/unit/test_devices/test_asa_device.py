@@ -3,6 +3,7 @@ from ipaddress import ip_address, ip_interface
 from unittest import mock
 
 import pytest
+
 from pyntc.devices import asa_device as asa_module
 from pyntc.devices import ASADevice
 
@@ -16,6 +17,25 @@ NEGOTIATION = "negotiation"
 FAILED = "failed"
 NOT_DETECTED = "not detected"
 COLD_STANDBY = "cold standby"
+VERSION_DATA = {
+    "version": "9.16(2)",
+    "device_mgr_version": "7.16(1)",
+    "image": "boot:/asa9162-smp-k8.bin",
+    "hostname": "ciscoasa",
+    "uptime": "2 hours 7 mins",
+    "hardware": "ASAv, 2048 MB RAM, CPU Lynnfield 3695 MHz",
+    "model": "",
+    "flash": "8192MB",
+    "interfaces": ["Management0/0", "GigabitEthernet0/0", "Internal-Data0/0"],
+    "license_mode": "Smart Licensing",
+    "license_state": "Unlicensed",
+    "max_intf": "",
+    "max_vlans": "50",
+    "failover": "Active/Active",
+    "cluster": "Disabled",
+    "serial": "9ANMLKTFC5B",
+    "last_mod": "cisco at 17:41:15.359 UTC Thu Dec 22 2022",
+}
 
 
 class TestASADevice:
@@ -62,7 +82,7 @@ class TestASADevice:
         assert boot_options["sys"] is None
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": BOOT_IMAGE}
@@ -70,7 +90,7 @@ class TestASADevice:
             mock_cl.assert_called_with([f"boot system disk0:/{BOOT_IMAGE}"])
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options_dir(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": BOOT_IMAGE}
@@ -84,7 +104,7 @@ class TestASADevice:
             self.device.set_boot_options("bad_image.bin")
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
-    @mock.patch.object(ASADevice, "config_list", return_value=None)
+    @mock.patch.object(ASADevice, "config", return_value=None)
     def test_set_boot_options_bad_boot(self, mock_cl, mock_fs):
         with mock.patch(BOOT_OPTIONS_PATH, new_callable=mock.PropertyMock) as mock_boot:
             mock_boot.return_value = {"sys": "bad_image.bin"}
@@ -161,7 +181,7 @@ def test_bad_config(asa_device):
 
 def test_config_list(asa_device):
     commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
-    asa_device.config_list(commands)
+    asa_device.config(commands)
 
     for cmd in commands:
         asa_device.native.send_command_timing.assert_any_call(cmd)
@@ -174,7 +194,7 @@ def test_bad_config_list(asa_device):
     asa_device.native.send_command_timing.side_effect = results
 
     with pytest.raises(asa_module.CommandListError, match=commands[1]):
-        asa_device.config_list(commands)
+        asa_device.config(commands)
 
 
 def test_show(asa_device):
@@ -200,7 +220,7 @@ def test_show_list(asa_device):
     results = ["console 0", "security-level meh"]
     asa_device.native.send_command_timing.side_effect = results
 
-    result = asa_device.show_list(commands)
+    result = asa_device.show(commands)
     assert isinstance(result, list)
     assert "console" in result[0]
     assert "security-level" in result[1]
@@ -216,7 +236,7 @@ def test_bad_show_list(asa_device):
     asa_device.native.send_command_timing.side_effect = results
 
     with pytest.raises(asa_module.CommandListError, match="show badcommand"):
-        asa_device.show_list(commands)
+        asa_device.show(commands)
 
 
 def test_save(asa_device):
@@ -229,11 +249,6 @@ def test_save(asa_device):
 def test_reboot(asa_device):
     asa_device.reboot()
     asa_device.native.send_command_timing.assert_any_call("reload")
-
-
-def test_reboot_with_timer(asa_device):
-    asa_device.reboot(timer=5)
-    asa_device.native.send_command_timing.assert_any_call("reload in 5")
 
 
 def test_reboot_confirm_deprecated(asa_device):
@@ -359,7 +374,9 @@ def test_file_copy_transfer_file_error(
 @mock.patch("pyntc.devices.asa_device.CiscoAsaFileTransfer", spec_set=asa_module.CiscoAsaFileTransfer)
 @mock.patch.object(ASADevice, "_file_copy_instance")
 @mock.patch.object(ASADevice, "open")
-def test_file_copy_transfer_file_does_not_transfer(
+@mock.patch("pyntc.devices.asa_device.log.error")
+def test__file_copy_transfer_file_does_not_transfer(
+    mock_log,
     mock_open,
     mock_file_copy_instance,
     mock_cisco_asa_file_transfer,
@@ -369,14 +386,16 @@ def test_file_copy_transfer_file_does_not_transfer(
 ):
     args = ("a.txt", "a.txt", "flash:")
     mock_file_copy_instance.return_value = mock_cisco_asa_file_transfer
-    with pytest.raises(asa_module.FileTransferError) as err:
+    with pytest.raises(asa_module.FileTransferError):
         asa_device._file_copy(*args)
     mock_enable.assert_called()
     mock_file_copy_remote_exists.assert_has_calls([mock.call(*args)] * 2)
     mock_cisco_asa_file_transfer.establish_scp_conn.assert_called_once()
     mock_cisco_asa_file_transfer.transfer_file.assert_called_once()
     mock_cisco_asa_file_transfer.close_scp_chan.assert_called_once()
-    assert err.value.message == "Attempted file copy, but could not validate file existed after transfer"
+    mock_log.assert_called_with(
+        "Host %s: Attempted file copy, but could not validate file %s existed after transfer.", "host", "a.txt"
+    )
 
 
 @pytest.mark.parametrize("host,command_prefix", (("self", ""), ("peer", "failover exec mate ")), ids=("self", "peer"))
@@ -482,11 +501,12 @@ def test_enable_scp_standby_device(mock_save, mock_config, mock_peer_device, moc
 @mock.patch.object(ASADevice, "peer_device", new_callable=mock.PropertyMock)
 @mock.patch.object(ASADevice, "config")
 @mock.patch.object(ASADevice, "save")
-def test_enable_scp_device_not_active(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+@mock.patch("pyntc.devices.asa_device.log.error")
+def test_enable_scp_device_not_active(mock_log, mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
     mock_peer_device.return_value = asa_device
-    with pytest.raises(asa_module.FileTransferError) as err:
+    with pytest.raises(asa_module.FileTransferError):
         asa_device.enable_scp()
-    assert err.value.message == "Unable to establish a connection with the active device"
+    mock_log.assert_called_once_with("Host %s: Unable to establish a connection with the active device", "host")
     mock_is_active.assert_has_calls([mock.call()] * 2)
     mock_peer_device.assert_called()
     mock_config.assert_not_called()
@@ -499,10 +519,11 @@ def test_enable_scp_device_not_active(mock_save, mock_config, mock_peer_device, 
     ASADevice, "config", side_effect=[asa_module.CommandError(command="ssh scopy enable", message="Error")]
 )
 @mock.patch.object(ASADevice, "save")
-def test_enable_scp_enable_fail(mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
-    with pytest.raises(asa_module.FileTransferError) as err:
+@mock.patch("pyntc.devices.asa_device.log.error")
+def test_enable_scp_enable_fail(mock_log, mock_save, mock_config, mock_peer_device, mock_is_active, asa_device):
+    with pytest.raises(asa_module.FileTransferError):
         asa_device.enable_scp()
-    assert err.value.message == "Unable to enable scopy on the device"
+    mock_log.assert_called_once_with("Host %s: Unable to enable scopy on the device", "host")
     mock_config.assert_called_with("ssh scopy enable")
     mock_save.assert_not_called()
 
@@ -819,3 +840,54 @@ def test_send_command_error(asa_send_command_timing):
     with pytest.raises(asa_module.CommandError):
         device._send_command(command)
     device.native.send_command_timing.assert_called()
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_uptime(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    uptime = asa_device.uptime
+    assert uptime == 7620
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_uptime_string(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    uptime_string = asa_device.uptime_string
+    assert uptime_string == "00:02:07:00"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_model(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    model = asa_device.model
+    assert model == "ASAv, 2048 MB RAM, CPU Lynnfield 3695 MHz"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_os_version(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    os_version = asa_device.os_version
+    assert os_version == "9.16(2)"
+
+
+@mock.patch.object(ASADevice, "_raw_version_data", autospec=True)
+def test_serial_number(mock_raw_version_data, asa_device):
+    mock_raw_version_data.return_value = VERSION_DATA
+    sn = asa_device.serial_number
+    assert sn == "9ANMLKTFC5B"
+
+
+@mock.patch.object(ASADevice, "_interfaces_detailed_list", autospec=True)
+def test_interfaces(mock_get_intf_list, asa_device):
+    expected = [{"interface": "Management0/0"}, {"interface": "GigabitEthernet0/0"}]
+    mock_get_intf_list.return_value = expected
+    interfaces = asa_device.interfaces
+    assert interfaces == ["Management0/0", "GigabitEthernet0/0"]
+
+
+@mock.patch.object(ASADevice, "_show_vlan", autospec=True)
+def test_vlan(mock_get_vlans, asa_device):
+    expected = [10, 20]
+    mock_get_vlans.return_value = expected
+    vlans = asa_device.vlans
+    assert vlans == [10, 20]
