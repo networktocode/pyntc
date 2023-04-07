@@ -173,12 +173,12 @@ On an IOS device:
 
 ### Sending Multiple Commands
 
-- `show_list` method
+- `show` method
 
 ```python
 >>> cmds = ['show hostname', 'show run int Eth2/1']
 
->>> data = nxs1.show_list(cmds, raw_text=True)
+>>> data = nxs1.show(cmds)
 ```
 
 ```python
@@ -197,7 +197,7 @@ interface Ethernet2/1
 
 ### Config Commands
 
-- Use `config` and `config_list`
+- Use `config`
 
 ```python
 >>> csr1.config('hostname testname')
@@ -205,7 +205,7 @@ interface Ethernet2/1
 ```
 
 ```python
->>> csr1.config_list(['interface Gi3', 'shutdown'])
+>>> csr1.config(['interface Gi3', 'shutdown'])
 >>>
 ```
 
@@ -283,11 +283,11 @@ Backup current running configuration and store it locally
 Reboot target device
 
 Parameters:
-  - `timer=0` by default
-  - `confirm=False` by default
+  - `wait_for_reload=False` by default. If `True` function waits for device to recover from reboot before returning.
+
 
 ```python
->>> csr1.reboot(confirm=True)
+>>> csr1.reboot(wait_for_reload=False)
 >>>
 ```
 
