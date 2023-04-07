@@ -153,8 +153,8 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_reboot(self):
         self.device.reboot()
-        self.device.native.show.assert_called_with("terminal dont-ask")
-        self.device.native.reboot.assert_called_with(confirm=True)
+        self.device.native.show_list.assert_called_with(["terminal dont-ask", "reload"])
+        # self.device.native.reboot.assert_called_with(confirm=True)
 
     def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}
