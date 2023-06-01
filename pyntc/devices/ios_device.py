@@ -1061,7 +1061,6 @@ class IOSDevice(BaseDevice):
             elif re.search(
                 r"boot\ssystem\s\S+\s\S+\s\S+:\S+", show_boot_sys
             ):  # TODO: Update to CommandError when deprecating config_list
-                file_system = file_system.replace(":", "")
                 command = "boot system switch all {0}{1}".format(file_system, image_name)
                 self.config(["no boot system", command])
             else:
