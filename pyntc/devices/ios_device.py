@@ -1056,6 +1056,14 @@ class IOSDevice(BaseDevice):
                 file_system = file_system.replace(":", "")
                 command = "boot system {0} {1}".format(file_system, image_name)
                 self.config(["no boot system", command])
+            # Sample:
+            # boot system switch all flash:cat3k_caa-universalk9.SPA.03.07.01.E.152-3.E1.bin
+            elif re.search(
+                r"boot\ssystem\s\S+\s\S+\s\S+:\S+", show_boot_sys
+            ):  # TODO: Update to CommandError when deprecating config_list
+                file_system = file_system.replace(":", "")
+                command = "boot system switch all {0}{1}".format(file_system, image_name)
+                self.config(["no boot system", command])
             else:
                 raise CommandError(
                     command=command,
