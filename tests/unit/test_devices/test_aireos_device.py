@@ -1673,6 +1673,10 @@ def test_wlans(aireos_show, aireos_expected_wlans):
     assert device.wlans == aireos_expected_wlans
 
 
+def test_port(aireos_device):
+    assert aireos_device.port == 22
+
+
 @mock.patch.object(AIREOSDevice, "open")
 def test_port_none(patch):
     device = AIREOSDevice("host", "user", "pass", port=None)

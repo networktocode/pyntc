@@ -65,6 +65,9 @@ class TestASADevice:
         self.device.native.reset_mock()
         self.count_teardown += 1
 
+    def test_port(self):
+        assert self.device.port == 22
+
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None

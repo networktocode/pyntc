@@ -78,6 +78,9 @@ class TestIOSDevice(unittest.TestCase):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
 
+    def test_port(self):
+        self.assertEqual(self.device.port, 22)
+
     def test_bad_show(self):
         command = "show microsoft"
         self.device.native.send_command.return_value = "Error: Microsoft"
