@@ -41,7 +41,6 @@ VERSION_DATA = {
 class TestASADevice:
     def setup(self, api):
         with mock.patch("pyntc.devices.asa_device.ConnectHandler") as api:
-
             if not getattr(self, "device", None):
                 self.device = ASADevice("host", "user", "password")
 
@@ -65,6 +64,9 @@ class TestASADevice:
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
         self.count_teardown += 1
+
+    def test_port(self):
+        assert self.device.port == 22
 
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
@@ -891,3 +893,9 @@ def test_vlan(mock_get_vlans, asa_device):
     mock_get_vlans.return_value = expected
     vlans = asa_device.vlans
     assert vlans == [10, 20]
+
+
+@mock.patch.object(ASADevice, "open")
+def test_port_none(patch):
+    device = ASADevice("host", "user", "pass", port=None)
+    assert device.port == 22

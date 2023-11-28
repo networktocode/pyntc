@@ -15,7 +15,7 @@ RUN apt-get update && \
 RUN pip install --upgrade pip
 
 RUN curl -sSL https://install.python-poetry.org -o /tmp/install-poetry.py && \
-    python /tmp/install-poetry.py --version 1.2.0 && \
+    python /tmp/install-poetry.py --version 1.6.0 && \
     rm -f /tmp/install-poetry.py
 
 # Add poetry install location to the $PATH
