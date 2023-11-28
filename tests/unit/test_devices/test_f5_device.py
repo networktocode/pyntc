@@ -132,7 +132,7 @@ class TestF5Device:
 
         volume = VOLUME
         # skip the wait_for_device_reboot
-        with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
+        with mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True):
             self.device.reboot(volume=volume)
 
         # # Check if _get_active_volume worked
@@ -146,7 +146,7 @@ class TestF5Device:
         api.tm.sys.software.volumes.volume.load.return_value.active = True
 
         # skipping timeout! It's too long!!
-        with (mock.patch.object(self.device, "_wait_for_device_reboot", timeout=0)):
+        with mock.patch.object(self.device, "_wait_for_device_reboot", timeout=0):
             self.device.reboot(volume=volume)
 
         # # Check if _get_active_volume worked
@@ -157,7 +157,7 @@ class TestF5Device:
     def test_reboot_no_volume(self):
         api = self.device.api_handler
 
-        with (mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True)):
+        with mock.patch.object(self.device, "_wait_for_device_reboot", return_value=True):
             self.device.reboot()
 
         # Check if _reboot_to_volume worked
@@ -175,7 +175,7 @@ class TestF5Device:
         # Patching out _volume_exists for _image_install
         api.tm.sys.software.volumes.volume.exists.return_value = True
 
-        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+        with mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None):
             self.device.set_boot_options(image_name=image_name, volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()
@@ -194,7 +194,7 @@ class TestF5Device:
         # Patching out _volume_exists for _image_install
         api.tm.sys.software.volumes.volume.exists.return_value = False
 
-        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+        with mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None):
             self.device.set_boot_options(image_name=image_name, volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()
@@ -215,7 +215,7 @@ class TestF5Device:
         # Patching out _volume_exists for _image_install
         api.tm.sys.software.volumes.volume.exists.return_value = False
 
-        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+        with mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None):
             with pytest.raises(NTCFileNotFoundError):
                 self.device.set_boot_options(image_name="bad_image", volume=volume)
 
@@ -248,7 +248,7 @@ class TestF5Device:
         # Patching out _image_install
         api.tm.sys.software.volumes.volume.exists.return_value = True
 
-        with (mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None)):
+        with mock.patch.object(self.device, "_wait_for_image_installed", timeout=0, return_value=None):
             self.device.install_os(image_name=image_name, volume=volume)
 
         api.tm.util.bash.exec_cmd.assert_called()

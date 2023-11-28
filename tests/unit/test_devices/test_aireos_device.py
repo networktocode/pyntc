@@ -1671,3 +1671,9 @@ def test_uptime_string(mock_uptime_components, aireos_device):
 def test_wlans(aireos_show, aireos_expected_wlans):
     device = aireos_show(["show_wlan_summary.txt"])
     assert device.wlans == aireos_expected_wlans
+
+
+@mock.patch.object(AIREOSDevice, "open")
+def test_port_none(patch):
+    device = AIREOSDevice("host", "user", "pass", port=None)
+    assert device.port == 22

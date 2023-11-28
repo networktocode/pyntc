@@ -393,6 +393,12 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@mock.patch.object(IOSDevice, "open")
+def test_port_none(patch):
+    device = IOSDevice("host", "user", "pass", port=None)
+    assert device.port == 22
+
+
 def test_check_command_output_for_errors(ios_device):
     command_passes = ios_device._check_command_output_for_errors("valid command", "valid output")
     assert command_passes is None
@@ -978,6 +984,7 @@ def test_set_boot_options_image_packages_conf_file(
 # TESTS FOR IOS INSTALL MODE METHOD
 #
 
+
 # Test install mode upgrade for install mode with latest method
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -1105,6 +1112,7 @@ def test_install_os_install_mode_no_upgrade(
 #
 # FROM CISCO IOS EVEREST VERSION TESTS
 #
+
 
 # Test install mode upgrade for install mode with interim method on OS Version
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
