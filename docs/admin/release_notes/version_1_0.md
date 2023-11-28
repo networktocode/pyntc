@@ -1,5 +1,10 @@
 # v1.0 Release Notes
 
+## [1.0.1] 11-2023
+
+### Fixed
+- [300](https://github.com/networktocode/pyntc/pull/300) Fixed default port value handling for `aireos, asa, ios` drivers, dropped python 3.7 support, updated pyeapi dependency, refreshed poetry dependencies.
+
 ## [1.0.0] 04-2023
 
 ### Added
