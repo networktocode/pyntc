@@ -38,7 +38,7 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(self, host: str, username: str, password: str, secret="", port=22, **kwargs):  # nosec
+    def __init__(self, host: str, username: str, password: str, secret="", port=None, **kwargs):  # nosec
         """
         Pyntc Device constructor for Cisco ASA.
 
@@ -46,14 +46,14 @@ class ASADevice(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate to the device.
             password (str): The password to authenticate to the device.
-            secret (str, optional): The password to escalate privilege on the device. Defaults to "".
+            secret (str, optional): The password to escalate privilege on the device. Defaults to 22.
             port (int, optional): Port used to establish connection. Defaults to 22.
         """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
         self.native: Optional[CiscoAsaSSH] = None
         self.secret = secret
-        self.port = int(port)
+        self.port = int(port) if port else 22
         self.kwargs = kwargs
         self.global_delay_factor: int = kwargs.get("global_delay_factor", 1)
         self.delay_factor: int = kwargs.get("delay_factor", 1)

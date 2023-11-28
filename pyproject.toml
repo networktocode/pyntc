@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyntc"
-version = "1.0.0"
+version = "1.0.1"
 description = "SDK to simplify common workflows for Network Devices."
 authors = ["Network to Code, LLC <info@networktocode.com>"]
 readme = "README.md"
@@ -24,14 +24,11 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
-# Required for Python 3.7 for now. See: https://stackoverflow.com/a/73932581/194311
-importlib-metadata = "4.13.0"
+python = "^3.8"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
-# pyeapi doesn't support py3.10 yet in a release, and pypi doesn't allow direct dependencies. py3.10 to work. https://github.com/arista-eosplus/pyeapi/blob/236503162d1aa3ecc953678ec05380f1f605be02/pyeapi/api/abstract.py#L44
-pyeapi = "^0.8.4"
+pyeapi = "^1.0.2"
 pynxos = "^0.0.5"
 requests = "^2.28"
 scp = "^0.14"

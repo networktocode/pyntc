@@ -70,7 +70,7 @@ class AIREOSDevice(BaseDevice):
     active_redundancy_states = {None, "active"}
 
     def __init__(  # nosec  # pylint: disable=too-many-arguments
-        self, host, username, password, secret="", port=22, confirm_active=True, **kwargs
+        self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco WLC.
@@ -80,13 +80,13 @@ class AIREOSDevice(BaseDevice):
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
             secret (str): The password to escalate privilege on the device.
-            port (int): The port to use to establish the connection.
+            port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
         """
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
         self.secret = secret
-        self.port = int(port)
+        self.port = int(port) if port else 22
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False

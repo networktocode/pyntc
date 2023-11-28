@@ -212,7 +212,6 @@ class TestEOSDevice(unittest.TestCase):
     @mock.patch.object(EOSDevice, "close")
     @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
     def test_file_copy_remote_not_exist(self, mock_open, mock_close, mock_ssh, mock_ft):
-
         self.device.native_ssh = mock_open
         self.device.native_ssh.send_command_timing.side_effect = None
         self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
