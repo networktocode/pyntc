@@ -87,6 +87,7 @@ class AIREOSDevice(BaseDevice):
         self.native = None
         self.secret = secret
         self.port = int(port) if port else 22
+        self.delay_factor_compat = kwargs.get("delay_factor_compat", True)
         self.global_delay_factor = kwargs.get("global_delay_factor", 1)
         self.delay_factor = kwargs.get("delay_factor", 1)
         self._connected = False
@@ -1096,6 +1097,7 @@ class AIREOSDevice(BaseDevice):
                 username=self.username,
                 password=self.password,
                 port=self.port,
+                delay_factor_compat=self.delay_factor_compat,
                 global_delay_factor=self.global_delay_factor,
                 secret=self.secret,
                 verbose=False,

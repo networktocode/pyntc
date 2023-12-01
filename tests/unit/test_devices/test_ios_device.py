@@ -81,6 +81,9 @@ class TestIOSDevice(unittest.TestCase):
     def test_port(self):
         self.assertEqual(self.device.port, 22)
 
+    def test_delay_factor_compat(self):
+        self.assertEqual(self.device.delay_factor_compat, True)
+
     def test_bad_show(self):
         command = "show microsoft"
         self.device.native.send_command.return_value = "Error: Microsoft"

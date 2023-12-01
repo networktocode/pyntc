@@ -1,5 +1,10 @@
 # v1.0 Release Notes
 
+## [1.0.2] 12-2023
+
+### Fixed
+- [304](https://github.com/networktocode/pyntc/pull/304) Fixed `delay_factor_compat` for netmiko.
+
 ## [1.0.1] 11-2023
 
 ### Fixed

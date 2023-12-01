@@ -68,6 +68,9 @@ class TestASADevice:
     def test_port(self):
         assert self.device.port == 22
 
+    def test_delay_factor_compat(self):
+        assert self.device.delay_factor_compat is True
+
     @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
     def test_boot_options_dir(self, mock_boot):
         self.device.native.send_command_timing.side_effect = None
