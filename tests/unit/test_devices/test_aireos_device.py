@@ -1681,3 +1681,7 @@ def test_port(aireos_device):
 def test_port_none(patch):
     device = AIREOSDevice("host", "user", "pass", port=None)
     assert device.port == 22
+
+
+def test_delay_factor_compat(aireos_device):
+    assert aireos_device.delay_factor_compat is True
