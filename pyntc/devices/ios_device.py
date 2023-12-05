@@ -67,7 +67,7 @@ class IOSDevice(BaseDevice):
         self.open(confirm_active=confirm_active)
         log.init(host=host)
 
-    def _check_command_output_for_errors(self, command, command_response):  # pylint: disable=no-self-use
+    def _check_command_output_for_errors(self, command, command_response):
         """
         Check response from device to see if an error was reported.
 
@@ -204,7 +204,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_data)
         return show_vlan_data
 
-    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
+    def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
@@ -872,7 +872,7 @@ class IOSDevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
@@ -1006,37 +1006,26 @@ class IOSDevice(BaseDevice):
             # boot system flash:/c3560-advipservicesk9-mz.122-44.SE.bin
             # boot system flash0:/c3560-advipservicesk9-mz.122-44.SE.bin
             if re.search(r"boot\ssystem\s\S+\:\/\S+", show_boot_sys):
-                command = "boot system {0}/{1}".format(file_system, image_name)
+                command = f"boot system {file_system}/{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash0:c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(r"boot\ssystem\s\S+\:\S+", show_boot_sys):
-                command = "boot system {0}{1}".format(file_system, image_name)
+                command = f"boot system {file_system}{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash flash:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash flash0:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash bootflash:c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(
                 r"boot\ssystem\s\S+\s\S+:\S+", show_boot_sys
             ):  # TODO: Update to CommandError when deprecating config_list
-                command = "boot system flash {0}{1}".format(file_system, image_name)
+                command = f"boot system flash {file_system}{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(
                 r"boot\ssystem\sflash\s\S+", show_boot_sys
             ):  # TODO: Update to CommandError when deprecating config_list
                 file_system = file_system.replace(":", "")
-                command = "boot system {0} {1}".format(file_system, image_name)
+                command = f"boot system {file_system} {image_name}"
                 self.config(["no boot system", command])
             else:
                 raise CommandError(
                     command=command,
-                    message="Unable to determine the boot system configuration syntax. Current config is {0}".format(
-                        show_boot_sys
-                    ),
+                    message=f"Unable to determine the boot system configuration syntax. Current config is {show_boot_sys}",
                 )
 
         self.save()

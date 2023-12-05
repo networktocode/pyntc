@@ -49,12 +49,11 @@ class F5Device(BaseDevice):
             raise ValueError("Could not get free space")
 
         if free_space >= min_space:
+            log.debug("Host %s: Free space %s is sufficient.", self.host, free_space)
             return
-        elif free_space < min_space:
-            log.error("Host %s: Not enough free space for min space requirement %s.", self.host, min_space)
-            raise NotEnoughFreeSpaceError(hostname=self.host, min_space=min_space)
 
-        log.debug("Host %s: Free space %s is sufficient.", self.host, free_space)
+        log.error("Host %s: Not enough free space for min space requirement %s.", self.host, min_space)
+        raise NotEnoughFreeSpaceError(hostname=self.host, min_space=str(min_space))
 
     def _check_md5sum(self, filename, checksum):
         """Check is md5sum is correct.
@@ -71,9 +70,9 @@ class F5Device(BaseDevice):
         if checksum == md5sum:
             log.debug("Host %s: Checksums match.", self.host)
             return True
-        else:
-            log.debug("Host %s: Checksums do not match.", self.host)
-            return False
+
+        log.debug("Host %s: Checksums do not match.", self.host)
+        return False
 
     @staticmethod
     def _file_copy_local_file_exists(filepath):
@@ -191,7 +190,7 @@ class F5Device(BaseDevice):
         """
         volume = vendor_specifics.get("volume")
         log.debug("Host %s: Checking if image %s has been booted.", self.host, image_name)
-        return True if self._get_active_volume() == volume else False
+        return self._get_active_volume() == volume
 
     def _image_exists(self, image_name):
         """Check if image exists on the device.
@@ -212,9 +211,9 @@ class F5Device(BaseDevice):
         if image_name in all_images:
             log.debug("Host %s: Image %s exists.", self.host, image_name)
             return True
-        else:
-            log.debug("Host %s: Image %s does not exist.", self.host, image_name)
-            return False
+
+        log.debug("Host %s: Image %s does not exist.", self.host, image_name)
+        return False
 
     def _image_install(self, image_name, volume):
         """Request installation of the image on a volume.
@@ -298,6 +297,8 @@ class F5Device(BaseDevice):
                     end = size
                 content_range = f"{start}-{end - 1}/{size}"
                 headers["Content-Range"] = content_range
+                # pylint: disable=missing-timeout
+                # TODO Add timeout to requests.post, missing timeout can cause the method to hang indefinitely
                 requests.post(
                     upload_uri,
                     auth=(self.username, self.password),
@@ -328,7 +329,7 @@ class F5Device(BaseDevice):
         uptime = uptime % 60
         seconds = uptime
 
-        return "%02d:%02d:%02d:%02d" % (days, hours, mins, seconds)
+        return "%02d:%02d:%02d:%02d" % (days, hours, mins, seconds)  # pylint: disable=consider-using-f-string
 
     def _volume_exists(self, volume_name):
         """Check if volume exist.
@@ -368,7 +369,6 @@ class F5Device(BaseDevice):
                 log.debug("Host %s: Reboot successfull.", self.host)
             except Exception:  # noqa E722 # nosec  # pylint: disable=broad-except
                 log.error("Host %s: Error while rebooting.", self.host)
-                pass
         log.debug("Host %s: Reboot not successfull.", self.host)
         return False
 
@@ -607,9 +607,8 @@ class F5Device(BaseDevice):
         if not self._image_match(image_name=file_basename, checksum=local_md5sum):
             log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
             return False
-        else:
-            log.debug("Host %s: File %s already exists on remote.", self.host)
-            return True
+        log.debug("Host %s: File %s already exists on remote.", self.host)
+        return True
 
     def image_installed(self, image_name, volume):
         """Check if image is installed on specified volume.

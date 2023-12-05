@@ -260,7 +260,7 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_out)
         return show_vlan_out.split(",")
 
-    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
+    def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) mins?", uptime_full_string)
@@ -374,8 +374,8 @@ class ASADevice(BaseDevice):
         else:
             boot_image = None
 
-        log.debug("Host %s: the boot options are %s", self.host, dict(sys=boot_image))
-        return dict(sys=boot_image)
+        log.debug("Host %s: the boot options are %s", self.host, {"sys": boot_image})
+        return {"sys": boot_image}
 
     def checkpoint(self, checkpoint_file):
         """
@@ -887,7 +887,7 @@ class ASADevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 

@@ -586,7 +586,7 @@ class AIREOSDevice(BaseDevice):
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
-            if not original_command_is_str:
+            if not original_command_is_str:  # pylint: disable=no-else-raise
                 log.error(
                     "Host %s: Commands %s returned the error %s",
                     self.host,
@@ -1179,7 +1179,7 @@ class AIREOSDevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint:disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
@@ -1361,7 +1361,7 @@ class AIREOSDevice(BaseDevice):
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
-            if not original_command_is_str:
+            if not original_command_is_str:  # pylint: disable=no-else-raise
                 log.error(
                     "Host %s: Command error for commands %s with message %s.",
                     self.host,

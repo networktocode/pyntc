@@ -122,13 +122,13 @@ class EOSDevice(BaseDevice):
         log.debug("Host %s: interfaces detailed list %s.", self.host, interface_status_list)
         return interface_status_list
 
-    def _parse_response(self, response, raw_text):  # pylint: disable=no-self-use
+    def _parse_response(self, response, raw_text):
         if raw_text:
             return list(x["result"]["output"] for x in response)
 
         return list(x["result"] for x in response)
 
-    def _uptime_to_string(self, uptime):  # pylint: disable=no-self-use
+    def _uptime_to_string(self, uptime):
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
 
@@ -176,8 +176,8 @@ class EOSDevice(BaseDevice):
         """
         image = self.show("show boot-config")["softwareImage"]
         image = image.replace("flash:", "")
-        log.debug("Host %s: the boot options are %s", self.host, dict(sys=image))
-        return dict(sys=image)
+        log.debug("Host %s: the boot options are %s", self.host, {"sys": image})
+        return {"sys": image}
 
     def checkpoint(self, checkpoint_file):
         """Copy running config checkpoint.

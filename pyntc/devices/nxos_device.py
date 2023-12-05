@@ -248,7 +248,7 @@ class NXOSDevice(BaseDevice):
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
             try:
-                file_copy = self.native.file_copy(
+                file_copy = self.native.file_copy(  # pylint: disable=assignment-from-no-return
                     src, dest, file_system=file_system
                 )  # pylint: disable=assignment-from-no-return
                 log.info("Host %s: File %s transferred successfully.", self.host, src)
@@ -420,9 +420,9 @@ class NXOSDevice(BaseDevice):
 
         if native_timeout < 300:
             self.native.timeout = 300
-        upgrade_result = self.native.set_boot_options(
+        upgrade_result = self.native.set_boot_options(  # pylint: disable=assignment-from-no-return
             image_name, kickstart=kickstart
-        )  # pylint: disable=assignment-from-no-return
+        )
         self.native.timeout = 30
 
         log.info("Host %s: boot options have been set to %s", self.host, upgrade_result)
