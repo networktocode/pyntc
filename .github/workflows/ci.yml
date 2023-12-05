@@ -119,7 +119,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.7"]
+        python-version: ["3.8"]
     env:
       PYTHON_VER: "${{ matrix.python-version }}"
     steps:
