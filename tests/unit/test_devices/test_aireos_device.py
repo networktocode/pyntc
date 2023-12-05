@@ -88,9 +88,9 @@ def test_send_command_timing(aireos_send_command_timing):
 def test_send_command_timing_kwargs(aireos_send_command_timing):
     command = "send_command_timing"
     device = aireos_send_command_timing([f"{command}.txt"])
-    device._send_command(command, delay_factor=3)
+    device._send_command(command, read_timeout=300)
     device.native.send_command_timing.assert_called()
-    device.native.send_command_timing.assert_called_with(command, delay_factor=3)
+    device.native.send_command_timing.assert_called_with(command, read_timeout=300)
 
 
 def test_send_command_expect(aireos_send_command):
@@ -103,8 +103,8 @@ def test_send_command_expect(aireos_send_command):
 def test_send_command_expect_kwargs(aireos_send_command):
     command = "send_command_expect"
     device = aireos_send_command([f"{command}.txt"])
-    device._send_command(command, expect_string="Continue?", delay_factor=3)
-    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?", delay_factor=3)
+    device._send_command(command, expect_string="Continue?", read_timeout=300)
+    device.native.send_command.assert_called_with("send_command_expect", expect_string="Continue?", read_timeout=300)
 
 
 def test_send_command_error(aireos_send_command_timing):
@@ -688,7 +688,7 @@ def test_file_copy(
                     "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
                 ],
             ),
-            mock.call("y", auto_find_prompt=False, delay_factor=10),
+            mock.call("y", auto_find_prompt=False, read_timeout=1000),
         ],
     )
     device.native.send_command_timing.assert_called_with("transfer download start")
@@ -786,7 +786,7 @@ def test_file_copy_yes_command_error(
                     "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
                 ],
             ),
-            mock.call("y", auto_find_prompt=False, delay_factor=10),
+            mock.call("y", auto_find_prompt=False, read_timeout=1000),
         ],
     )
     device.native.send_command_timing.assert_called_with("transfer download start")
@@ -820,7 +820,7 @@ def test_file_copy_error_during_transfer(
                     "transfer download filename AIR-CT5520-K9-8-10-105-0.aes",
                 ],
             ),
-            mock.call("y", auto_find_prompt=False, delay_factor=10),
+            mock.call("y", auto_find_prompt=False, read_timeout=1000),
         ],
     )
 
@@ -1681,7 +1681,3 @@ def test_port(aireos_device):
 def test_port_none(patch):
     device = AIREOSDevice("host", "user", "pass", port=None)
     assert device.port == 22
-
-
-def test_delay_factor_compat(aireos_device):
-    assert aireos_device.delay_factor_compat is True

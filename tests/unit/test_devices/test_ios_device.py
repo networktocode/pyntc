@@ -81,9 +81,6 @@ class TestIOSDevice(unittest.TestCase):
     def test_port(self):
         self.assertEqual(self.device.port, 22)
 
-    def test_delay_factor_compat(self):
-        self.assertEqual(self.device.delay_factor_compat, True)
-
     def test_bad_show(self):
         command = "show microsoft"
         self.device.native.send_command.return_value = "Error: Microsoft"
@@ -364,13 +361,11 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "set_boot_options")
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
-    @mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
-    def test_install_os(self, mock_fast_cli, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
+    def test_install_os(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted):
         state = self.device.install_os(BOOT_IMAGE)
         mock_set_boot.assert_called()
         mock_reboot.assert_called()
         mock_wait.assert_called()
-        mock_fast_cli.fast_cli.assert_not_called()
         self.assertEqual(state, True)
 
     @mock.patch.object(IOSDevice, "_image_booted", side_effect=[True])
@@ -999,9 +994,7 @@ def test_set_boot_options_image_packages_conf_file(
 @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
 @mock.patch.object(IOSDevice, "_get_file_system")
 @mock.patch.object(IOSDevice, "reboot")
-@mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
 def test_install_os_install_mode(
-    mock_fast_cli,
     mock_reboot,
     mock_get_file_system,
     mock_wait_for_reboot,
@@ -1023,15 +1016,13 @@ def test_install_os_install_mode(
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+        f"install add file {file_system}{image_name} activate commit prompt-level none", read_timeout=2000
     )
     mock_reboot.assert_not_called()
     mock_os_version.assert_called()
     mock_image_booted.assert_called()
     mock_wait_for_reboot.assert_called()
     assert actual is True
-    # Assert that fast_cli value was retrieved, set to Fals, and set back to original value
-    assert mock_fast_cli.call_count == 3
 
 
 # Test install mode upgrade fail
@@ -1070,7 +1061,7 @@ def test_install_os_install_mode_failed(
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+        f"install add file {file_system}{image_name} activate commit prompt-level none", read_timeout=2000
     )
     mock_reboot.assert_not_called()
     mock_os_version.assert_called()
@@ -1150,7 +1141,7 @@ def test_install_os_install_mode_from_everest(
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
         f"request platform software package install switch all file {file_system}{image_name} auto-copy",
-        delay_factor=20,
+        read_timeout=2000,
     )
     mock_reboot.assert_called()
     mock_os_version.assert_called()
@@ -1196,7 +1187,7 @@ def test_install_os_install_mode_from_everest_failed(
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
         f"request platform software package install switch all file {file_system}{image_name} auto-copy",
-        delay_factor=20,
+        read_timeout=2000,
     )
     mock_reboot.assert_called()
     mock_os_version.assert_called()
@@ -1244,48 +1235,6 @@ def test_install_os_install_mode_from_everest_to_everest(
     assert actual is False
 
 
-@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
-@mock.patch.object(IOSDevice, "_image_booted")
-@mock.patch.object(IOSDevice, "set_boot_options")
-@mock.patch.object(IOSDevice, "show")
-@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
-@mock.patch.object(IOSDevice, "_get_file_system")
-@mock.patch.object(IOSDevice, "reboot")
-@pytest.mark.parametrize("fast_cli_setting", [True, False], ids=["true", "false"])
-def test_install_os_install_mode_fast_cli_state(
-    mock_reboot,
-    mock_get_file_system,
-    mock_wait_for_reboot,
-    mock_show,
-    mock_set_boot_options,
-    mock_image_booted,
-    mock_os_version,
-    ios_device,
-    fast_cli_setting,
-):
-    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
-    file_system = "flash:"
-    mock_get_file_system.return_value = file_system
-    mock_os_version.return_value = "16.12.03a"
-    mock_image_booted.side_effect = [False, True]
-    ios_device.fast_cli = fast_cli_setting
-    mock_show.side_effect = [IOError("Search pattern never detected in send_command")]
-    # Call the install os function
-    actual = ios_device.install_os(image_name, install_mode=True)
-
-    # Check the results
-    mock_set_boot_options.assert_called_with("packages.conf")
-    mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
-    )
-    mock_reboot.assert_not_called()
-    mock_os_version.assert_called()
-    mock_image_booted.assert_called()
-    mock_wait_for_reboot.assert_called()
-    assert actual is True
-    assert ios_device.fast_cli == fast_cli_setting
-
-
 @mock.patch.object(IOSDevice, "_has_reload_happened_recently")
 @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSDevice, "_image_booted")
@@ -1293,11 +1242,9 @@ def test_install_os_install_mode_fast_cli_state(
 @mock.patch.object(IOSDevice, "show")
 @mock.patch.object(IOSDevice, "_get_file_system")
 @mock.patch.object(IOSDevice, "reboot")
-@mock.patch.object(IOSDevice, "fast_cli", new_callable=mock.PropertyMock)
 @mock.patch.object(time, "sleep")
 def test_install_os_install_mode_with_retries(
     mock_sleep,
-    mock_fast_cli,
     mock_reboot,
     mock_get_file_system,
     mock_show,
@@ -1320,15 +1267,13 @@ def test_install_os_install_mode_with_retries(
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_any_call(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+        f"install add file {file_system}{image_name} activate commit prompt-level none", read_timeout=2000
     )
     mock_show.assert_any_call("show version")
     mock_reboot.assert_not_called()
     mock_os_version.assert_called()
     mock_image_booted.assert_called()
     assert actual is True
-    # Assert that fast_cli value was retrieved, set to False, and set back to original value
-    assert mock_fast_cli.call_count == 3
 
 
 def test_show(ios_send_command):
@@ -1404,40 +1349,6 @@ def test_boot_options_show_boot(mock_boot, show_boot_out, ios_native_send_comman
     boot_options = device.boot_options
     assert boot_options == {"sys": BOOT_IMAGE}
     device.native.send_command.assert_called_with(command_string="show boot")
-
-
-def test_connected_with_fast_cli():
-    with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
-        mock_confirm.return_value = True
-        with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
-            device = IOSDevice("host", "user", "password")
-            device.native = ch
-    assert device.fast_cli
-
-
-def test_connected_with_fast_cli_false():
-    with mock.patch.object(IOSDevice, "confirm_is_active") as mock_confirm:
-        mock_confirm.return_value = True
-        with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
-            device = IOSDevice("host", "user", "password", fast_cli=False)
-            device.native = ch
-    assert not device.fast_cli
-
-
-@pytest.mark.parametrize("expected", ((True,), (False,)))
-def test_fast_cli(expected, ios_device):
-    ios_device._fast_cli = expected
-    assert ios_device.fast_cli is expected
-
-
-@pytest.mark.parametrize("expected", ((True,), (False,)))
-def test_fast_cli_setter(expected, ios_device):
-    ios_device._fast_cli = not expected
-    assert ios_device._fast_cli is not expected
-    assert ios_device.native.fast_cli is not expected
-    ios_device.fast_cli = expected
-    assert ios_device._fast_cli is expected
-    assert ios_device.native.fast_cli is expected
 
 
 def test_image_booted_bundle_version(ios_show):
