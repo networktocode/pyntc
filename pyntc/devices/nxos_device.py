@@ -27,7 +27,9 @@ class NXOSDevice(BaseDevice):
 
     vendor = "cisco"
 
-    def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):  # noqa: D403
+    def __init__(
+        self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs
+    ):  # noqa: D403
         """PyNTC Device implementation for Cisco IOS.
 
         Args:
@@ -37,11 +39,16 @@ class NXOSDevice(BaseDevice):
             transport (str, optional): Transport protocol to connect to device. Defaults to "http".
             timeout (int, optional): Timeout in seconds. Defaults to 30.
             port (int, optional): Port used to connect to device. Defaults to None.
+            verify (bool, optional): SSL verification.
+            kwargs: Left for compatibility with other tools, for instance nautobot-inventory may pass additional kwargs.
+
         """
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
+        self.native = NXOSNative(
+            host, username, password, transport=transport, timeout=timeout, port=port, verify=verify
+        )
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
