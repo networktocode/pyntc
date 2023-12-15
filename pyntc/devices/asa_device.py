@@ -600,7 +600,7 @@ class ASADevice(BaseDevice):
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
