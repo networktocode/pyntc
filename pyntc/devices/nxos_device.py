@@ -58,11 +58,8 @@ class NXOSDevice(BaseDevice):
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
         while time.time() - start < timeout:
-            # Clear cache
-            self._uptime = None
-            delattr(self.native, "_facts")
-
             try:  # NXOS stays online, when it installs OS
+                self.refresh()
                 if self.uptime < 180:
                     log.debug("Host %s: Device rebooted.", self.host)
                     return
@@ -71,6 +68,12 @@ class NXOSDevice(BaseDevice):
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+
+    def refresh(self):
+        """Refresh caches on device instance."""
+        if hasattr(self.native, "_facts"):
+            delattr(self.native, "_facts")
+        super().refresh()
 
     def backup_running_config(self, filename):
         """Backup running configuration.
@@ -141,6 +144,18 @@ class NXOSDevice(BaseDevice):
 
         log.debug("Host %s: Uptime %s", self.host, self._uptime)
         return self._uptime
+
+    @property
+    def uptime_string(self):
+        """Get uptime in format dd:hh:mm.
+
+        Returns:
+            str: Uptime of device.
+        """
+        if self._uptime_string is None:
+            self._uptime_string = self.native.facts.get("uptime_string")
+
+        return self._uptime_string
 
     @property
     def hostname(self):
