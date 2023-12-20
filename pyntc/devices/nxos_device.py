@@ -61,9 +61,10 @@ class NXOSDevice(BaseDevice):
             try:  # NXOS stays online, when it installs OS
                 self.refresh()
                 if self.uptime < 180:
-                    log.debug("Host %s: Device rebooted.", self.host)
+                    log.info("Host %s: Device rebooted.", self.host)
                     return
             except:  # noqa E722 # nosec  # pylint: disable=bare-except
+                log.debug("Host %s: Pausing for 10 sec before retrying.", self.host)
                 time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
@@ -322,8 +323,6 @@ class NXOSDevice(BaseDevice):
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-            self.save()
-
             log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
