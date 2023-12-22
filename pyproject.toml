@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyntc"
-version = "1.0.2"
+version = "2.0.0"
 description = "SDK to simplify common workflows for Network Devices."
 authors = ["Network to Code, LLC <info@networktocode.com>"]
 readme = "README.md"
