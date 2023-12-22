@@ -1179,7 +1179,7 @@ class AIREOSDevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:  # pylint:disable=broad-exception-caught
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
