@@ -87,9 +87,7 @@ class AIREOSDevice(BaseDevice):
         self.native = None
         self.secret = secret
         self.port = int(port) if port else 22
-        self.delay_factor_compat = kwargs.get("delay_factor_compat", True)
-        self.global_delay_factor = kwargs.get("global_delay_factor", 1)
-        self.delay_factor = kwargs.get("delay_factor", 1)
+        self.read_timeout_override = kwargs.get("read_timeout_override")
         self._connected = False
         self.open(confirm_active=confirm_active)
         log.init(host=host)
@@ -588,7 +586,7 @@ class AIREOSDevice(BaseDevice):
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
-            if not original_command_is_str:
+            if not original_command_is_str:  # pylint: disable=no-else-raise
                 log.error(
                     "Host %s: Commands %s returned the error %s",
                     self.host,
@@ -862,7 +860,7 @@ class AIREOSDevice(BaseDevice):
         filepath,
         protocol="sftp",
         filetype="code",
-        delay_factor=10,
+        read_timeout=1000,
     ):
         """
         Copy a file from server to Controller.
@@ -874,7 +872,7 @@ class AIREOSDevice(BaseDevice):
             filepath (str): The full path to the file on the ``server``.
             protocol (str): The transfer protocol to use to transfer the file.
             filetype (str): The type of file per aireos definitions.
-            delay_factor (int): The Netmiko delay factor to wait for device to complete transfer.
+            read_timeout (int): The Netmiko read_timeout to wait for device to complete transfer.
 
         Returns:
             bool: True when the file was transferred, False when the file is deemed to already be on the device.
@@ -929,7 +927,7 @@ class AIREOSDevice(BaseDevice):
         try:
             response = self.native.send_command_timing("transfer download start")
             if "Are you sure you want to start? (y/N)" in response:
-                response = self.show("y", auto_find_prompt=False, delay_factor=delay_factor)
+                response = self.show("y", auto_find_prompt=False, read_timeout=read_timeout)
         except CommandError as error:
             log.error(
                 "Host %s: File transfer error %s\n\n%s",
@@ -1097,8 +1095,7 @@ class AIREOSDevice(BaseDevice):
                 username=self.username,
                 password=self.password,
                 port=self.port,
-                delay_factor_compat=self.delay_factor_compat,
-                global_delay_factor=self.global_delay_factor,
+                read_timeout_override=self.read_timeout_override,
                 secret=self.secret,
                 verbose=False,
             )
@@ -1182,7 +1179,7 @@ class AIREOSDevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
@@ -1364,7 +1361,7 @@ class AIREOSDevice(BaseDevice):
             raise TypeError(f"Netmiko Driver's {err.args[0]}")
         # TODO: Remove this when deprecating config_list method
         except CommandError as err:
-            if not original_command_is_str:
+            if not original_command_is_str:  # pylint: disable=no-else-raise
                 log.error(
                     "Host %s: Command error for commands %s with message %s.",
                     self.host,

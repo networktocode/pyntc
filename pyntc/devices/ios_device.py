@@ -44,7 +44,7 @@ class IOSDevice(BaseDevice):
     active_redundancy_states = {None, "active"}
 
     def __init__(  # nosec
-        self, host, username, password, secret="", port=None, confirm_active=True, fast_cli=True, **kwargs
+        self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
         """
         PyNTC Device implementation for Cisco IOS.
@@ -56,22 +56,18 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
-            fast_cli (bool): Fast CLI mode for Netmiko, it is recommended to use False when opening the client on code upgrades
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
         self.native = None
         self.secret = secret
         self.port = int(port) if port else 22
-        self.delay_factor_compat = kwargs.get("delay_factor_compat", True)
-        self.global_delay_factor = kwargs.get("global_delay_factor", 1)
-        self.delay_factor = kwargs.get("delay_factor", 1)
-        self._fast_cli = fast_cli
+        self.read_timeout_override = kwargs.get("read_timeout_override")
         self._connected = False
         self.open(confirm_active=confirm_active)
         log.init(host=host)
 
-    def _check_command_output_for_errors(self, command, command_response):  # pylint: disable=no-self-use
+    def _check_command_output_for_errors(self, command, command_response):
         """
         Check response from device to see if an error was reported.
 
@@ -208,7 +204,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_data)
         return show_vlan_data
 
-    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
+    def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)
@@ -612,20 +608,6 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Config register %s", self.host, self._config_register)
         return self._config_register
 
-    @property
-    def fast_cli(self):
-        """Get current fast_cli value.
-
-        Returns:
-            bool: True if fast_cli is set to true. Otherwise, false.
-        """
-        return self._fast_cli
-
-    @fast_cli.setter
-    def fast_cli(self, value):
-        self._fast_cli = value
-        self.native.fast_cli = value
-
     def file_copy(self, src, dest=None, file_system=None):
         """Copy file to device.
 
@@ -700,12 +682,13 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def install_os(self, image_name, install_mode=False, install_mode_delay_factor=20, **vendor_specifics):
+    def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
             image_name (str): Name of the IOS image to boot into
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
+            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 30.
 
         Raises:
             OSInstallError: Unable to install OS Error type
@@ -719,19 +702,13 @@ class IOSDevice(BaseDevice):
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
 
-                # Get the current fast_cli to set it back later to whatever it is
-                current_fast_cli = self.fast_cli
-
-                # Set fast_cli to False to handle install mode, 10+ minute installation
-                self.fast_cli = False
-
                 # Check for OS Version specific upgrade path
                 # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
                 os_version = self.os_version
                 if "16.5.1a" in os_version or "16.6.1" in os_version:
                     # Run install command and reboot device
                     command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                    self.show(command, delay_factor=install_mode_delay_factor)
+                    self.show(command, read_timeout=read_timeout)
                     self.reboot()
 
                 else:
@@ -739,15 +716,14 @@ class IOSDevice(BaseDevice):
                     command = (
                         f"install add file {self._get_file_system()}{image_name} activate commit prompt-level none"
                     )
-                    # Set a higher delay factor and send it in
+                    # Set a higher read_timeout and send it in
                     try:
-                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.show(command, read_timeout=read_timeout)
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
-                        pass
                     except CommandError:
                         command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                        self.show(command, delay_factor=install_mode_delay_factor)
+                        self.show(command, read_timeout=read_timeout)
                         self.reboot()
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
@@ -759,7 +735,6 @@ class IOSDevice(BaseDevice):
 
             # Set FastCLI back to originally set when using install mode
             if install_mode:
-                self.fast_cli = current_fast_cli
                 image_name = INSTALL_MODE_FILE_NAME
             # Verify the OS level
             if not self._image_booted(image_name):
@@ -827,11 +802,9 @@ class IOSDevice(BaseDevice):
                 username=self.username,
                 password=self.password,
                 port=self.port,
-                delay_factor_compat=self.delay_factor_compat,
-                global_delay_factor=self.global_delay_factor,
+                read_timeout_override=self.read_timeout_override,
                 secret=self.secret,
                 verbose=False,
-                fast_cli=self.fast_cli,
             )
             self._connected = True
 
@@ -899,7 +872,7 @@ class IOSDevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
@@ -998,8 +971,8 @@ class IOSDevice(BaseDevice):
         self.native.send_command_timing(command)
         # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
         # This will send return without requiring an OK.
-        # Send a return to pass the [OK]? message - Incease delay_factor for looking for response.
-        self.native.send_command_timing("\n", delay_factor=2)
+        # Send a return to pass the [OK]? message - Increase read_timeout for looking for response.
+        self.native.send_command_timing("\n", read_timeout=200)
         # Confirm that we have a valid prompt again before returning.
         self.native.find_prompt()
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
@@ -1033,37 +1006,26 @@ class IOSDevice(BaseDevice):
             # boot system flash:/c3560-advipservicesk9-mz.122-44.SE.bin
             # boot system flash0:/c3560-advipservicesk9-mz.122-44.SE.bin
             if re.search(r"boot\ssystem\s\S+\:\/\S+", show_boot_sys):
-                command = "boot system {0}/{1}".format(file_system, image_name)
+                command = f"boot system {file_system}/{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash0:c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(r"boot\ssystem\s\S+\:\S+", show_boot_sys):
-                command = "boot system {0}{1}".format(file_system, image_name)
+                command = f"boot system {file_system}{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash flash:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash flash0:c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash bootflash:c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(
                 r"boot\ssystem\s\S+\s\S+:\S+", show_boot_sys
             ):  # TODO: Update to CommandError when deprecating config_list
-                command = "boot system flash {0}{1}".format(file_system, image_name)
+                command = f"boot system flash {file_system}{image_name}"
                 self.config(["no boot system", command])
-            # Sample:
-            # boot system flash c3560-advipservicesk9-mz.122-44.SE.bin
             elif re.search(
                 r"boot\ssystem\sflash\s\S+", show_boot_sys
             ):  # TODO: Update to CommandError when deprecating config_list
                 file_system = file_system.replace(":", "")
-                command = "boot system {0} {1}".format(file_system, image_name)
+                command = f"boot system {file_system} {image_name}"
                 self.config(["no boot system", command])
             else:
                 raise CommandError(
                     command=command,
-                    message="Unable to determine the boot system configuration syntax. Current config is {0}".format(
-                        show_boot_sys
-                    ),
+                    message=f"Unable to determine the boot system configuration syntax. Current config is {show_boot_sys}",
                 )
 
         self.save()

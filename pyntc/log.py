@@ -27,10 +27,10 @@ def get_log(name=None):
     logger_name = f"{APP}.{name}" if name else APP
     # file handler
     handler = RotatingFileHandler(f"{logger_name}.log", maxBytes=2000)
-    logger = logging.getLogger(logger_name)
-    logger.addHandler(handler)
+    _logger = logging.getLogger(logger_name)
+    _logger.addHandler(handler)
 
-    return logger
+    return _logger
 
 
 def init(**kwargs):
@@ -44,11 +44,11 @@ def init(**kwargs):
 
 
     """
-    debug = os.environ.get("PYNTC_DEBUG", None)
-    log_format = DEBUG_FORMAT if debug else FORMAT
+    _debug = os.environ.get("PYNTC_DEBUG", None)
+    log_format = DEBUG_FORMAT if _debug else FORMAT
 
     log_level = getattr(logging, os.environ.get("PYNTC_LOG_LEVEL", "info").upper())
-    log_level = logging.DEBUG if debug else log_level
+    log_level = logging.DEBUG if _debug else log_level
 
     kwargs.setdefault("format", log_format)
     kwargs.setdefault("level", log_level)
