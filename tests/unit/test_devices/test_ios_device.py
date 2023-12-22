@@ -618,11 +618,7 @@ def test_connected_setter(expected, ios_device):
 @mock.patch.object(IOSDevice, "redundancy_state", new_callable=mock.PropertyMock)
 @pytest.mark.parametrize(
     "redundancy_state,expected",
-    (
-        ("active", True),
-        ("standby hot", False),
-        (None, True),
-    ),
+    (("active", True), ("standby hot", False), (None, True)),
     ids=("active", "standby_hot", "unsupported"),
 )
 def test_is_active(mock_redundancy_state, ios_device, redundancy_state, expected):
@@ -680,10 +676,7 @@ def test_open_standby(mock_confirm, mock_connected, mock_connect_handler, ios_de
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (
-        ("show_redundancy", "standby hot"),
-        ("show_redundancy_no_peer", "disabled"),
-    ),
+    (("show_redundancy", "standby hot"), ("show_redundancy_no_peer", "disabled")),
     ids=("standby_hot", "disabled"),
 )
 def test_peer_redundancy_state(filename, expected, ios_show):
@@ -713,11 +706,7 @@ def test_re_show_redundancy_no_peer(ios_show, ios_redundancy_info, ios_redundanc
     device = ios_show(["show_redundancy_no_peer.txt"])
     show_redundancy = device.show("show redundancy")
     re_show_redundancy = ios_module.RE_SHOW_REDUNDANCY.match(show_redundancy)
-    assert re_show_redundancy.groupdict() == {
-        "info": ios_redundancy_info,
-        "self": ios_redundancy_self,
-        "other": None,
-    }
+    assert re_show_redundancy.groupdict() == {"info": ios_redundancy_info, "self": ios_redundancy_self, "other": None}
 
 
 def test_re_show_redundancy_no_peer_slot_unavailable(ios_show, ios_redundancy_info, ios_redundancy_self):
@@ -760,10 +749,7 @@ def test_redundancy_mode_unsupported_command(ios_show):
 
 @pytest.mark.parametrize(
     "filename,expected",
-    (
-        ("show_redundancy", "active"),
-        ("show_redundancy_standby", "standby hot"),
-    ),
+    (("show_redundancy", "active"), ("show_redundancy_standby", "standby hot")),
     ids=("active", "standby_hot"),
 )
 def test_redundancy_state(filename, expected, ios_show):
@@ -889,6 +875,21 @@ def test_set_boot_options_pass_with_space(mock_save, mock_boot_options, mock_con
     mock_boot_options.return_value = {"sys": BOOT_IMAGE}
     device.set_boot_options(BOOT_IMAGE, file_system="flash:")
     mock_config.assert_called_with(["no boot system", f"boot system flash {BOOT_IMAGE}"])
+    mock_file_system.assert_not_called()
+    mock_config.assert_called_once()
+    mock_save.assert_called_once()
+    mock_boot_options.assert_called_once()
+
+
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "config")
+@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "save")
+def test_set_boot_options_pass_with_switch_all(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
+    device = ios_show(["dir_flash:.txt", "boot system switch all flash:c3560-advipservicesk9-mz.122-44.SE.bin"])
+    mock_boot_options.return_value = {"sys": BOOT_IMAGE}
+    device.set_boot_options(BOOT_IMAGE, file_system="flash:")
+    mock_config.assert_called_with(["no boot system", f"boot system switch all flash:{BOOT_IMAGE}"])
     mock_file_system.assert_not_called()
     mock_config.assert_called_once()
     mock_save.assert_called_once()
@@ -1280,10 +1281,7 @@ def test_show(ios_send_command):
     command = "show_ip_arp"
     device = ios_send_command([f"{command}.txt"])
     device.show(command)
-    device._send_command.assert_called_with(
-        "show_ip_arp",
-        expect_string=None,
-    )
+    device._send_command.assert_called_with("show_ip_arp", expect_string=None)
     device._send_command.assert_called_once()
 
 
@@ -1292,10 +1290,7 @@ def test_show_expect(ios_send_command):
     expect = "this string"
     device = ios_send_command([f"{command}.txt"])
     device.show(command, expect)
-    device._send_command.assert_called_with(
-        "show_ip_arp",
-        expect_string=expect,
-    )
+    device._send_command.assert_called_with("show_ip_arp", expect_string=expect)
 
 
 def test_show_expect_netmiko_args(ios_send_command):
@@ -1304,11 +1299,7 @@ def test_show_expect_netmiko_args(ios_send_command):
     netmiko_args = {"some_flag": "passed"}
     device = ios_send_command([f"{command}.txt"])
     device.show(command, expect, **netmiko_args)
-    device._send_command.assert_called_with(
-        "show_ip_arp",
-        expect_string=expect,
-        **netmiko_args,
-    )
+    device._send_command.assert_called_with("show_ip_arp", expect_string=expect, **netmiko_args)
 
 
 def test_show_netmiko_args(ios_send_command):
@@ -1316,11 +1307,7 @@ def test_show_netmiko_args(ios_send_command):
     netmiko_args = {"some_flag": "passed"}
     device = ios_send_command([f"{command}.txt"])
     device.show(command, **netmiko_args)
-    device._send_command.assert_called_with(
-        "show_ip_arp",
-        expect_string=None,
-        **netmiko_args,
-    )
+    device._send_command.assert_called_with("show_ip_arp", expect_string=None, **netmiko_args)
 
 
 def test_show_list(ios_native_send_command):
