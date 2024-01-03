@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyntc"
-version = "1.0.2"
+version = "2.0.0"
 description = "SDK to simplify common workflows for Network Devices."
 authors = ["Network to Code, LLC <info@networktocode.com>"]
 readme = "README.md"
@@ -104,7 +104,6 @@ disable = """,
     arguments-differ,
     arguments-renamed,
     attribute-defined-outside-init,
-    bad-continuation,
     consider-iterating-dictionary,
     duplicate-code,
     inconsistent-return-statements,

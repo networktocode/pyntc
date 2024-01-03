@@ -7,7 +7,7 @@ from pynxos.device import Device as NXOSNative
 from pynxos.errors import CLIError
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout, ConnectTimeout
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
@@ -27,7 +27,9 @@ class NXOSDevice(BaseDevice):
 
     vendor = "cisco"
 
-    def __init__(self, host, username, password, transport="http", timeout=30, port=None, **kwargs):  # noqa: D403
+    def __init__(
+        self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs
+    ):  # noqa: D403
         """PyNTC Device implementation for Cisco IOS.
 
         Args:
@@ -37,34 +39,42 @@ class NXOSDevice(BaseDevice):
             transport (str, optional): Transport protocol to connect to device. Defaults to "http".
             timeout (int, optional): Timeout in seconds. Defaults to 30.
             port (int, optional): Port used to connect to device. Defaults to None.
+            verify (bool, optional): SSL verification.
+            kwargs: Left for compatibility with other tools, for instance nautobot-inventory may pass additional kwargs.
+
         """
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
         self.transport = transport
         self.timeout = timeout
-        self.native = NXOSNative(host, username, password, transport=transport, timeout=timeout, port=port, **kwargs)
+        self.native = NXOSNative(
+            host, username, password, transport=transport, timeout=timeout, port=port, verify=verify
+        )
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
         version_data = self.show("show version", raw_text=True)
-        if re.search(image_name, version_data):
-            log.info("Host %s: Image %s booted successfully.", self.host, image_name)
-            return True
-
-        log.info("Host %s: Image %s not booted successfully.", self.host, image_name)
-        return False
+        return bool(re.search(image_name, version_data))
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
         while time.time() - start < timeout:
-            try:
-                self.native.show("show hostname")
-                log.debug("Host %s: Device rebooted.", self.host)
-                return
+            try:  # NXOS stays online, when it installs OS
+                self.refresh()
+                if self.uptime < 180:
+                    log.info("Host %s: Device rebooted.", self.host)
+                    return
             except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                pass
+                log.debug("Host %s: Pausing for 10 sec before retrying.", self.host)
+                time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+
+    def refresh(self):
+        """Refresh caches on device instance."""
+        if hasattr(self.native, "_facts"):
+            delattr(self.native, "_facts")
+        super().refresh()
 
     def backup_running_config(self, filename):
         """Backup running configuration.
@@ -135,6 +145,18 @@ class NXOSDevice(BaseDevice):
 
         log.debug("Host %s: Uptime %s", self.host, self._uptime)
         return self._uptime
+
+    @property
+    def uptime_string(self):
+        """Get uptime in format dd:hh:mm.
+
+        Returns:
+            str: Uptime of device.
+        """
+        if self._uptime_string is None:
+            self._uptime_string = self.native.facts.get("uptime_string")
+
+        return self._uptime_string
 
     @property
     def hostname(self):
@@ -241,7 +263,7 @@ class NXOSDevice(BaseDevice):
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
             try:
-                file_copy = self.native.file_copy(
+                file_copy = self.native.file_copy(  # pylint: disable=assignment-from-no-return
                     src, dest, file_system=file_system
                 )  # pylint: disable=assignment-from-no-return
                 log.info("Host %s: File %s transferred successfully.", self.host, src)
@@ -294,17 +316,17 @@ class NXOSDevice(BaseDevice):
         self.native.show("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
+            log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
             self.set_boot_options(image_name, **vendor_specifics)
+            log.info("Host %s: Waiting for device reload.", self.host)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
-            self.save()
-
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
             log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
 
-        log.info("Host %s: OS image %s not installed.", self.host, image_name)
+        log.info("Host %s: Image %s is already running on the device.", self.host, image_name)
         return False
 
     def open(self):  # noqa: D401
@@ -405,21 +427,11 @@ class NXOSDevice(BaseDevice):
             kickstart = file_system + kickstart
 
         image_name = file_system + image_name
-        # Allow for user defined timeout to take precedence if its over 300 seconds, otherwise change to 300.
         try:
-            native_timeout = int(self.native.timeout)
-        except (TypeError, ValueError):
-            native_timeout = 1
-
-        if native_timeout < 300:
-            self.native.timeout = 300
-        upgrade_result = self.native.set_boot_options(
-            image_name, kickstart=kickstart
-        )  # pylint: disable=assignment-from-no-return
-        self.native.timeout = 30
-
-        log.info("Host %s: boot options have been set to %s", self.host, upgrade_result)
-        return upgrade_result
+            self.native.set_boot_options(image_name, kickstart=kickstart)
+        except (ReadTimeout, ConnectTimeout):
+            pass
+        log.info("Host %s: boot options have been set to %s", self.host, image_name)
 
     def set_timeout(self, timeout):
         """Set timeout value on device connection.

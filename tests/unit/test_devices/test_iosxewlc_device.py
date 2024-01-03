@@ -80,12 +80,12 @@ def test_show(iosxewlc_send_command):
     device._send_command.assert_called_once()
 
 
-def test_show_delay_factor(iosxewlc_send_command):
+def test_show_read_timeout(iosxewlc_send_command):
     command = "show_ip_arp"
-    delay_factor = 20
+    read_timeout = 2000
     device = iosxewlc_send_command([f"{command}"])
-    device.show(command, delay_factor=delay_factor)
-    device._send_command.assert_called_with("show_ip_arp", expect_string=None, delay_factor=delay_factor)
+    device.show(command, read_timeout=read_timeout)
+    device._send_command.assert_called_with("show_ip_arp", expect_string=None, read_timeout=read_timeout)
     device._send_command.assert_called_once()
 
 
@@ -96,9 +96,7 @@ def test_show_delay_factor(iosxewlc_send_command):
 @mock.patch.object(IOSXEWLCDevice, "_wait_for_device_reboot")
 @mock.patch.object(IOSXEWLCDevice, "_wait_for_device_start_reboot")
 @mock.patch.object(IOSXEWLCDevice, "_get_file_system")
-@mock.patch.object(IOSXEWLCDevice, "fast_cli", new_callable=mock.PropertyMock)
 def test_install_os_install_mode(
-    mock_fast_cli,
     mock_get_file_system,
     mock_wait_for_reboot_start,
     mock_wait_for_reboot,
@@ -118,10 +116,9 @@ def test_install_os_install_mode(
     # Test the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+        f"install add file {file_system}{image_name} activate commit prompt-level none", read_timeout=2000
     )
     assert 2 == mock_image_booted.call_count
-    assert 3 == mock_fast_cli.call_count
     mock_wait_for_reboot.assert_called()
     mock_wait_for_reboot_start.assert_called()
     assert actual is True
@@ -135,9 +132,7 @@ def test_install_os_install_mode(
 @mock.patch.object(IOSXEWLCDevice, "_wait_for_device_start_reboot")
 @mock.patch.object(IOSXEWLCDevice, "_get_file_system")
 @mock.patch.object(IOSXEWLCDevice, "hostname", new_callable=mock.PropertyMock)
-@mock.patch.object(IOSXEWLCDevice, "fast_cli", new_callable=mock.PropertyMock)
 def test_install_os_install_mode_failed(
-    mock_fast_cli,
     mock_hostname,
     mock_get_file_system,
     mock_wait_for_reboot_start,
@@ -162,10 +157,9 @@ def test_install_os_install_mode_failed(
     # Check the results
     mock_set_boot_options.assert_called_with("packages.conf")
     mock_show.assert_called_with(
-        f"install add file {file_system}{image_name} activate commit prompt-level none", delay_factor=20
+        f"install add file {file_system}{image_name} activate commit prompt-level none", read_timeout=2000
     )
     assert 2 == mock_image_booted.call_count
-    assert 3 == mock_fast_cli.call_count
     mock_wait_for_reboot.assert_called()
     mock_wait_for_reboot_start.assert_called()
 
@@ -178,9 +172,7 @@ def test_install_os_install_mode_failed(
 @mock.patch.object(IOSXEWLCDevice, "_wait_for_device_start_reboot")
 @mock.patch.object(IOSXEWLCDevice, "_get_file_system")
 @mock.patch.object(IOSXEWLCDevice, "hostname", new_callable=mock.PropertyMock)
-@mock.patch.object(IOSXEWLCDevice, "fast_cli", new_callable=mock.PropertyMock)
 def test_install_os_already_installed(
-    mock_fast_cli,
     mock_hostname,
     mock_get_file_system,
     mock_wait_for_reboot_start,
@@ -200,7 +192,6 @@ def test_install_os_already_installed(
     actual = iosxewlc_device.install_os(image_name)
 
     # Check the results
-    mock_fast_cli.assert_not_called()
     mock_set_boot_options.assert_not_called()
     mock_show.assert_not_called()
     mock_image_booted.assert_called()

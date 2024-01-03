@@ -39,7 +39,7 @@ class IOSXEWLCDevice(IOSDevice):
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
-    def install_os(self, image_name, install_mode_delay_factor=20, **vendor_specifics):
+    def install_os(self, image_name, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
@@ -56,18 +56,12 @@ class IOSXEWLCDevice(IOSDevice):
             # Change boot statement to be boot system <flash>:packages.conf
             self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
 
-            # Get the current fast_cli to set it back later to whatever it is
-            current_fast_cli = self.fast_cli
-
-            # Set fast_cli to False to handle install mode, 10+ minute installation
-            self.fast_cli = False
-
             # Run install command (which reboots the device)
             command = f"install add file {self._get_file_system()}{image_name} activate commit prompt-level none"
 
-            # Set a higher delay factor and send it in
+            # Set a higher read_timeout and send it in
             try:
-                self.show(command, delay_factor=install_mode_delay_factor)
+                self.show(command, read_timeout=read_timeout)
             except IOError:
                 # Expected error IOError is raised from previous show command.
                 pass
@@ -77,9 +71,6 @@ class IOSXEWLCDevice(IOSDevice):
 
             # Wait for the reboot to finish
             self._wait_for_device_reboot(timeout=timeout)
-
-            # Set FastCLI back to originally set when using install mode
-            self.fast_cli = current_fast_cli
 
             # Verify the OS level
             if not self._image_booted(image_name):

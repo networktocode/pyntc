@@ -8,14 +8,14 @@ from tempfile import NamedTemporaryFile
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.exception import ConfigLoadError
-from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=no-name-in-module
+from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
 
 from pyntc.devices.base_device import BaseDevice, fix_docs
-from pyntc.devices.tables.jnpr.loopback import LoopbackTable
+from pyntc.devices.tables.jnpr.loopback import LoopbackTable  # pylint: disable=no-name-in-module
 from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
 
 
@@ -41,7 +41,7 @@ class JunosDevice(BaseDevice):
         self.fs = JunosNativeFS(self.native)  # pylint: disable=invalid-name
         self.sw = JunosNativeSW(self.native)  # pylint: disable=invalid-name
 
-    def _file_copy_local_file_exists(self, filepath):  # pylint: disable=no-self-use
+    def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
@@ -72,7 +72,7 @@ class JunosDevice(BaseDevice):
     def _image_booted(self, image_name, **vendor_specifics):
         raise NotImplementedError
 
-    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
+    def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) minutes?", uptime_full_string)

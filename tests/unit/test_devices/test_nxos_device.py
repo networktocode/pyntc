@@ -250,6 +250,12 @@ class TestNXOSDevice(unittest.TestCase):
         expected = self.device.show("show startup-config", raw_text=True)
         self.assertEqual(self.device.startup_config, expected)
 
+    def test_refresh(self):
+        self.assertTrue(hasattr(self.device.native, "_facts"))
+        self.device.refresh()
+        self.assertIsNone(self.device._uptime)
+        self.assertFalse(hasattr(self.device.native, "_facts"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -55,9 +55,7 @@ class ASADevice(BaseDevice):
         self.secret = secret
         self.port = int(port) if port else 22
         self.kwargs = kwargs
-        self.delay_factor_compat = kwargs.get("delay_factor_compat", True)
-        self.global_delay_factor: int = kwargs.get("global_delay_factor", 1)
-        self.delay_factor: int = kwargs.get("delay_factor", 1)
+        self.read_timeout_override = kwargs.get("read_timeout_override")
         self._connected = False
         self.open()
         self._peer_device: Optional[ASADevice] = None
@@ -262,7 +260,7 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: Successfully executed command 'show vlan' with responses %s.", self.host, show_vlan_out)
         return show_vlan_out.split(",")
 
-    def _uptime_components(self, uptime_full_string):  # pylint: disable=no-self-use
+    def _uptime_components(self, uptime_full_string):
         match_days = re.search(r"(\d+) days?", uptime_full_string)
         match_hours = re.search(r"(\d+) hours?", uptime_full_string)
         match_minutes = re.search(r"(\d+) mins?", uptime_full_string)
@@ -376,8 +374,8 @@ class ASADevice(BaseDevice):
         else:
             boot_image = None
 
-        log.debug("Host %s: the boot options are %s", self.host, dict(sys=boot_image))
-        return dict(sys=boot_image)
+        log.debug("Host %s: the boot options are %s", self.host, {"sys": boot_image})
+        return {"sys": boot_image}
 
     def checkpoint(self, checkpoint_file):
         """
@@ -602,7 +600,7 @@ class ASADevice(BaseDevice):
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(hostname=self.facts.get("hostname"), desired_boot=image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
@@ -728,8 +726,7 @@ class ASADevice(BaseDevice):
                 username=self.username,
                 password=self.password,
                 port=self.port,
-                delay_factor_compat=self.delay_factor_compat,
-                global_delay_factor=self.global_delay_factor,
+                read_timeout_override=self.read_timeout_override,
                 secret=self.secret,
                 verbose=False,
             )
@@ -890,7 +887,7 @@ class ASADevice(BaseDevice):
             if wait_for_reload:
                 time.sleep(10)
                 self._wait_for_device_reboot()
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
 
