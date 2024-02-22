@@ -1029,6 +1029,11 @@ class IOSDevice(BaseDevice):
             ):  # TODO: Update to CommandError when deprecating config_list
                 command = f"boot system switch all {file_system}{image_name}"
                 self.config(["no boot system", command])
+
+            # If boot system is not found in the running config, but it exists in show boot or show bootvar
+            elif self.boot_options["sys"]:
+                command = f"boot system {file_system}/{image_name}"
+                self.config(command)
             else:
                 raise CommandError(
                     command=command,
