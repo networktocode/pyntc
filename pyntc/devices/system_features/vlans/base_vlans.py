@@ -1,4 +1,5 @@
 """Base Vlan checks."""
+
 from pyntc.errors import NTCError
 
 from ..base_feature import BaseFeature
