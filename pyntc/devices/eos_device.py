@@ -73,11 +73,11 @@ class EOSDevice(BaseDevice):
         self._connected = False
         log.init(host=host)
 
-    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+    def _file_copy_instance(self, src, dest=None, file_system="/mnt/flash"):
         if dest is None:
             dest = os.path.basename(src)
 
-        file_copy = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
+        file_copy = FileTransfer(self.native_ssh, src, dest, file_system="/mnt/flash")
         log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
 
@@ -175,7 +175,7 @@ class EOSDevice(BaseDevice):
             dict: Key is ``sys`` with value being the image on the device.
         """
         image = self.show("show boot-config")["softwareImage"]
-        image = image.replace("flash:", "")
+        image = image.replace("flash:/", "")
         log.debug("Host %s: the boot options are %s", self.host, {"sys": image})
         return {"sys": image}
 
@@ -375,7 +375,7 @@ class EOSDevice(BaseDevice):
             file_copy = self._file_copy_instance(src, dest, file_system=file_system)
 
             try:
-                file_copy.enable_scp()
+                # file_copy.enable_scp()
                 file_copy.establish_scp_conn()
                 file_copy.transfer_file()
                 log.info("Host %s: File %s transferred successfully.", self.host, src)
