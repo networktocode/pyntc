@@ -12,3 +12,11 @@
 - [308](https://github.com/networktocode/pyntc/pull/308) Deprecated netmiko argument `delay_factor` in favor of `read_timeout` as per changes in Netmiko 4.0.
 
   Refer to this blog post for more info about changes in netmiko 4.0: https://pynet.twb-tech.com/blog/netmiko-read-timeout.html
+
+
+## [2.0.1] 09-2024
+### Added
+- [311](https://github.com/networktocode/pyntc/pull/311) Extend cisco_ios set_boot_options method.
+
+### Fixed
+- [312](https://github.com/networktocode/pyntc/pull/312) Fix Arista EOS file copy issues.
