@@ -74,10 +74,13 @@ class EOSDevice(BaseDevice):
         log.init(host=host)
 
     def _file_copy_instance(self, src, dest=None, file_system="/mnt/flash"):
+        # "flash:" is only valid locally, "/mnt/flash" is used externally
+        if file_system == "flash:":
+            file_system = "/mnt/flash"
         if dest is None:
             dest = os.path.basename(src)
 
-        file_copy = FileTransfer(self.native_ssh, src, dest, file_system="/mnt/flash")
+        file_copy = FileTransfer(self.native_ssh, src, dest, file_system=file_system)
         log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
 
