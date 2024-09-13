@@ -237,7 +237,7 @@ class TestEOSDevice(unittest.TestCase):
         mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("path/to/source_file")
 
-        mock_ft.assert_called_with(self.device.native_ssh, "path/to/source_file", "source_file", file_system="flash:")
+        mock_ft.assert_called_with(self.device.native_ssh, "path/to/source_file", "source_file", file_system="/mnt/flash")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
@@ -255,7 +255,7 @@ class TestEOSDevice(unittest.TestCase):
         mock_ft_instance.check_file_exists.side_effect = [False, True]
         self.device.file_copy("source_file", "dest_file")
 
-        mock_ft.assert_called_with(self.device.native_ssh, "source_file", "dest_file", file_system="flash:")
+        mock_ft.assert_called_with(self.device.native_ssh, "source_file", "dest_file", file_system="/mnt/flash")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
@@ -286,7 +286,7 @@ class TestEOSDevice(unittest.TestCase):
 
     def test_set_boot_options(self):
         results = [
-            [{"result": {"output": "flash:"}}],
+            [{"result": {"output": "/mnt/flash"}}],
             [{"result": {"output": "new_image.swi"}}],
             [{"result": {}}],
             [{"result": {"softwareImage": "flash:new_image.swi"}}],
