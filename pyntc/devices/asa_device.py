@@ -156,7 +156,7 @@ class ASADevice(BaseDevice):
         elif host == "peer":
             command = "failover exec mate show ip address"
 
-        show_ip_address = self.show(command)
+        show_ip_address = self.show(command)  # pylint: disable=possibly-used-before-assignment
         re_ip_addresses = RE_SHOW_IP_ADDRESS.findall(show_ip_address)
 
         results = {
@@ -188,7 +188,7 @@ class ASADevice(BaseDevice):
         elif host == "peer":
             command = "failover exec mate show ipv6 interface"
 
-        show_ipv6_interface = self.show(command)
+        show_ipv6_interface = self.show(command)  # pylint: disable=possibly-used-before-assignment
         show_ipv6_interface_lines: List[str] = show_ipv6_interface.strip().splitlines()
         first_line = show_ipv6_interface_lines.pop(0)
         interface: str = first_line.split()[0]

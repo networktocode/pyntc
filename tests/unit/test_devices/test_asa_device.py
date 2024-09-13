@@ -39,7 +39,7 @@ VERSION_DATA = {
 
 
 class TestASADevice:
-    def setup(self, api):
+    def setup_method(self, api):
         with mock.patch("pyntc.devices.asa_device.ConnectHandler") as api:
             if not getattr(self, "device", None):
                 self.device = ASADevice("host", "user", "password")
@@ -60,7 +60,7 @@ class TestASADevice:
             self.device.native = api
             self.count_setup += 1
 
-    def teardown(self):
+    def teardown_method(self):
         # Reset the mock so we don't have transient test effects
         self.device.native.reset_mock()
         self.count_teardown += 1
