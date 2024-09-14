@@ -1,4 +1,5 @@
 """Logging utilities for Pyntc."""
+
 import os
 import logging
 

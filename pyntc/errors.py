@@ -1,4 +1,5 @@
 """pyntc custom exceptions."""
+
 import warnings
 
 

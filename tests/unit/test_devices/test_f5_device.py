@@ -27,7 +27,7 @@ class Image:
 
 
 class TestF5Device:
-    def setup(self):
+    def setup_method(self):
         with mock.patch("pyntc.devices.f5_device.ManagementRoot") as big_ip:
             self.device = F5Device("host", "user", "password")
             self.device.api_handler = big_ip
@@ -40,7 +40,7 @@ class TestF5Device:
 
             self.count_setup += 1
 
-    def teardown(self):
+    def teardown_method(self):
         self.device.api_handler.reset_mock()
         self.count_teardown += 1
 

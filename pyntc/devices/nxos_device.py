@@ -1,4 +1,5 @@
 """Module for using an NXOS device over NX-API."""
+
 import os
 import re
 import time

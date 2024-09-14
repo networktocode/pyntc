@@ -1,4 +1,5 @@
 """Module for using a Cisco IOSXE WLC device over SSH."""
+
 import time
 
 from pyntc import log

@@ -898,7 +898,7 @@ def test_set_boot_options_pass_with_switch_all(mock_save, mock_boot_options, moc
 
 @mock.patch.object(IOSDevice, "_get_file_system")
 @mock.patch.object(IOSDevice, "config")
-@mock.patch.object(IOSDevice, "boot_options", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "boot_options", new_callable=lambda: {"sys": None})
 @mock.patch.object(IOSDevice, "save")
 def test_set_boot_options_raise_commanderror(mock_save, mock_boot_options, mock_config, mock_file_system, ios_show):
     device = ios_show(["dir_flash:.txt", "boot flash:c3560-advipservicesk9-mz.122-44.SE.bin"])

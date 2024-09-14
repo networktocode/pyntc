@@ -1,4 +1,5 @@
 """Module for using a Juniper junOS device."""
+
 import hashlib
 import os
 import re

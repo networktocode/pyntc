@@ -1,4 +1,5 @@
 """Module to use NTC_TEMPLATES."""
+
 import os
 import textfsm
 
