@@ -408,8 +408,8 @@ class JunosDevice(BaseDevice):
             self.cu.commit()
             return
 
-        temp_file = NamedTemporaryFile()  # pylint: disable=consider-using-with
-        temp_file.write(self.show("show config"))
+        temp_file = NamedTemporaryFile(mode="w")  # pylint: disable=consider-using-with
+        temp_file.write(self.startup_config)
         temp_file.flush()
 
         with SCP(self.native) as scp:
