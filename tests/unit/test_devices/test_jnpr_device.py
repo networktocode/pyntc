@@ -165,19 +165,19 @@ class TestJnprDevice(unittest.TestCase):
         self.device.show(commands)
         self.device.show.assert_called_with(commands)
 
+    @mock.patch("pyntc.devices.jnpr_device.JunosDevice.startup_config", new_callable=mock.PropertyMock)
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
-    def test_save(self, mock_scp):
-        self.device.show = mock.MagicMock()
-        self.device.show.return_value = b"file contents"
+    def test_save(self, mock_scp, mock_startup_config):
+        mock_startup_config.return_value = "file contents"
 
         result = self.device.save(filename="saved_config")
 
         self.assertTrue(result)
-        self.device.show.assert_called_with("show config")
+        mock_startup_config.assert_called_once_with()
 
     def test_file_copy_remote_exists(self):
-        temp_file = NamedTemporaryFile()
-        temp_file.write(b"file contents")
+        temp_file = NamedTemporaryFile(mode="w")
+        temp_file.write("file contents")
         temp_file.flush()
 
         local_checksum = "4a8ec4fa5f01b4ab1a0ab8cbccb709f0"
@@ -189,8 +189,8 @@ class TestJnprDevice(unittest.TestCase):
         self.device.fs.checksum.assert_called_with("dest")
 
     def test_file_copy_remote_exists_failure(self):
-        temp_file = NamedTemporaryFile()
-        temp_file.write(b"file contents")
+        temp_file = NamedTemporaryFile(mode="w")
+        temp_file.write("file contents")
         temp_file.flush()
 
         self.device.fs.checksum.return_value = "deadbeef"
@@ -202,8 +202,8 @@ class TestJnprDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.jnpr_device.SCP")
     def test_file_copy(self, mock_scp):
-        temp_file = NamedTemporaryFile()
-        temp_file.write(b"file contents")
+        temp_file = NamedTemporaryFile(mode="w")
+        temp_file.write("file contents")
         temp_file.flush()
 
         local_checksum = "4a8ec4fa5f01b4ab1a0ab8cbccb709f0"
@@ -241,7 +241,7 @@ class TestJnprDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.jnpr_device.SCP", autospec=True)
     def test_checkpoint(self, mock_scp):
         self.device.show = mock.MagicMock()
-        self.device.show.return_value = b"file contents"
+        self.device.show.return_value = "file contents"
         self.device.checkpoint("saved_config")
         self.device.show.assert_called_with("show config")
 
