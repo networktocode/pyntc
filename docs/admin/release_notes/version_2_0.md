@@ -20,3 +20,9 @@
 
 ### Fixed
 - [312](https://github.com/networktocode/pyntc/pull/312) Fix Arista EOS file copy issues.
+
+
+## [2.0.2] 01-2025
+
+### Fixed
+- [312](https://github.com/networktocode/pyntc/pull/318) Fix Juniper Junos save() method.
