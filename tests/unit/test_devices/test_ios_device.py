@@ -395,12 +395,14 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "show")
     @mock.patch.object(IOSDevice, "reboot")
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    @mock.patch.object(IOSDevice, "_raw_version_data")
     def test_install_os_not_enough_space(
-        self, mock_wait, mock_reboot, mock_show, mock_set_boot, mock_image_booted, mock_os_version
+        self, mock_raw_version_data, mock_wait, mock_reboot, mock_show, mock_set_boot, mock_image_booted, mock_os_version
     ):
+        mock_raw_version_data.return_value = DEVICE_FACTS
         mock_os_version.return_value = "17.4.3"
         mock_show.return_value = "FAILED: There is not enough free disk available to perform this operation on switch 1. At least 1276287 KB of free disk is required"
-        self.assertRaises(ios_module.OSInstallError, self.device.install_os(image_name=BOOT_IMAGE, install_mode=True))
+        self.assertRaises(ios_module.OSInstallError, self.device.install_os, image_name=BOOT_IMAGE, install_mode=True)
         mock_wait.assert_not_called()
         mock_reboot.assert_not_called()
 
