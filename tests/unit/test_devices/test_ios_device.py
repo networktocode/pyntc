@@ -1286,6 +1286,7 @@ def test_install_os_install_mode_with_retries(
     mock_has_reload_happened_recently.side_effect = [False, False, True]
     mock_image_booted.side_effect = [False, True]
     mock_sleep.return_value = None
+    mock_show.return_value = "show must go on"
     # Call the install os function
     actual = ios_device.install_os(image_name, install_mode=True)
 
