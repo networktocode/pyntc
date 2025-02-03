@@ -397,7 +397,14 @@ class TestIOSDevice(unittest.TestCase):
     @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
     @mock.patch.object(IOSDevice, "_raw_version_data")
     def test_install_os_not_enough_space(
-        self, mock_raw_version_data, mock_wait, mock_reboot, mock_show, mock_set_boot, mock_image_booted, mock_os_version
+        self,
+        mock_raw_version_data,
+        mock_wait,
+        mock_reboot,
+        mock_show,
+        mock_set_boot,
+        mock_image_booted,
+        mock_os_version,
     ):
         mock_raw_version_data.return_value = DEVICE_FACTS
         mock_os_version.return_value = "17.4.3"
