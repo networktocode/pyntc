@@ -718,7 +718,10 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher read_timeout and send it in
                     try:
-                        self.show(command, read_timeout=read_timeout)
+                        install_message = self.show(command, read_timeout=read_timeout)
+                        if install_message.startswith("FAILED:"):
+                            log.error("Host %s: OS install error for image %s", self.host, image_name)
+                            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
                     except CommandError:
