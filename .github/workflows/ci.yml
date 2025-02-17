@@ -17,7 +17,7 @@ env:
 
 jobs:
   black:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       INVOKE_LOCAL: "True"
     steps:
@@ -28,7 +28,7 @@ jobs:
       - name: "Linting: black"
         run: "poetry run invoke black"
   bandit:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       INVOKE_LOCAL: "True"
     steps:
@@ -41,7 +41,7 @@ jobs:
     needs:
       - "black"
   pydocstyle:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       INVOKE_LOCAL: "True"
     steps:
@@ -54,7 +54,7 @@ jobs:
     needs:
       - "black"
   flake8:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       INVOKE_LOCAL: "True"
     steps:
@@ -67,7 +67,7 @@ jobs:
     needs:
       - "black"
   yamllint:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       INVOKE_LOCAL: "True"
     steps:
@@ -84,7 +84,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.11"]
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       PYTHON_VER: "${{ matrix.python-version }}"
     steps:
@@ -115,7 +115,7 @@ jobs:
       - "flake8"
       - "yamllint"
   pylint:
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -156,7 +156,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.8", "3.11"]
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     env:
       PYTHON_VER: "${{ matrix.python-version }}"
     steps:
@@ -194,7 +194,7 @@ jobs:
       - "yamllint"
   publish_gh:
     name: "Publish to GitHub"
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     if: "startsWith(github.ref, 'refs/tags/v')"
     steps:
       - name: "Check out repository code"
@@ -223,7 +223,7 @@ jobs:
       - "pytest"
   publish_pypi:
     name: "Push Package to PyPI"
-    runs-on: "ubuntu-20.04"
+    runs-on: "ubuntu-24.04"
     if: "startsWith(github.ref, 'refs/tags/v')"
     steps:
       - name: "Check out repository code"
