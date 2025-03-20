@@ -4,7 +4,7 @@ import os
 import re
 import time
 
-from netmiko import ConnectHandler, FileTransfer, file_transfer
+from netmiko import ConnectHandler, file_transfer
 from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
@@ -13,13 +13,9 @@ from pyntc.errors import (
     CommandError,
     CommandListError,
     DeviceNotActiveError,
-    FileSystemNotFoundError,
     FileTransferError,
     NTCError,
-    NTCFileNotFoundError,
-    OSInstallError,
     RebootTimeoutError,
-    SocketClosedError,
 )
 from pyntc.utils import get_structured_data
 
