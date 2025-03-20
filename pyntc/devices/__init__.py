@@ -8,6 +8,7 @@ from .asa_device import ASADevice
 from .f5_device import F5Device
 from .aireos_device import AIREOSDevice
 from .iosxewlc_device import IOSXEWLCDevice
+from .ios_xr_device import IOSXRDevice
 
 
 supported_devices = {
@@ -19,4 +20,5 @@ supported_devices = {
     "cisco_nxos_nxapi": NXOSDevice,
     "cisco_aireos_ssh": AIREOSDevice,
     "cisco_iosxewlc_ssh": IOSXEWLCDevice,
+    "cisco_iosxr_ssh": IOSXRDevice,
 }
