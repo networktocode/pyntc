@@ -255,6 +255,7 @@ def ios_device():
             device.native = ch
             yield device
 
+
 @pytest.fixture
 def ios_xr_device():
     with mock.patch.object(IOSXRDevice, "confirm_is_active") as mock_confirm:
@@ -263,6 +264,7 @@ def ios_xr_device():
             device = IOSXRDevice("host", "user", "password")
             device.native = ch
             yield device
+
 
 @pytest.fixture
 def iosxewlc_device():

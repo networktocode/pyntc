@@ -14,14 +14,18 @@ DEVICE_FACTS = {
     "hostname": "rtr2811",
     "uptime": "2 weeks, 4 days, 18 hours, 59 minutes",
     "hardware": "2811",
-    "inventory_data": [{"sn":"123"},],
+    "inventory_data": [
+        {"sn": "123"},
+    ],
 }
 RECENT_UPTIME_DEVICE_FACTS = {
     "version": "7.5.2",
     "hostname": "rtr2811",
     "uptime": "9 minutes",
     "hardware": "2811",
-    "inventory_data": [{"sn":"123"},],
+    "inventory_data": [
+        {"sn": "123"},
+    ],
 }
 # SHOW_BOOT_VARIABLE = (
 #     "Current Boot Variables:\n"
@@ -107,7 +111,7 @@ class TestIOSXRDevice(unittest.TestCase):
             self.device.file_copy("source.txt", "dest.txt", overwrite=False)
 
     @mock.patch("pyntc.devices.ios_xr_device.file_transfer")
-    def test_file_copy_success(self,mock_ft):
+    def test_file_copy_success(self, mock_ft):
         mock_ft.return_value = {
             "file_exists": False,
             "file_transfered": True,
@@ -116,7 +120,7 @@ class TestIOSXRDevice(unittest.TestCase):
         self.device.file_copy("source.txt", "dest.txt")
 
     @mock.patch("pyntc.devices.ios_xr_device.file_transfer")
-    def test_file_copy_success_file_exists(self,mock_ft):
+    def test_file_copy_success_file_exists(self, mock_ft):
         mock_ft.return_value = {
             "file_exists": True,
             "file_transfered": True,
@@ -303,5 +307,3 @@ class TestIOSXRDevice(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-

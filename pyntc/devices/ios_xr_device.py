@@ -6,7 +6,7 @@ import time
 
 from netmiko import ConnectHandler, file_transfer
 from netmiko.exceptions import ReadTimeout
-
+from ntc_templates.parse import parse_output
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.errors import (
@@ -19,7 +19,6 @@ from pyntc.errors import (
 )
 from pyntc.utils import get_structured_data
 
-from ntc_templates.parse import parse_output
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 SHOW_DIR_RETRY_COUNT = 5
@@ -121,14 +120,14 @@ class IOSXRDevice(BaseDevice):
 
     def _interfaces_detailed_list(self):
         ip_int_br_out = self.show("show interfaces description")
-        ip_int_br_data = parse_output(platform = "cisco_xr", command = "show interfaces description", data =ip_int_br_out)
+        ip_int_br_data = parse_output(platform="cisco_xr", command="show interfaces description", data=ip_int_br_out)
         log.debug("Host %s: interfaces detailed list %s.", self.host, ip_int_br_data)
         return ip_int_br_data
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
-            version_data = parse_output(platform = "cisco_xr", command = "show version", data =show_version_out)[0]
+            version_data = parse_output(platform="cisco_xr", command="show version", data=show_version_out)[0]
         except IndexError:
             log.error("Host %s: index error.", self.host)
             return {}
@@ -139,7 +138,7 @@ class IOSXRDevice(BaseDevice):
     def _raw_inventory_data(self):
         inventory_out = self.show("admin show inventory")
         try:
-            inventory_data = parse_output(platform = "cisco_xr", command = "admin show inventory", data =inventory_out)
+            inventory_data = parse_output(platform="cisco_xr", command="admin show inventory", data=inventory_out)
         except IndexError:
             log.error("Host %s: index error.", self.host)
             return {}
@@ -149,7 +148,6 @@ class IOSXRDevice(BaseDevice):
 
     def _redundancy_check(self):
         """Determine the current redundancy state of the chassis."""
-
         try:
             show_redundancy = self.show("show redundancy")
         except CommandError:
@@ -161,19 +159,19 @@ class IOSXRDevice(BaseDevice):
         standby_pattern = r"ode (\S+) is in STANDBY role"
         no_valid_pattern = r"ode (\S+) has no valid partner"
         # Extracted redundancy information
-        current_node =  active_node = standby_node = None
-        if (node_match := re.search(node_pattern, show_redundancy)):
+        current_node = active_node = standby_node = None
+        if node_match := re.search(node_pattern, show_redundancy):
             current_node = node_match.group(1)
-        if (active_match := re.search(active_pattern, show_redundancy)):
+        if active_match := re.search(active_pattern, show_redundancy):
             active_node = active_match.group(1)
-        if (standby_match := re.search(standby_pattern, show_redundancy)):
+        if standby_match := re.search(standby_pattern, show_redundancy):
             standby_node = standby_match.group(1)
 
         # Logic to determine the redundancy state
         if current_node is None:
             # Means that the command failed somehow or CLI has changed
             raise ValueError("No valid redundancy information found")
-        if (no_valid_match := re.search(no_valid_pattern, show_redundancy)):
+        if no_valid_match := re.search(no_valid_pattern, show_redundancy):
             # No valid match means no stanby thefore standalone
             log.debug(f"no_valid_pattern matched for Node:{no_valid_match}")
             self._redundancy_mode = "STANDALONE"
@@ -183,7 +181,7 @@ class IOSXRDevice(BaseDevice):
         else:
             # Means that there is a bug - A valid match and no standby
             raise ValueError("No valid redundancy information found")
-        
+
         if active_node == current_node:
             self._redundancy_state = "active"
 
@@ -569,15 +567,14 @@ class IOSXRDevice(BaseDevice):
             FileTransferError: Error in transferring file.
             FileTransferError: Error if unable to verify file was transferred successfully.
         """
-        
         transfer_result = file_transfer(
             self.native,
             source_file=src,
             dest_file=dest,
             file_system=file_system,
-            direction='put',
+            direction="put",
             overwrite_file=overwrite,
-            verify_file=True
+            verify_file=True,
         )
         if transfer_result.get("file_exists"):
             if overwrite:
@@ -585,11 +582,20 @@ class IOSXRDevice(BaseDevice):
             else:
                 raise FileTransferError("File already exists on device.")
         if not transfer_result.get("file_transfered"):
-           raise FileTransferError("File transfer failed.")
+            raise FileTransferError("File transfer failed.")
         if not transfer_result.get("file_verified"):
-           raise FileTransferError("File transfer validation failed.")
+            raise FileTransferError("File transfer validation failed.")
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        """Copy Files when the remote file exists - Not Implemeted in this version.
+
+        Args:
+            src (_type_): _description_
+            dest (_type_, optional): _description_. Defaults to None.
+
+        Raises:
+            NotImplementedError: _description_
+        """
         raise NotImplementedError
 
     def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
@@ -691,7 +697,7 @@ class IOSXRDevice(BaseDevice):
             >>>
         """
         log.warning("Peer node not implemented in IOS-XR")
-        
+
         processor_redundancy_state = None
 
         log.debug("Host %s: Processor redundancy state %s.", self.host, processor_redundancy_state)
@@ -724,7 +730,7 @@ class IOSXRDevice(BaseDevice):
                 log.info("Host %s: Device rebooted.", self.host)
                 log.info("Hit expected exception during reload: %s", expected_exception.__class__)
             if wait_for_reload:
-                time.sleep(35) # XR7 has 30 second delay in rebooting
+                time.sleep(35)  # XR7 has 30 second delay in rebooting
                 self._wait_for_device_reboot(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
@@ -746,7 +752,7 @@ class IOSXRDevice(BaseDevice):
             >>>
         """
         self._redundancy_check()
-        #log.debug("Host %s: Redundancy mode is %s.", self.host, self.redundancy_mode)
+        # log.debug("Host %s: Redundancy mode is %s.", self.host, self.redundancy_mode)
         return self._redundancy_mode
 
     @property
@@ -780,7 +786,7 @@ class IOSXRDevice(BaseDevice):
             self.native.config_mode("configure")
             output = self.native.send_command(f"load disk0:/{rollback_to}")
             if "Loading" not in output:
-               raise CommandError(f"load disk0:/{rollback_to}", f"{output}")
+                raise CommandError(f"load disk0:/{rollback_to}", f"{output}")
             self.native.commit()
             log.info("Host %s: Rollback to %s.", self.host, rollback_to)
         except CommandError:
@@ -801,7 +807,7 @@ class IOSXRDevice(BaseDevice):
         return self.show("show running-config")
 
     def backup_to_disk(self, path="disk0:/backup-config"):
-        """backup running configuration to disk.
+        """Backup running configuration to disk.
 
         Args:
             path (str, optional): Path of file to save running configuration. Defaults to disk0 and file "backup-config".
@@ -833,7 +839,7 @@ class IOSXRDevice(BaseDevice):
             str: Startup configuration.
         """
         return self.running_config
-    
+
     def show(self, command, expect_string=None, **netmiko_args):
         """Run command on device.
 

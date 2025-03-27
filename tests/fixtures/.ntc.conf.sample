@@ -13,3 +13,8 @@ transport: http
 username: user
 password: pass
 secret: cisco
+
+[cisco_iosxr_ssh:test_ios_xr]
+host: 192.168.43.4
+username: user
+password: pass
