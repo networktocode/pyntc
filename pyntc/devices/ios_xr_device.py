@@ -535,7 +535,6 @@ class IOSXRDevice(BaseDevice):
             str: OS version on device.
         """
         version_data = self._raw_version_data()
-        print(f" Gary's Version Data is {version_data}")
         if self._os_version is None:
             self._os_version = version_data["version"]
 
@@ -577,15 +576,18 @@ class IOSXRDevice(BaseDevice):
             dest_file=dest,
             file_system=file_system,
             direction='put',
-            overwrite_file=overwrite
+            overwrite_file=overwrite,
+            verify_file=True
         )
         if transfer_result.get("file_exists"):
             if overwrite:
                 log.info(f"File {src} already exists on device. Overwriting.")
             else:
                 raise FileTransferError("File already exists on device.")
-        if transfer_result.get("file_transfered"):
+        if not transfer_result.get("file_transfered"):
            raise FileTransferError("File transfer failed.")
+        if not transfer_result.get("file_verified"):
+           raise FileTransferError("File transfer validation failed.")
 
     def file_copy_remote_exists(self, src, dest=None, **kwargs):
         raise NotImplementedError
@@ -604,7 +606,7 @@ class IOSXRDevice(BaseDevice):
         Returns:
             bool: False if no install is needed, true if the install completes successfully
         """
-    raise NotImplementedError
+        raise NotImplementedError
 
     def is_active(self):
         """
@@ -775,12 +777,18 @@ class IOSXRDevice(BaseDevice):
             RollbackError: Error if unable to rollback to configuration.
         """
         try:
-            self.native.send_config_set(f"load disk0:/{rollback_to}")
+            self.native.config_mode("configure")
+            output = self.native.send_command(f"load disk0:/{rollback_to}")
+            if "Loading" not in output:
+               raise CommandError(f"load disk0:/{rollback_to}", f"{output}")
             self.native.commit()
             log.info("Host %s: Rollback to %s.", self.host, rollback_to)
         except CommandError:
             log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, rollback_to)
             raise RollbackError(f"Rollback unsuccessful. {rollback_to} may not exist.")
+        except Exception as e:
+            log.error("Host %s: Rollback failed.", self.host)
+            raise RollbackError(f"Rollback failed. Error: {e}")
 
     @property
     def running_config(self):
