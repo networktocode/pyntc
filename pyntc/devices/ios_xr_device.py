@@ -32,6 +32,7 @@ class IOSXRDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(  # nosec
         self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
@@ -173,7 +174,7 @@ class IOSXRDevice(BaseDevice):
             raise ValueError("No valid redundancy information found")
         if no_valid_match := re.search(no_valid_pattern, show_redundancy):
             # No valid match means no stanby thefore standalone
-            log.debug(f"no_valid_pattern matched for Node:{no_valid_match}")
+            log.debug("no_valid_pattern matched for Node: %s", no_valid_match)
             self._redundancy_mode = "STANDALONE"
         elif standby_node is not None:
             # Presence of a standby node means redundancy
@@ -578,7 +579,7 @@ class IOSXRDevice(BaseDevice):
         )
         if transfer_result.get("file_exists"):
             if overwrite:
-                log.info(f"File {src} already exists on device. Overwriting.")
+                log.info("File %s already exists on device. Overwriting.", src)
             else:
                 raise FileTransferError("File already exists on device.")
         if not transfer_result.get("file_transfered"):
