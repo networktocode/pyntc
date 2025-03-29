@@ -2,7 +2,6 @@
 
 import os
 import sys
-from distutils.util import strtobool
 
 from invoke import task
 
@@ -13,7 +12,8 @@ except ImportError:
 
 
 def is_truthy(arg):
-    """Convert "truthy" strings into Booleans.
+    """
+    Convert "truthy" strings into Booleans.
 
     Examples:
         >>> is_truthy('yes')
@@ -25,14 +25,20 @@ def is_truthy(arg):
     """
     if isinstance(arg, bool):
         return arg
-    return bool(strtobool(arg))
+
+    val = str(arg).lower()
+    if val in ("y", "yes", "t", "true", "on", "1"):
+        return True
+    if val in ("n", "no", "f", "false", "off", "0"):
+        return False
+    raise ValueError(f"Invalid truthy value: `{arg}`")
 
 
 PYPROJECT_CONFIG = toml.load("pyproject.toml")
 TOOL_CONFIG = PYPROJECT_CONFIG["tool"]["poetry"]
 
 # Can be set to a separate Python version to be used for launching or building image
-PYTHON_VER = os.getenv("PYTHON_VER", "3.8")
+PYTHON_VER = os.getenv("PYTHON_VER", "3.11")
 # Name of the docker image/image
 IMAGE_NAME = os.getenv("IMAGE_NAME", TOOL_CONFIG["name"])
 # Tag for the image
