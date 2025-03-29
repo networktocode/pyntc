@@ -43,7 +43,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(  # nosec
         self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403

@@ -41,7 +41,7 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):  # noqa: D403
         """PyNTC Device implementation for Arista EOS.
 
