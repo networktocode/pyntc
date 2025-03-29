@@ -69,7 +69,8 @@ class AIREOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    def __init__(  # nosec  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(  # nosec
         self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
         """
@@ -423,7 +424,7 @@ class AIREOSDevice(BaseDevice):
             }
             for ap in ap_boot_options
         }
-        log.debug("Host %s: Boot options: {boot_options_by_ap}", self.host, boot_options_by_ap)
+        log.debug("Host %s: Boot options: %s", self.host, boot_options_by_ap)
         return boot_options_by_ap
 
     @property
@@ -852,6 +853,7 @@ class AIREOSDevice(BaseDevice):
         """
         raise NotImplementedError
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def file_copy(
         self,
         username,
@@ -1199,7 +1201,7 @@ class AIREOSDevice(BaseDevice):
         """
         high_availability = self.show("show redundancy summary")
         ha_mode = re.search(r"^\s*Redundancy\s+Mode\s*=\s*(.+?)\s*$", high_availability, re.M)
-        log.debug("Host %s: Redundancy mode: {ha_mode.group(1).lower()}", self.host, ha_mode.group(1).lower())
+        log.debug("Host %s: Redundancy mode: %s", self.host, ha_mode.group(1).lower())
         return ha_mode.group(1).lower()
 
     @property

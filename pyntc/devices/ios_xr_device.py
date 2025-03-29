@@ -4,41 +4,30 @@ import os
 import re
 import time
 
-from netmiko import ConnectHandler, FileTransfer
+from netmiko import ConnectHandler, file_transfer
 from netmiko.exceptions import ReadTimeout
-
+from ntc_templates.parse import parse_output
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
 from pyntc.errors import (
     CommandError,
     CommandListError,
     DeviceNotActiveError,
-    FileSystemNotFoundError,
     FileTransferError,
     NTCError,
-    NTCFileNotFoundError,
-    OSInstallError,
     RebootTimeoutError,
-    SocketClosedError,
 )
 from pyntc.utils import get_structured_data
 
+
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
-RE_SHOW_REDUNDANCY = re.compile(
-    r"^Redundant\s+System\s+Information\s*:\s*\n^-.+-\s*\n(?P<info>.+?)\n"
-    r"^Current\s+Processor\s+Information\s*:\s*\n^-.+-\s*\n(?P<self>.+?$)\n"
-    r"(?:Peer\s+Processor\s+Information\s*:\s*\n-.+-\s*\n(?P<other>.+)|Peer\s+\(slot:\s+\S+\).+)",
-    re.DOTALL | re.MULTILINE,
-)
-RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*=\s*(.+?)\s*$", re.M)
-RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
 INSTALL_MODE_FILE_NAME = "packages.conf"
 
 
 @fix_docs
-class IOSDevice(BaseDevice):
-    """Cisco IOS Device Implementation."""
+class IOSXRDevice(BaseDevice):
+    """Cisco IOSXR Device Implementation."""
 
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
@@ -48,7 +37,7 @@ class IOSDevice(BaseDevice):
         self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
         """
-        PyNTC Device implementation for Cisco IOS.
+        PyNTC Device implementation for Cisco IOSXR.
 
         Args:
             host (str): The address of the network device.
@@ -58,7 +47,7 @@ class IOSDevice(BaseDevice):
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
         """
-        super().__init__(host, username, password, device_type="cisco_ios_ssh")
+        super().__init__(host, username, password, device_type="cisco_iosxr_ssh")
 
         self.native = None
         self.secret = secret
@@ -79,7 +68,7 @@ class IOSDevice(BaseDevice):
             CommandError: When ``command_response`` reports an error in sending ``command``.
 
         Example:
-            >>> device = IOSDevice(**connection_args)
+            >>> device = IOSXRDevice(**connection_args)
             >>> command = "show version"
             >>> command_response = "output from show version"
             >>> device._check_command_output_for_errors(command, command_response)
@@ -102,40 +91,13 @@ class IOSDevice(BaseDevice):
         self.native.config_mode()
         log.debug("Host %s: Device entered config mode.", self.host)
 
-    def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+    def _file_copy_instance(self, src, dest=None, file_system="disk0:"):
         if dest is None:
             dest = os.path.basename(src)
 
-        file_copy = FileTransfer(self.native, src, dest, file_system=file_system)
+        file_copy = file_transfer(self.native, src, dest, file_system=file_system)
         log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
-
-    def _get_file_system(self):
-        """Determine the default file system or directory for device.
-
-        Returns:
-            str: The name of the default file system or directory for the device.
-
-        Raises:
-            FileSystemNotFound: When the module is unable to determine the default file system.
-        """
-        # Set variables to control while loop
-        counter = 0
-
-        # Attempt to gather file system
-        while counter < SHOW_DIR_RETRY_COUNT:
-            counter += 1
-            raw_data = self.show("dir")
-            try:
-                file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
-                log.debug("Host %s: File system %s.", self.host, file_system)
-                return file_system
-            except AttributeError:
-                # Allow to continue through the loop
-                continue
-
-        log.error("host %s: File system not found with command 'dir'.")
-        raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     # Get the version of the image that is booted into on the device
     def _image_booted(self, image_name, image_pattern=r".*\.(\d+\.\d+\.\w+)\.SPA.+", **vendor_specifics):
@@ -158,25 +120,77 @@ class IOSDevice(BaseDevice):
         return False
 
     def _interfaces_detailed_list(self):
-        ip_int_br_out = self.show("show ip int br")
-        ip_int_br_data = get_structured_data("cisco_ios_show_ip_int_brief.template", ip_int_br_out)
-
+        ip_int_br_out = self.show("show interfaces description")
+        ip_int_br_data = parse_output(platform="cisco_xr", command="show interfaces description", data=ip_int_br_out)
         log.debug("Host %s: interfaces detailed list %s.", self.host, ip_int_br_data)
         return ip_int_br_data
-
-    def _is_catalyst(self):
-        return self.model.startswith("WS-")
 
     def _raw_version_data(self):
         show_version_out = self.show("show version")
         try:
-            version_data = get_structured_data("cisco_ios_show_version.template", show_version_out)[0]
+            version_data = parse_output(platform="cisco_xr", command="show version", data=show_version_out)[0]
         except IndexError:
             log.error("Host %s: index error.", self.host)
             return {}
 
         log.debug("Host %s: version data %s.", self.host, version_data)
         return version_data
+
+    def _raw_inventory_data(self):
+        inventory_out = self.show("admin show inventory")
+        try:
+            inventory_data = parse_output(platform="cisco_xr", command="admin show inventory", data=inventory_out)
+        except IndexError:
+            log.error("Host %s: index error.", self.host)
+            return {}
+
+        log.debug("Host %s: platform data %s.", self.host, inventory_data)
+        return inventory_data
+
+    def _redundancy_check(self):
+        """Determine the current redundancy state of the chassis."""
+        try:
+            show_redundancy = self.show("show redundancy")
+        except CommandError:
+            log.error("Host %s: Command error for command 'show redundancy'.", self.host)
+            return "n/a"
+        # Regular Expression patterns
+        node_pattern = r"Redundancy information for node (\S+):"
+        active_pattern = r"ode (\S+) is in ACTIVE role"
+        standby_pattern = r"ode (\S+) is in STANDBY role"
+        no_valid_pattern = r"ode (\S+) has no valid partner"
+        # Extracted redundancy information
+        current_node = active_node = standby_node = None
+        if node_match := re.search(node_pattern, show_redundancy):
+            current_node = node_match.group(1)
+        if active_match := re.search(active_pattern, show_redundancy):
+            active_node = active_match.group(1)
+        if standby_match := re.search(standby_pattern, show_redundancy):
+            standby_node = standby_match.group(1)
+
+        # Logic to determine the redundancy state
+        if current_node is None:
+            # Means that the command failed somehow or CLI has changed
+            raise ValueError("No valid redundancy information found")
+        if no_valid_match := re.search(no_valid_pattern, show_redundancy):
+            # No valid match means no stanby thefore standalone
+            log.debug("no_valid_pattern matched for Node: %s", no_valid_match)
+            self._redundancy_mode = "STANDALONE"
+        elif standby_node is not None:
+            # Presence of a standby node means redundancy
+            self._redundancy_mode = "REDUNDANT"
+        else:
+            # Means that there is a bug - A valid match and no standby
+            raise ValueError("No valid redundancy information found")
+
+        if active_node == current_node:
+            self._redundancy_state = "active"
+
+        elif standby_node == current_node:
+            self._redundancy_state = "standby"
+        else:
+            # Means that there is a bug - A valid match and no standby
+            raise ValueError("No valid redundancy information found")
 
     def _send_command(self, command, expect_string=None, **kwargs):
         # Set command args and assign the command to command_string argument
@@ -250,15 +264,6 @@ class IOSDevice(BaseDevice):
             return False
         return True
 
-    def backup_running_config(self, filename):
-        """Backup running configuration to filename specified.
-
-        Args:
-            filename (str): Filename to save running configuration to.
-        """
-        with open(filename, "w", encoding="utf-8") as file_name:
-            file_name.write(self.running_config)
-
     @property
     def boot_options(self):
         """Get current boot image.
@@ -266,38 +271,7 @@ class IOSDevice(BaseDevice):
         Returns:
             dict: Key ``sys`` with value being the current boot image.
         """
-        boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
-        try:
-            # Try show bootvar command first
-            show_boot_out = self.show("show bootvar")
-            show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
-        except CommandError:
-            try:
-                # Try show boot if previous command was invalid
-                show_boot_out = self.show("show boot")
-                show_boot_out = show_boot_out.split("Boot Variables on next reload", 1)[-1]
-            except CommandError:
-                # Default to running config value
-                show_boot_out = self.show("show run | inc boot")
-                boot_path_regex = r"boot\ssystem\s\S+(?::+|\s)(\S+.bin)"
-                log.error("Host %s: Command error 'show boot'.", self.host)
-
-        match = re.search(boot_path_regex, show_boot_out, re.MULTILINE)
-        if match:
-            boot_path_tuple = match.groups()
-            # The regex match will return two values: the boot value and None
-            # The return order will depend on which side of the `or` is matched in the regex
-            boot_path = [value for value in boot_path_tuple if value is not None][0]
-            file_system = self._get_file_system()
-            boot_image = boot_path.replace(file_system, "")
-            boot_image = boot_image.replace("/", "")
-            boot_image = boot_image.split(",")[0]
-            boot_image = boot_image.split(";")[0]
-        else:
-            boot_image = None
-
-        log.debug("Host %s: the boot options are {dict(sys=boot_image)}", self.host)
-        return {"sys": boot_image}
+        raise NotImplementedError
 
     def checkpoint(self, checkpoint_file):
         """Create checkpoint file.
@@ -306,7 +280,7 @@ class IOSDevice(BaseDevice):
             checkpoint_file (str): Name of checkpoint file.
         """
         log.debug("Host %s: checkpoint is %s.", self.host, checkpoint_file)
-        self.save(filename=checkpoint_file)
+        self.backup_to_disk(path=f"disk0:/{checkpoint_file}")
 
     def close(self):
         """Disconnect from device."""
@@ -502,9 +476,10 @@ class IOSDevice(BaseDevice):
         Returns:
             str: Hostname of device.
         """
-        version_data = self._raw_version_data()
+        match = re.search(r"hostname\s+(\S+)", self.show("show run hostname"))
+        hostname = match.group(1) if match else None
         if self._hostname is None:
-            self._hostname = version_data["hostname"]
+            self._hostname = hostname
 
         log.debug("Host %s: Hostname {self._hostname}", self.host)
         return self._hostname
@@ -518,27 +493,10 @@ class IOSDevice(BaseDevice):
             list: List of interfaces on device.
         """
         if self._interfaces is None:
-            self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
+            self._interfaces = list(x["interface"] for x in self._interfaces_detailed_list())
 
         log.debug("Host %s: Interfaces %s", self.host, self._interfaces)
         return self._interfaces
-
-    @property
-    def vlans(self):
-        """
-        Get list of VLANs on device.
-
-        Returns:
-            list: List of VLANs on device.
-        """
-        if self._vlans is None:
-            if self.model.startswith("WS"):
-                self._vlans = list(str(x["vlan_id"]) for x in self._show_vlan())
-            else:
-                self._vlans = []
-
-        log.debug("Host %s: Vlans %s", self.host, self._vlans)
-        return self._vlans
 
     @property
     def fqdn(self):
@@ -561,6 +519,7 @@ class IOSDevice(BaseDevice):
             str: Device model.
         """
         version_data = self._raw_version_data()
+
         if self._model is None:
             self._model = version_data["hardware"]
 
@@ -588,28 +547,15 @@ class IOSDevice(BaseDevice):
         Returns:
             str: Serial number of device.
         """
-        version_data = self._raw_version_data()
+        inventory_data = self._raw_inventory_data()
+        log.debug("Host %s: Inventory data", inventory_data)
         if self._serial_number is None:
-            self._serial_number = version_data["serial"]
+            self._serial_number = inventory_data[0]["sn"]
 
         log.debug("Host %s: Serial number %s", self.host, self._serial_number)
         return self._serial_number
 
-    @property
-    def config_register(self):
-        """Get config register of device.
-
-        Returns:
-            str: Config register.
-        """
-        # ios-specific facts
-        version_data = self._raw_version_data()
-        self._config_register = version_data["config_register"]
-
-        log.debug("Host %s: Config register %s", self.host, self._config_register)
-        return self._config_register
-
-    def file_copy(self, src, dest=None, file_system=None):
+    def file_copy(self, src, dest=None, file_system="disk0:", overwrite=False):
         """Copy file to device.
 
         Args:
@@ -622,66 +568,36 @@ class IOSDevice(BaseDevice):
             FileTransferError: Error in transferring file.
             FileTransferError: Error if unable to verify file was transferred successfully.
         """
-        self.enable()
-        if file_system is None:
-            file_system = self._get_file_system()
+        transfer_result = file_transfer(
+            self.native,
+            source_file=src,
+            dest_file=dest,
+            file_system=file_system,
+            direction="put",
+            overwrite_file=overwrite,
+            verify_file=True,
+        )
+        if transfer_result.get("file_exists"):
+            if overwrite:
+                log.info("File %s already exists on device. Overwriting.", src)
+            else:
+                raise FileTransferError("File already exists on device.")
+        if not transfer_result.get("file_transfered"):
+            raise FileTransferError("File transfer failed.")
+        if not transfer_result.get("file_verified"):
+            raise FileTransferError("File transfer validation failed.")
 
-        if not self.file_copy_remote_exists(src, dest, file_system):
-            file_copy = self._file_copy_instance(src, dest, file_system=file_system)
-            #        if not self.fc.verify_space_available():
-            #            raise FileTransferError('Not enough space available.')
-
-            try:
-                file_copy.enable_scp()
-                file_copy.establish_scp_conn()
-                file_copy.transfer_file()
-                log.info("Host %s: File %s transferred successfully.", self.host, src)
-            except OSError as error:
-                # compare hashes
-                if not file_copy.compare_md5():
-                    log.error("Host %s: Socket closed error %s", self.host, error)
-                    raise SocketClosedError(message=error)
-                log.error("Host %s: OS error  %s", self.host, error)
-            except:  # noqa E722
-                log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
-                raise FileTransferError
-            finally:
-                file_copy.close_scp_chan()
-
-            # Ensure connection to device is still open after long transfers
-            self.open()
-
-            if not self.file_copy_remote_exists(src, dest, file_system):
-                log.error(
-                    "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
-                    self.host,
-                    FileTransferError.default_message,
-                )
-                raise FileTransferError
-
-    # TODO: Make this an internal method since exposing file_copy should be sufficient
-    def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        """Copy file to device.
+    def file_copy_remote_exists(self, src, dest=None, **kwargs):
+        """Copy Files when the remote file exists - Not Implemeted in this version.
 
         Args:
-            src (str): Source of file.
-            dest (str, optional): Destination name for file. Defaults to None.
-            file_system (str, optional): File system to copy file to. Defaults to None.
+            src (_type_): _description_
+            dest (_type_, optional): _description_. Defaults to None.
 
-        Returns:
-            bool: True if file copied succesfully and md5 hashes match. Otherwise, false.
+        Raises:
+            NotImplementedError: _description_
         """
-        self.enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        file_copy = self._file_copy_instance(src, dest, file_system=file_system)
-        if file_copy.check_file_exists() and file_copy.compare_md5():
-            log.debug("Host %s: File %s already exists on remote.", self.host, src)
-            return True
-
-        log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
-        return False
+        raise NotImplementedError
 
     def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
@@ -697,59 +613,7 @@ class IOSDevice(BaseDevice):
         Returns:
             bool: False if no install is needed, true if the install completes successfully
         """
-        timeout = vendor_specifics.get("timeout", 3600)
-        if not self._image_booted(image_name):
-            if install_mode:
-                # Change boot statement to be boot system <flash>:packages.conf
-                self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
-
-                # Check for OS Version specific upgrade path
-                # https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-2/release_notes/ol-17-2-9300.html
-                os_version = self.os_version
-                if "16.5.1a" in os_version or "16.6.1" in os_version:
-                    # Run install command and reboot device
-                    command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                    self.show(command, read_timeout=read_timeout)
-                    self.reboot()
-
-                else:
-                    # Run install command (which reboots the device)
-                    command = (
-                        f"install add file {self._get_file_system()}{image_name} activate commit prompt-level none"
-                    )
-                    # Set a higher read_timeout and send it in
-                    try:
-                        install_message = self.show(command, read_timeout=read_timeout)
-                        if install_message.startswith("FAILED:"):
-                            log.error("Host %s: OS install error for image %s", self.host, image_name)
-                            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-                    except IOError:
-                        log.error("Host %s: IO error for image %s", self.host, image_name)
-                    except CommandError:
-                        command = f"request platform software package install switch all file {self._get_file_system()}{image_name} auto-copy"
-                        self.show(command, read_timeout=read_timeout)
-                        self.reboot()
-            else:
-                self.set_boot_options(image_name, **vendor_specifics)
-                self.reboot()
-
-            # Wait for the reboot to finish
-            # TODO: This was moved into reboot method as well, should cause issues running again, but should be removed in future versions.
-            self._wait_for_device_reboot(timeout=timeout)
-
-            # Set FastCLI back to originally set when using install mode
-            if install_mode:
-                image_name = INSTALL_MODE_FILE_NAME
-            # Verify the OS level
-            if not self._image_booted(image_name):
-                log.error("Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-
-            log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
-            return True
-
-        log.info("Host %s: OS image %s not installed.", self.host, image_name)
-        return False
+        raise NotImplementedError
 
     def is_active(self):
         """
@@ -759,11 +623,12 @@ class IOSDevice(BaseDevice):
             bool: True if the processor is active or does not support HA, else False.
 
         Example:
-            >>> device = IOSDevice(**connection_args)
+            >>> device = IOSXRDevice(**connection_args)
             >>> device.is_active()
             True
             >>>
         """
+        self._redundancy_check()
         return self.redundancy_state in self.active_redundancy_states
 
     def open(self, confirm_active=True):
@@ -780,7 +645,7 @@ class IOSDevice(BaseDevice):
             DeviceNotActiveError: When ``confirm_active`` is True, and the device high availability state is not active.
 
         Example:
-            >>> device = IOSDevice(**connection_args)
+            >>> device = IOSXRDevice(**connection_args)
             >>> device.open()
             raised DeviceNotActiveError:
             host1 is not the active device.
@@ -801,7 +666,7 @@ class IOSDevice(BaseDevice):
 
         if not self.connected:
             self.native = ConnectHandler(
-                device_type="cisco_ios",
+                device_type="cisco_xr",
                 ip=self.host,
                 username=self.username,
                 password=self.password,
@@ -832,18 +697,9 @@ class IOSDevice(BaseDevice):
             'standby hot'
             >>>
         """
-        try:
-            show_redundancy = self.show("show redundancy")
-        except CommandError:
-            log.error("Host %s: Command error for command 'show redundancy'.", self.host)
-            return None
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
-        processor_redundancy_info = re_show_redundancy.group("other")
-        if processor_redundancy_info is not None:
-            re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
-            processor_redundancy_state = re_redundancy_state.group(1).lower()
-        else:
-            processor_redundancy_state = "disabled"
+        log.warning("Peer node not implemented in IOS-XR")
+
+        processor_redundancy_state = None
 
         log.debug("Host %s: Processor redundancy state %s.", self.host, processor_redundancy_state)
         return processor_redundancy_state
@@ -870,12 +726,13 @@ class IOSDevice(BaseDevice):
 
             try:
                 self.native.send_command_timing("\n", read_timeout=10)
+                self.native.send_command_timing("\n", read_timeout=10)
             except ReadTimeout as expected_exception:
                 log.info("Host %s: Device rebooted.", self.host)
                 log.info("Hit expected exception during reload: %s", expected_exception.__class__)
             if wait_for_reload:
-                time.sleep(10)
-                self._wait_for_device_reboot()
+                time.sleep(35)  # XR7 has 30 second delay in rebooting
+                self._wait_for_device_reboot(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             log.error(err)
             log.error(err.__class__)
@@ -895,17 +752,9 @@ class IOSDevice(BaseDevice):
             'stateful switchover'
             >>>
         """
-        try:
-            show_redundancy = self.show("show redundancy")
-        except CommandError:
-            log.error("Host %s: Command error for command 'show redundancy'.", self.host)
-            return "n/a"
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
-        redundancy_info = re_show_redundancy.group("info")
-        re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
-        redundancy_mode = re_redundancy_mode.group(1).lower()
-        log.debug("Host %s: Redundancy mode is %s.", self.host, redundancy_mode)
-        return redundancy_mode
+        self._redundancy_check()
+        # log.debug("Host %s: Redundancy mode is %s.", self.host, self.redundancy_mode)
+        return self._redundancy_mode
 
     @property
     def redundancy_state(self):
@@ -922,34 +771,31 @@ class IOSDevice(BaseDevice):
             'active'
             >>>
         """
-        try:
-            show_redundancy = self.show("show redundancy")
-        except CommandError:
-            log.error("Host %s: Command error for command 'show redundancy'.", self.host)
-            return None
-        re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
-        processor_redundancy_info = re_show_redundancy.group("self")
-        re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
-        processor_redundancy_state = re_redundancy_state.group(1).lower()
-
-        log.debug("Host %s: Redundancy state is %s.", self.host, processor_redundancy_state)
-        return processor_redundancy_state
+        self._redundancy_check()
+        return self._redundancy_state
 
     def rollback(self, rollback_to):
-        """Rollback configuration to file on flash.
+        """Rollback configuration to file on disk0:.
 
         Args:
-            rollback_to (sEtr): Name of the file to rollback to.
+            rollback_to (str): Name of the file to rollback to.
 
         Raises:
             RollbackError: Error if unable to rollback to configuration.
         """
         try:
-            self.show(f"configure replace {self._get_file_system()}{rollback_to} force")
+            self.native.config_mode("configure")
+            output = self.native.send_command(f"load disk0:/{rollback_to}")
+            if "Loading" not in output:
+                raise CommandError(f"load disk0:/{rollback_to}", f"{output}")
+            self.native.commit()
             log.info("Host %s: Rollback to %s.", self.host, rollback_to)
         except CommandError:
             log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, rollback_to)
             raise RollbackError(f"Rollback unsuccessful. {rollback_to} may not exist.")
+        except Exception as e:
+            log.error("Host %s: Rollback failed.", self.host)
+            raise RollbackError(f"Rollback failed. Error: {e}")
 
     @property
     def running_config(self):
@@ -961,16 +807,16 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Show running config.", self.host)
         return self.show("show running-config")
 
-    def save(self, filename="startup-config"):
-        """Save running configuration.
+    def backup_to_disk(self, path="disk0:/backup-config"):
+        """Backup running configuration to disk.
 
         Args:
-            filename (str, optional): Name of file to save running configuration. Defaults to "startup-config".
+            path (str, optional): Path of file to save running configuration. Defaults to disk0 and file "backup-config".
 
         Returns:
             bool: True if save is succesfull.
         """
-        command = f"copy running-config {filename}"
+        command = f"copy running-config {path}"
         # Changed to send_command_timing to not require a direct prompt return.
         self.native.send_command_timing(command)
         # If the user has enabled 'file prompt quiet' which dose not require any confirmation or feedback.
@@ -979,79 +825,21 @@ class IOSDevice(BaseDevice):
         self.native.send_command_timing("\n", read_timeout=200)
         # Confirm that we have a valid prompt again before returning.
         self.native.find_prompt()
-        log.debug("Host %s: Copy running config with name %s.", self.host, filename)
+        log.debug("Host %s: Copy running config to path  %s.", self.host, path)
         return True
 
-    def set_boot_options(self, image_name, **vendor_specifics):
-        """Set specified image as boot image.
+    def backup_running_config(self, filename=None):
+        """Save a local copy of the running config."""
+        raise NotImplementedError
 
-        Args:
-            image_name (str): Name of image to set as boot variable.
+    @property
+    def startup_config(self):
+        """Get startup configuration.
 
-        Raises:
-            NTCFileNotFoundError: Error if file is not found on device.
-            CommandError: Error if setting new image as boot variable fails.
+        Returns:
+            str: Startup configuration.
         """
-        file_system = vendor_specifics.get("file_system")
-        command = "boot system flash"
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        file_system_files = self.show(f"dir {file_system}")
-        if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
-            log.error("Host %s: File not found error for image %s.", self.host, image_name)
-            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
-        if image_name == "packages.conf":
-            command = f"boot system {file_system}{image_name}"
-            self.config(["no boot system", command])
-        else:
-            show_boot_sys = self.show("show run | include boot system")
-            # Sample:
-            # boot system flash:/c3560-advipservicesk9-mz.122-44.SE.bin
-            # boot system flash0:/c3560-advipservicesk9-mz.122-44.SE.bin
-            if re.search(r"boot\ssystem\s\S+\:\/\S+", show_boot_sys):
-                command = f"boot system {file_system}/{image_name}"
-                self.config(["no boot system", command])
-            elif re.search(r"boot\ssystem\s\S+\:\S+", show_boot_sys):
-                command = f"boot system {file_system}{image_name}"
-                self.config(["no boot system", command])
-            elif re.search(
-                r"boot\ssystem\s\S+\s\S+:\S+", show_boot_sys
-            ):  # TODO: Update to CommandError when deprecating config_list
-                command = f"boot system flash {file_system}{image_name}"
-                self.config(["no boot system", command])
-            elif re.search(
-                r"boot\ssystem\sflash\s\S+", show_boot_sys
-            ):  # TODO: Update to CommandError when deprecating config_list
-                file_system = file_system.replace(":", "")
-                command = f"boot system {file_system} {image_name}"
-                self.config(["no boot system", command])
-            # Sample:
-            # boot system switch all flash:cat3k_caa-universalk9.SPA.03.07.01.E.152-3.E1.bin
-            elif re.search(
-                r"boot\ssystem\s\S+\s\S+\s\S+:\S+", show_boot_sys
-            ):  # TODO: Update to CommandError when deprecating config_list
-                command = f"boot system switch all {file_system}{image_name}"
-                self.config(["no boot system", command])
-
-            # If boot system is not found in the running config, but it exists in show boot or show bootvar
-            elif self.boot_options["sys"]:
-                command = f"boot system {file_system}/{image_name}"
-                self.config(command)
-            else:
-                raise CommandError(
-                    command=command,
-                    message=f"Unable to determine the boot system configuration syntax. Current config is {show_boot_sys}",
-                )
-
-        self.save()
-        new_boot_options = self.boot_options["sys"]
-        if new_boot_options != image_name:
-            log.error("Host %s: Setting boot command did not yield expected results", self.host)
-            raise CommandError(
-                command=command,
-                message=f"Setting boot command did not yield expected results, found {new_boot_options}",
-            )
+        return self.running_config
 
     def show(self, command, expect_string=None, **netmiko_args):
         """Run command on device.
@@ -1076,16 +864,6 @@ class IOSDevice(BaseDevice):
 
             return responses
         return self._send_command(command, expect_string=expect_string, **netmiko_args)
-
-    @property
-    def startup_config(self):
-        """Get startup configuration.
-
-        Returns:
-            str: Startup configuration from device.
-        """
-        log.debug("Host %s: Successfully executed command 'show startup-config'.", self.host)
-        return self.show("show startup-config")
 
 
 class RebootSignal(NTCError):  # noqa: D101

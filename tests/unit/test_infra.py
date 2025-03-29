@@ -4,7 +4,7 @@ import pytest
 
 from pyntc import ntc_device, ntc_device_by_name
 from pyntc.errors import UnsupportedDeviceError, ConfFileNotFoundError
-from pyntc.devices import EOSDevice, NXOSDevice, IOSDevice
+from pyntc.devices import EOSDevice, NXOSDevice, IOSDevice, IOSXRDevice
 
 
 BAD_DEVICE_TYPE = "238nzsvkn3981"
@@ -15,9 +15,10 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 @mock.patch("pyntc.devices.f5_device.ManagementRoot")
 @mock.patch("pyntc.devices.asa_device.ASADevice.open")
 @mock.patch("pyntc.devices.ios_device.IOSDevice.open")
+@mock.patch("pyntc.devices.ios_xr_device.IOSXRDevice.open")
 @mock.patch("pyntc.devices.jnpr_device.JunosNativeSW")
 @mock.patch("pyntc.devices.jnpr_device.JunosDevice.open")
-def test_device_creation(j_open, j_nsw, i_open, a_open, f_mr, air_open, device_type, expected):
+def test_device_creation(j_open, j_nsw, xr_open, i_open, a_open, f_mr, air_open, device_type, expected):
     device = ntc_device(device_type, "host", "user", "pass")
     assert isinstance(device, expected)
 
@@ -29,7 +30,8 @@ def test_unsupported_device():
 
 @mock.patch("pyntc.devices.ios_device.IOSDevice.open")
 @mock.patch("pyntc.devices.jnpr_device.JunosDevice.open")
-def test_device_by_name(j_open, i_open):
+@mock.patch("pyntc.devices.ios_xr_device.IOSXRDevice.open")
+def test_device_by_name(xr_open, j_open, i_open):
     config_filepath = os.path.join(FIXTURES_DIR, ".ntc.conf.sample")
 
     nxos_device = ntc_device_by_name("test_nxos", filename=config_filepath)
@@ -40,6 +42,9 @@ def test_device_by_name(j_open, i_open):
 
     ios_device = ntc_device_by_name("test_ios", filename=config_filepath)
     assert isinstance(ios_device, IOSDevice)
+
+    ios_xr_device = ntc_device_by_name("test_ios_xr", filename=config_filepath)
+    assert isinstance(ios_xr_device, IOSXRDevice)
 
 
 def test_no_conf_file():

@@ -2,7 +2,7 @@ import os
 from unittest import mock
 
 import pytest
-from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice, supported_devices
+from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXRDevice, IOSXEWLCDevice, supported_devices
 
 
 def get_side_effects(mock_path, side_effects):
@@ -252,6 +252,16 @@ def ios_device():
         mock_confirm.return_value = True
         with mock.patch("pyntc.devices.ios_device.ConnectHandler") as ch:
             device = IOSDevice("host", "user", "password")
+            device.native = ch
+            yield device
+
+
+@pytest.fixture
+def ios_xr_device():
+    with mock.patch.object(IOSXRDevice, "confirm_is_active") as mock_confirm:
+        mock_confirm.return_value = True
+        with mock.patch("pyntc.devices.ios_xr_device.ConnectHandler") as ch:
+            device = IOSXRDevice("host", "user", "password")
             device.native = ch
             yield device
 
