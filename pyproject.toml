@@ -13,10 +13,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
-    # "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 include = [
     "LICENSE",
@@ -24,7 +24,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.11"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
@@ -69,7 +69,7 @@ file = "README.md"
 
 [tool.black]
 line-length = 120
-target-version = ['py37']
+target-version = ['py311']
 include = '\.pyi?$'
 exclude = '''
 (

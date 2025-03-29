@@ -162,7 +162,7 @@ class ASADevice(BaseDevice):
         results = {
             interface: [IPv4Interface(f"{address}/{netmask}")] for interface, address, netmask in re_ip_addresses
         }
-        log.debug("Host %s: ip interfaces %s", self.host)
+        log.debug("Host %s: ip interfaces %s", self.host, results)
         return results
 
     def _get_ipv6_addresses(self, host: str) -> Dict[str, List[IPv6Address]]:
@@ -693,7 +693,7 @@ class ASADevice(BaseDevice):
         """
         protocol = f"ipv{self.ip_address.version}"
 
-        log.debug("Host %s: IP protocol for paramiko is %s.", self.host)
+        log.debug("Host %s: IP protocol for paramiko is %s.", self.host, protocol)
         return protocol
 
     def is_active(self):

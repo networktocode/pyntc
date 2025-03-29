@@ -350,7 +350,8 @@ class NXOSDevice(BaseDevice):
             >>
         """
         if kwargs.get("confirm"):
-            log.warning("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
+            log.warning("Passing 'confirm' to reboot method is deprecated.")
+            raise DeprecationWarning("Passing 'confirm' to reboot method is deprecated.")
         try:
             self.native.show_list(["terminal dont-ask", "reload"])
             # The native reboot is not always properly disabling confirmation. Above is more consistent.
