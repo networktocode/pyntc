@@ -195,6 +195,7 @@ jobs:
   publish_gh:
     name: "Publish to GitHub"
     runs-on: "ubuntu-24.04"
+    # yamllint disable-line rule:quoted-strings
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: "Check out repository code"
@@ -224,6 +225,7 @@ jobs:
   publish_pypi:
     name: "Push Package to PyPI"
     runs-on: "ubuntu-24.04"
+    # yamllint disable-line rule:quoted-strings
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: "Check out repository code"

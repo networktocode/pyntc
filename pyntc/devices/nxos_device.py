@@ -28,7 +28,7 @@ class NXOSDevice(BaseDevice):
 
     vendor = "cisco"
 
-    # pylint: disable=too-many-positional-arguments
+    # pylint: disable=too-many-arguments
     def __init__(
         self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs
     ):  # noqa: D403

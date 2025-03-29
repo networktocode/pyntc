@@ -38,7 +38,7 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
-    # pylint: disable=too-many-positional-arguments
+    # pylint: disable=too-many-arguments
     def __init__(self, host: str, username: str, password: str, secret="", port=None, **kwargs):  # nosec
         """
         Pyntc Device constructor for Cisco ASA.
