@@ -28,6 +28,7 @@ class F5Device(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
+            kwargs (dict): Additional keyword arguments.
         """
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
@@ -80,7 +81,7 @@ class F5Device(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            md5_check = hashlib.md5()  # nosec
+            md5_check = hashlib.md5()  # nosec # noqa: S324
             with open(filepath, "rb") as file_name:
                 buf = file_name.read(blocksize)
                 while buf:
@@ -184,6 +185,7 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Name of image.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Returns:
             bool: True if booted volume is equal to active volume. Otherwise, false.
@@ -299,12 +301,12 @@ class F5Device(BaseDevice):
                 headers["Content-Range"] = content_range
                 # pylint: disable=missing-timeout
                 # TODO Add timeout to requests.post, missing timeout can cause the method to hang indefinitely
-                requests.post(
+                requests.post(  # noqa: S113
                     upload_uri,
                     auth=(self.username, self.password),
                     data=payload,
                     headers=headers,
-                    verify=False,  # nosec
+                    verify=False,  # noqa: S501
                 )
 
                 start += len(payload)
@@ -566,6 +568,7 @@ class F5Device(BaseDevice):
         Args:
             src (str): Source of file.
             dest (str, optional): Destination to save file. Defaults to None.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             FileTransferError: Error in verifying if file existed before transfer.
@@ -590,6 +593,7 @@ class F5Device(BaseDevice):
         Args:
             src (str): Source of file.
             dest (str, optional): Destination to save file. Defaults to None.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             NotImplementedError: Destination must be ``/shared/images``.
@@ -655,6 +659,7 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Image name.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Raises:
             NTCFileNotFoundError: Error is image is not found on device.
@@ -688,6 +693,7 @@ class F5Device(BaseDevice):
         Args:
             volume (str, optional): Active volume to reboot. Defaults to None.
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             RuntimeError: If device is unreachable after timeout period, raise an error.
@@ -747,6 +753,7 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Name of image.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Raises:
             NTCFileNotFoundError: Error if file is not found on device.

@@ -1,8 +1,8 @@
 """Module to use NTC_TEMPLATES."""
 
 import os
-import textfsm
 
+import textfsm
 
 TEMPLATE_PATH_ENV_VAR = "NTC_TEMPLATES"
 

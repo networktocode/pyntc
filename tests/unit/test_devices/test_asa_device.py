@@ -4,8 +4,8 @@ from unittest import mock
 
 import pytest
 
-from pyntc.devices import asa_device as asa_module
 from pyntc.devices import ASADevice
+from pyntc.devices import asa_device as asa_module
 
 from .device_mocks.asa import send_command
 

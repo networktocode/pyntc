@@ -45,6 +45,8 @@ class IOSXEWLCDevice(IOSDevice):
 
         Args:
             image_name (str): Name of the IOS image to boot into
+            read_timeout (int): Timeout for reading the output of the command.
+            vendor_specifics (dict): Vendor specific options.
 
         Raises:
             OSInstallError: Unable to install OS Error type
@@ -90,6 +92,7 @@ class IOSXEWLCDevice(IOSDevice):
         Args:
             command (str): Command to be ran.
             expect_string (str, optional): Expected string from command output. Defaults to None.
+            netmiko_args (dict): Additional arguments to pass to Netmiko's send_command method.
 
         Returns:
             str: Output of command.

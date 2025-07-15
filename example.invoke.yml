@@ -1,0 +1,7 @@
+---
+pyntc:
+  python_ver: "3.11"
+  # local: false
+  # image_name: "pyntc"
+  # image_ver: "latest"
+  # pwd: "."

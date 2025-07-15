@@ -10,7 +10,7 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import (
     CommandError,
@@ -23,7 +23,6 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import convert_list_by_key
-
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
@@ -52,6 +51,7 @@ class EOSDevice(BaseDevice):
             transport (str): The protocol to communicate with the device. Defaults to http.
             port (int): The port to use to establish the connection. Defaults to None.
             timeout(int): Timeout value used for connection with the device. Defaults to None.
+            kwargs: Additional keyword arguments.
         """
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
@@ -426,6 +426,7 @@ class EOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image name to be installed.
+            vendor_specifics (dict): Vendor specific options for installing OS, such as timeout.
 
         Raises:
             OSInstallError: Error in installing new OS.
@@ -477,6 +478,7 @@ class EOSDevice(BaseDevice):
 
         Args:
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs: Additional keyword arguments, such as confirm.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -536,6 +538,7 @@ class EOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image file.
+            vendor_specifics (dict): Vendor specific options, such as file_system.
 
         Raises:
             NTCFileNotFoundError: File not found on device.

@@ -5,7 +5,7 @@ about: Propose a new feature or enhancement
 ---
 
 ### Environment
-* pyntc version:  <!-- Example: 1.0.0 -->
+* pyntc version:  <!-- Example: 2.0.2 -->
 
 <!--
     Describe in detail the new functionality you are proposing.

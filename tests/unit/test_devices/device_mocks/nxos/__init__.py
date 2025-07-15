@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 from pynxos.errors import CLIError
 
 CURRNENT_DIR = os.path.dirname(os.path.realpath(__file__))

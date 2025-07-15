@@ -33,6 +33,8 @@ class JunosDevice(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
+            args: Additional positional arguments to pass to the device.
+            kwargs: Additional keyword arguments to pass to the device.
         """
         super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
 
@@ -47,7 +49,7 @@ class JunosDevice(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            md5_hash = hashlib.md5()  # nosec
+            md5_hash = hashlib.md5()  # noqa: S324
             with open(filepath, "rb") as file_name:
                 buf = file_name.read(blocksize)
                 while buf:
@@ -146,6 +148,7 @@ class JunosDevice(BaseDevice):
 
         Args:
             commands (str, list): String with single command, or list with multiple commands.
+            format_type (str, optional): Format type for the command. Defaults to "set".
 
         Raises:
             ConfigLoadError: Issue with loading the command.
@@ -290,6 +293,7 @@ class JunosDevice(BaseDevice):
         Args:
             src (str): Name of file to be transferred.
             dest (str, optional): Path on device to save file. Defaults to None.
+            kwargs: Additional keyword arguments to pass to the `file_copy` command.
 
         Raises:
             FileTransferError: Raised when unable to verify file was transferred succesfully.
@@ -313,6 +317,7 @@ class JunosDevice(BaseDevice):
         Args:
             src (str): Source of local file.
             dest (str, optional): Path of file on device. Defaults to None.
+            kwargs: Additional keyword arguments to pass to the `file_copy` command.
 
         Returns:
             bool: True if hashes of the file match. Otherwise, false.
@@ -331,6 +336,7 @@ class JunosDevice(BaseDevice):
 
         Args:
             image_name (str): Name of image.
+            vendor_specifics (dict): Vendor specific options.
 
         Raises:
             NotImplementedError: Method currently not implemented.
@@ -348,6 +354,7 @@ class JunosDevice(BaseDevice):
 
         Args:
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs: Additional keyword arguments to pass to the `reboot` command.
 
         Example:
             >>> device = JunosDevice(**connection_args)

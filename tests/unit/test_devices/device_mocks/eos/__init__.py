@@ -1,7 +1,8 @@
-import os
 import json
-from pyeapi.eapilib import CommandError as EOSCommandError
+import os
 import re
+
+from pyeapi.eapilib import CommandError as EOSCommandError
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 

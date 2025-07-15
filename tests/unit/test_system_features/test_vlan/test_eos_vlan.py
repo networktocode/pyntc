@@ -1,9 +1,11 @@
-import mock
 import unittest
 
-from .mocks.eos import get, getall
-from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
+import mock
+
 from pyntc.devices.system_features.vlans.base_vlans import VlanNotInRangeError
+from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
+
+from .mocks.eos import get, getall
 
 
 class TestEOSVlan(unittest.TestCase):

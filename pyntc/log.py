@@ -1,10 +1,8 @@
 """Logging utilities for Pyntc."""
 
-import os
 import logging
-
+import os
 from logging.handlers import RotatingFileHandler
-
 
 APP = "pyntc"
 """ Application name, used as the logging root. """
