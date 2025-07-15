@@ -67,7 +67,7 @@ jobs:
         with:
           poetry-version: "1.8.5"
       - name: "Checking: poetry lock file"
-        run: "poetry run invoke lock --check"
+        run: "poetry lock --check"
   yamllint:
     runs-on: "ubuntu-24.04"
     env:
