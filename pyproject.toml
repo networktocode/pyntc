@@ -13,10 +13,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
-    # "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 include = [
     "LICENSE",
@@ -24,7 +24,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
@@ -69,7 +69,7 @@ file = "README.md"
 
 [tool.black]
 line-length = 120
-target-version = ['py37']
+target-version = ['py39']
 include = '\.pyi?$'
 exclude = '''
 (
@@ -97,24 +97,24 @@ ignore=[".venv", "tests"]
 # No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.
 no-docstring-rgx="^(_|test_|Meta$)"
 
-[tool.pylint.messages_control]
+[tool.pylint."messages control"]
 # Line length is enforced by Black, so pylint doesn't need to check it.
 # Pylint and Black disagree about how to format multi-line arrays; Black wins.
-disable = """,
-    abstract-method,
-    arguments-differ,
-    arguments-renamed,
-    attribute-defined-outside-init,
-    consider-iterating-dictionary,
-    duplicate-code,
-    inconsistent-return-statements,
-    line-too-long,
-    raise-missing-from,
-    too-many-arguments,
-    too-many-instance-attributes,
-    too-many-lines,
-    too-many-public-methods,
-    """
+disable = [
+    "abstract-method",
+    "arguments-differ",
+    "arguments-renamed",
+    "attribute-defined-outside-init",
+    "consider-iterating-dictionary",
+    "duplicate-code",
+    "inconsistent-return-statements",
+    "line-too-long",
+    "raise-missing-from",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-lines",
+    "too-many-public-methods"
+    ]
 
 [tool.pylint.miscellaneous]
 # Don't flag TODO as a failure, let us commit with things that still need to be done in the code

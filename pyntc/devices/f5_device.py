@@ -607,7 +607,7 @@ class F5Device(BaseDevice):
         if not self._image_match(image_name=file_basename, checksum=local_md5sum):
             log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
             return False
-        log.debug("Host %s: File %s already exists on remote.", self.host)
+        log.debug("Host %s: File %s already exists on remote.", self.host, src)
         return True
 
     def image_installed(self, image_name, volume):
