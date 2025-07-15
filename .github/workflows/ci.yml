@@ -129,8 +129,6 @@ jobs:
         run: "docker image ls"
       - name: "Linting: Pylint"
         run: "poetry run invoke pylint"
-    needs:
-      - "build"
   pytest:
     strategy:
       fail-fast: true
