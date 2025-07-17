@@ -1,1 +1,1 @@
-"""Initialization for Juniper table package."""
+"""Initialization for tables."""

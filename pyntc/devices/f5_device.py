@@ -81,7 +81,7 @@ class F5Device(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            md5_check = hashlib.md5()  # nosec # noqa: S324
+            md5_check = hashlib.md5()  # noqa: S324
             with open(filepath, "rb") as file_name:
                 buf = file_name.read(blocksize)
                 while buf:

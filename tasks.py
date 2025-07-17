@@ -29,7 +29,7 @@ def is_truthy(arg):
 
 
 # Use pyinvoke configuration for default values, see http://docs.pyinvoke.org/en/stable/concepts/configuration.html
-# Variables may be overwritten in invoke.yml or by the environment variables INVOKE_PYNAUTOBOT_xxx
+# Variables may be overwritten in invoke.yml or by the environment variables INVOKE_PYNTC_xxx
 namespace = Collection("pyntc")
 namespace.configure(
     {
