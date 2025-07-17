@@ -3,5 +3,5 @@ pyntc:
   python_ver: "3.11"
   # local: false
   # image_name: "pyntc"
-  # image_ver: "latest"
+  # image_ver: "2.0.2"
   # pwd: "."
