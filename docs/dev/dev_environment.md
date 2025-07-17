@@ -32,7 +32,6 @@ Once you have Poetry and Docker installed you can run the following commands (in
 ```shell
 poetry shell
 poetry install
-cp development/creds.example.env development/creds.env
 invoke build
 invoke start
 ```
@@ -51,7 +50,7 @@ Poetry is used in lieu of the "virtualenv" commands and is leveraged in both env
 The `pyproject.toml` file outlines all of the relevant dependencies for the project:
 
 - `tool.poetry.dependencies` - the main list of dependencies.
-- `tool.poetry.dev-dependencies` - development dependencies, to facilitate linting, testing, and documentation building.
+- `tool.poetry.group.dev.dependencies` - development dependencies, to facilitate linting, testing, and documentation building.
 
 The `poetry shell` command is used to create and enable a virtual environment managed by Poetry, so all commands ran going forward are executed within the virtual environment. This is similar to running the `source venv/bin/activate` command with virtualenvs. To install project dependencies in the virtual environment, you should run `poetry install` - this will install **both** project and development dependencies.
 
@@ -82,21 +81,18 @@ Each command can be executed with `invoke <command>`. Each command also has its 
 ### Utility
 
 ```
-  cli                Enter the image to perform troubleshooting or dev work.
-  clean-container    Remove stopped containers that source for image `pyntc:`
+  cli                       Enter the image to perform troubleshooting or dev work.
+  clean                     Remove stopped containers that source for image `pyntc:`
+  generate-release-notes    Generate Release Notes using Towncrier.
 ```
 
 ### Testing
 
 ```
-  bandit             Run bandit to validate basic static code security analysis.
-  black              Run black to check that Python files adhere to its style standards.
-  coverage           Run the coverage report against pytest.
-  flake8             Run flake8 to check that Python files adhere to its style standards.
-  mypy               Run mypy to validate typing-hints.
-  pylint             Run pylint code analysis.
-  pydocstyle         Run pydocstyle to validate docstring formatting adheres to NTC defined standards.
-  pytest             Run pytest for the specified name and Python version.
-  tests              Run all tests for the specified name and Python version.
-  yamllint           Run yamllint to validate formatting adheres to NTC defined YAML standards.
+  autoformat (a)    Run code autoformatting.
+  pylint            Run pylint for the specified name and Python version.
+  ruff              Run ruff to perform code formatting and/or linting.
+  pytest            Run pytest for the specified name and Python version.
+  tests             Run all tests for the specified name and Python version.
+  yamllint          Run yamllint to validate formatting adheres to NTC defined YAML standards.
 ```

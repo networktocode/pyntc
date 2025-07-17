@@ -11,7 +11,7 @@ Option 2: Manually install via Poetry.
 ```
 git clone https://github.com/networktocode/pyntc.git
 cd pyntc
-pip install poetry
+curl -sSL https://install.python-poetry.org | python3 -
 poetry install
 ```
 
