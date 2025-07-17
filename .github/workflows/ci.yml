@@ -13,8 +13,8 @@ on:  # yamllint disable-line rule:truthy rule:comments
   pull_request: ~
 
 env:
-  INVOKE_PYNTC_INVOKE_PYNTC_IMAGE_NAME: "pyntc"
-  INVOKE_PYNTC_INVOKE_PYNTC_IMAGE_VER: "latest"
+  INVOKE_PYNTC_IMAGE_NAME: "pyntc"
+  INVOKE_PYNTC_IMAGE_VER: "latest"
 
 jobs:
   ruff-format:
