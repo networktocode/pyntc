@@ -83,6 +83,7 @@ class AIREOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            **kwargs: Additional keyword arguments for device customization.
         """
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
@@ -127,6 +128,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             command (str): The command that was sent to the device.
+            command_response (str): The response received from the device.
 
         Raises:
             CommandError: When ``command_response`` reports an error in sending ``command``.
@@ -138,7 +140,6 @@ class AIREOSDevice(BaseDevice):
             >>> device._check_command_output_for_errors(command, command_response)
             >>> command = "invalid command"
             >>> command_response = "Incorrect Usage: invalid command"
-            >>> device._check_command_output_for_errors(command, command_resposne)
             CommandError: ...
             >>>
         """
@@ -158,6 +159,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             image_name (str): The version to check if image is booted.
+            vendor_specifics (dict): Additional vendor-specific arguments.
 
         Returns:
             bool: True if ``image_name`` is the current boot version, else False.
@@ -185,9 +187,7 @@ class AIREOSDevice(BaseDevice):
         Args:
             command (str): The command to send to the device.
             expect_string (str): The expected prompt after running the command.
-
-        Kwargs:
-            Any argument supported by Netmiko's ``send_command_timing`` method.
+            kwargs (dict): Any argument supported by Netmiko's ``send_command_timing`` method.
 
         Returns:
             str: The response from the device after issuing the ``command``.
@@ -277,7 +277,7 @@ class AIREOSDevice(BaseDevice):
             }
             >>>
 
-        TODO:
+        Todo:
             Change timeout to be a multiplier for number of APs attached to controller
         """
         start = time.time()
@@ -298,7 +298,7 @@ class AIREOSDevice(BaseDevice):
                     failed,
                 )
                 raise FileTransferError(
-                    "Failed transferring image to AP\n" f"Unsupported: {unsupported}\n" f"Failed: {failed}\n"
+                    f"Failed transferring image to AP\nUnsupported: {unsupported}\nFailed: {failed}\n"
                 )
             elapsed_time = time.time() - start
             if elapsed_time > timeout:
@@ -314,9 +314,7 @@ class AIREOSDevice(BaseDevice):
                 )
 
             log.debug(
-                "Host %s:"
-                "End of waiting time for AP image to be transferred to all devices:\n"
-                "Total: %s\nDownloaded: %s",
+                "Host %s:End of waiting time for AP image to be transferred to all devices:\nTotal: %s\nDownloaded: %s",
                 self.host,
                 ap_count,
                 downloaded,
@@ -517,7 +515,7 @@ class AIREOSDevice(BaseDevice):
         Create a checkpoint file of the current config.
 
         Args:
-            checkpoint_file (str):  Saves a checkpoint file with the name provided to the function.
+            filename (str): Saves a checkpoint file with the name provided to the function.
 
         Raises:
             NotImplementedError: Function currently not implemented
@@ -872,9 +870,9 @@ class AIREOSDevice(BaseDevice):
             password (str): The password to authenticate with the ``server``.
             server (str): The address of the file server.
             filepath (str): The full path to the file on the ``server``.
-            protocol (str): The transfer protocol to use to transfer the file.
-            filetype (str): The type of file per aireos definitions.
-            read_timeout (int): The Netmiko read_timeout to wait for device to complete transfer.
+            protocol (str, optional): The transfer protocol to use to transfer the file. Defaults to "sftp".
+            filetype (str, optional): The type of file per aireos definitions. Defaults to "code".
+            read_timeout (int, optional): The Netmiko read_timeout to wait for device to complete transfer. Defaults to 1000.
 
         Returns:
             bool: True when the file was transferred, False when the file is deemed to already be on the device.
@@ -957,6 +955,7 @@ class AIREOSDevice(BaseDevice):
             src (str): The path to the file to be copied to the device.
             dest (str, optional): The name to use for storing the file on the device.
                 Defaults to use the name of the ``src`` file.
+            kwargs: Any additional arguments supported by Netmiko's ``file_copy`` method.
 
         Raises:
             NotImplementedError: Function currently not implemented.
@@ -982,6 +981,7 @@ class AIREOSDevice(BaseDevice):
             save_config (bool): Whether the config should be saved to the device before reboot.
             disable_wlans (str|list): Which WLANs to disable/enable before/after upgrade. Default is None.
                 To disable all WLANs, pass `"all"`. To disable select WLANs, pass a list of WLAN IDs.
+            vendor_specifics (dict): Any vendor specific arguments to pass to the install method.
 
         Returns:
             bool: True when the install is successful, False when the version is deemed to already be running.
@@ -1145,6 +1145,7 @@ class AIREOSDevice(BaseDevice):
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
             controller (str): Which controller(s) to reboot (only applies to HA pairs).
             save_config (bool): Whether the configuration should be saved before reload.
+            kwargs: Additional arguments that are not used, but are accepted for backwards compatibility.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -1272,6 +1273,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             image_name (str): The version to boot into on next reload.
+            **vendor_specifics: Additional vendor-specific arguments (unused).
 
         Raises:
             NTCFileNotFoundError: When the version is not listed in ``boot_options``.
@@ -1280,16 +1282,16 @@ class AIREOSDevice(BaseDevice):
             >>> device = AIREOSDevice(**connection_args)
             >>> device.boot_options
             {
-                'backup': '8.8.125.0',
-                'primary': '8.9.100.0',
-                'sys': '8.9.100.0'
+            'backup': '8.8.125.0',
+            'primary': '8.9.100.0',
+            'sys': '8.9.100.0'
             }
             >>> device.set_boot_options("8.8.125.0")
             >>> device.boot_options
             {
-                'backup': '8.8.125.0',
-                'primary': '8.9.100.0',
-                'sys': '8.8.125.0'
+            'backup': '8.8.125.0',
+            'primary': '8.9.100.0',
+            'sys': '8.8.125.0'
             }
         """
         if self.boot_options["primary"] == image_name:

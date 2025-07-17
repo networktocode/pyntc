@@ -4,7 +4,7 @@ import os
 import re
 import time
 from collections import Counter
-from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
+from ipaddress import IPv4Address, IPv4Interface, IPv6Address, IPv6Interface, ip_address
 from typing import Dict, Iterable, List, Optional, Union
 
 from netmiko import ConnectHandler
@@ -49,6 +49,7 @@ class ASADevice(BaseDevice):
             password (str): The password to authenticate to the device.
             secret (str, optional): The password to escalate privilege on the device. Defaults to 22.
             port (int, optional): Port used to establish connection. Defaults to 22.
+            kwargs (dict): Additional keyword arguments to pass to the Netmiko connection handler.
         """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
@@ -399,7 +400,7 @@ class ASADevice(BaseDevice):
         """Send configuration commands to a device.
 
         Args:
-            commands (str, list): String with single command, or list with multiple commands.
+            command (str, list): String with single command, or list with multiple commands.
 
         Raises:
             CommandListError: Message stating which command failed and the response from the device.
@@ -587,6 +588,7 @@ class ASADevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image to be installed.
+            vendor_specifics (dict): Vendor specific arguments to pass to the install process.
 
         Raises:
             OSInstallError: Message stating the end device could not boot into the new image.
@@ -862,6 +864,7 @@ class ASADevice(BaseDevice):
 
         Args:
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional arguments to pass to the reboot method.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -1045,6 +1048,7 @@ class ASADevice(BaseDevice):
 
         Args:
             image_name (str): AName of image.
+            vendor_specifics (dict): Vendor specific arguments to pass to the set_boot_options process.
 
         Raises:
             NTCFileNotFoundError: File not found on device.

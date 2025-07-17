@@ -5,8 +5,8 @@ import unittest
 import mock
 import pytest
 
-from pyntc.devices import ios_device as ios_module
 from pyntc.devices import IOSDevice
+from pyntc.devices import ios_device as ios_module
 from pyntc.devices.base_device import RollbackError
 
 from .device_mocks.ios import send_command, send_command_expect

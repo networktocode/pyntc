@@ -1,32 +1,26 @@
-ARG PYTHON_VER
+ARG PYTHON_VER=3.11
 
 FROM python:${PYTHON_VER}-slim
 
-# Install all OS package upgrades and dependencies needed to run Nautobot in production
-# hadolint ignore=DL3005,DL3008,DL3013
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install --no-install-recommends -y git mime-support curl libxml2 libmariadb3 openssl && \
-    apt-get autoremove -y && \
-    apt-get clean all && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip --no-cache-dir install --upgrade pip wheel
-
-RUN pip install --upgrade pip
-
-RUN curl -sSL https://install.python-poetry.org -o /tmp/install-poetry.py && \
-    python /tmp/install-poetry.py --version 1.6.0 && \
-    rm -f /tmp/install-poetry.py
+# Install Poetry manually via its installer script;
+# if we instead used "pip install poetry" it would install its own dependencies globally which may conflict with ours.
+# https://python-poetry.org/docs/master/#installing-with-the-official-installer
+# This also makes it so that Poetry will *not* be included in the "final" image since it's not installed to /usr/local/
+ARG POETRY_HOME=/opt/poetry
+ARG POETRY_INSTALLER_PARALLEL=true
+ARG POETRY_VERSION=1.8.2
+ARG POETRY_VIRTUALENVS_CREATE=false
+ADD https://install.python-poetry.org /tmp/install-poetry.py
+RUN python /tmp/install-poetry.py
 
 # Add poetry install location to the $PATH
-ENV PATH="${PATH}:/root/.local/bin"
+ENV PATH="${POETRY_HOME}/bin:${PATH}"
+
+RUN poetry config virtualenvs.create ${POETRY_VIRTUALENVS_CREATE} && \
+    poetry config installer.parallel "${POETRY_INSTALLER_PARALLEL}"
 
 WORKDIR /local
-COPY pyproject.toml poetry.lock /local/
+COPY . /local
 
-RUN poetry config virtualenvs.create false \
-  && poetry install --no-interaction --no-ansi
-
-# Do not break dependency caching before installing project
-COPY . .
-RUN poetry install
+# Install the app
+RUN poetry install --with dev

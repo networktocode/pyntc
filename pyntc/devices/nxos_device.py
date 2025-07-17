@@ -7,11 +7,10 @@ import time
 from pynxos.device import Device as NXOSNative
 from pynxos.errors import CLIError
 from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
-
-from requests.exceptions import ReadTimeout, ConnectTimeout
+from requests.exceptions import ConnectTimeout, ReadTimeout
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -29,9 +28,7 @@ class NXOSDevice(BaseDevice):
     vendor = "cisco"
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def __init__(
-        self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs
-    ):  # noqa: D403
+    def __init__(self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs):  # noqa: D403
         """PyNTC Device implementation for Cisco IOS.
 
         Args:
@@ -308,6 +305,7 @@ class NXOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image file to upgrade the device to.
+            vendor_specifics (dict): Vendor specific options.
 
         Raises:
             OSInstallError: Error if boot option is not set to new image.
@@ -341,6 +339,7 @@ class NXOSDevice(BaseDevice):
 
         Args:
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs: Additional arguments to pass to reboot method.
 
         Raises:
             RebootTimerError: When the device is still unreachable after the timeout period.
@@ -409,6 +408,7 @@ class NXOSDevice(BaseDevice):
         Args:
             image_name (str): Main system image file.
             kickstart (str, optional): Kickstart filename. Defaults to None.
+            vendor_specifics (dict): Vendor specific options.
 
         Raises:
             NTCFileNotFoundError: Error if either image_name or kickstart image not found on device.

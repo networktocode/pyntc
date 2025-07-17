@@ -8,7 +8,7 @@ from netmiko import ConnectHandler, FileTransfer
 from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -57,6 +57,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            kwargs: Additional arguments to pass to the Netmiko ConnectHandler.
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -74,6 +75,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             command (str): The command that was sent to the device.
+            command_response (str): The response from the device after sending ``command``.
 
         Raises:
             CommandError: When ``command_response`` reports an error in sending ``command``.
@@ -690,6 +692,7 @@ class IOSDevice(BaseDevice):
             image_name (str): Name of the IOS image to boot into
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 30.
+            vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
 
         Raises:
             OSInstallError: Unable to install OS Error type
@@ -855,6 +858,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs: Additional arguments to pass to the Netmiko.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -987,6 +991,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of image to set as boot variable.
+            vendor_specifics (dict, optional): Vendor specific arguments to pass to the set_boot_options command.
 
         Raises:
             NTCFileNotFoundError: Error if file is not found on device.
@@ -1059,6 +1064,7 @@ class IOSDevice(BaseDevice):
         Args:
             command (str): Command to be ran.
             expect_string (str, optional): Expected string from command output. Defaults to None.
+            netmiko_args (dict): Additional arguments to pass to Netmiko's send_command method.
 
         Returns:
             str: Output of command.

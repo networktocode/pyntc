@@ -26,9 +26,7 @@ def fix_docs(cls):
 class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Base Device ABC."""
 
-    def __init__(
-        self, host, username, password, device_type=None, **kwargs
-    ):  # noqa: D403  # pylint: disable=unused-argument
+    def __init__(self, host, username, password, device_type=None, **kwargs):  # noqa: D403  # pylint: disable=unused-argument
         """PyNTC base device implementation.
 
         Args:
@@ -36,6 +34,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
             device_type (str, optional): Denotes which device type. Defaults to None.
+            kwargs: Additional keyword arguments that may be used by subclasses.
         """
         self.host = host
         self.username = username
@@ -218,6 +217,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote flash.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            kwargs: Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
@@ -237,6 +237,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote the remote device.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            kwargs: Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
@@ -261,6 +262,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 the ``_get_file_system`` method.
             timeout (int): Option for ``IOSDevice`` and ``NXOSDevice`` to set the wait time for
                 device installation to complete.
+            vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
 
         Returns:
             True if system has been installed during function's call, False if OS has not been installed
@@ -332,6 +334,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             file_system: Option for ``ASADevice`` and ``IOSDevice`` to set which directory
                 to use when setting the boot path. The default will use the directory returned
                 by the ``_get_file_system()`` method.
+            vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
 
         Raises:
             ValueError: When the boot options returned by the ``boot_options``

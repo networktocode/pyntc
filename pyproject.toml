@@ -1,3 +1,5 @@
+# This file has been modified by NetworktoCode, LLC.
+
 [tool.poetry]
 name = "pyntc"
 version = "2.0.2"
@@ -5,19 +7,20 @@ description = "SDK to simplify common workflows for Network Devices."
 authors = ["Network to Code, LLC <info@networktocode.com>"]
 readme = "README.md"
 license = "Apache-2.0"
-homepage = "https://pyntc.readthedocs.io"
-repository = "https://github.com/networktocode/pyntc"
-documentation = "https://pyntc.readthedocs.io"
 keywords = ["network", "os-upgrades", "network devices"]
 classifiers = [
     "Intended Audience :: Developers",
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+homepage = "https://pyntc.readthedocs.io"
+repository = "https://github.com/networktocode/pyntc"
+documentation = "https://pyntc.readthedocs.io"
+
 include = [
     "LICENSE",
     "README.md",
@@ -37,26 +40,24 @@ scp = "^0.14"
 pyntc = 'pyntc.cli:main'
 
 [tool.poetry.group.dev.dependencies]
+requests_mock = "*"
 pytest = "*"
 mock = "*"
-requests_mock = "*"
-pyyaml = "*"
-black = "*"
-pylint = "*"
-pydocstyle = "*"
-yamllint = "*"
-bandit = "*"
-invoke = "*"
-toml = "*"
-# we need to pin flake8 because of package dependencies that cause it to downgrade and 
-# therefore cause issues with linting since older versions do not take .flake8 as config
-flake8 = "^3.9.2"
-mkdocs = "1.6.0"
+mkdocs = "^1.6.0"
 mkdocs-material = "9.5.32"
-mkdocs-version-annotations = "1.0.0"
 mkdocstrings = "0.25.2"
 mkdocstrings-python =  "1.10.8"
 griffe = "1.1.1"
+markdown-data-tables = "^1.0.0"
+mkdocs-version-annotations = "^1.0.0"
+pyyaml = "^6.0.1"
+pylint = "^3.1.0"
+yamllint = "^1.35.1"
+invoke = "^2.2.0"
+toml = "^0.10.2"
+attrs = "^23.2.0"
+towncrier = "^24.8.0"
+ruff = "*"
 
 [tool.pyntc]
 string_required = "some string"
@@ -66,40 +67,55 @@ ip_address = "192.168.0.1"
 ip_network = "2001:db8:3c4d:15::/64"
 file = "README.md"
 
-
-[tool.black]
+[tool.ruff]
 line-length = 120
-target-version = ['py39']
-include = '\.pyi?$'
-exclude = '''
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-  | settings.py     # This is where you define files that should not be stylized by black
-                     # the root of the project
-)
-'''
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "D",  # pydocstyle
+    "F", "E", "W",  # flake8
+    "S",  # bandit
+    "I",  # isort
+]
+ignore = [
+    # warning: `one-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible.
+    "D203", # 1 blank line required before class docstring
+
+    # D212 is enabled by default in google convention, and complains if we have a docstring like:
+    # """
+    # My docstring is on the line after the opening quotes instead of on the same line as them.
+    # """
+    # We've discussed and concluded that we consider this to be a valid style choice.
+    "D212", # Multi-line docstring summary should start at the first line
+    "D213", # Multi-line docstring summary should start at the second line
+
+    # Produces a lot of issues in the current codebase.
+    "D401", # First line of docstring should be in imperative mood
+    "D407", # Missing dashed underline after section
+    "D416", # Section name ends in colon
+    "E501", # Line too long
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D",
+    "S"
+]
+
 
 [tool.pylint.master]
 ignore=[".venv", "tests"]
 
 [tool.pylint.basic]
 # No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.
-no-docstring-rgx="^(_|test_|Meta$)"
+no-docstring-rgx = "^(_|test_)"
 
-[tool.pylint."messages control"]
-# Line length is enforced by Black, so pylint doesn't need to check it.
-# Pylint and Black disagree about how to format multi-line arrays; Black wins.
+
+[tool.pylint.messages_control]
 disable = [
     "abstract-method",
     "arguments-differ",
@@ -123,18 +139,6 @@ notes = """,
     XXX,
     """
 
-[tool.pydocstyle]
-convention = "google"
-inherit = false
-match = "(?!__init__).*\\.py"
-match-dir = "(?!tests|migrations|development)[^\\.].*"
-# D212 is enabled by default in google convention, and complains if we have a docstring like:
-# """
-# My docstring is on the line after the opening quotes instead of on the same line as them.
-# """
-# We've discussed and concluded that we consider this to be a valid style choice.
-add_ignore = "D212"
-
 [build-system]
 requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
@@ -145,3 +149,56 @@ testpaths = [
     "tests/"
 ]
 addopts = "-vv --doctest-modules -p no:warnings --ignore-glob='*mock*'"
+
+[tool.towncrier]
+package = "pyntc"
+directory = "changes"
+filename = "docs/release_notes.md"
+template = "changes/towncrier_template.j2"
+start_string = "<!-- towncrier release notes start -->"
+issue_format = "[#{issue}](https://github.com/networktocode/pyntc/issues/{issue})"
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecated"
+name = "Deprecated"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "dependencies"
+name = "Dependencies"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "documentation"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "housekeeping"
+name = "Housekeeping"
+showcontent = true

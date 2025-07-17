@@ -3,8 +3,8 @@ from unittest import mock
 
 import pytest
 
-from pyntc.devices import aireos_device as aireos_module
 from pyntc.devices import AIREOSDevice
+from pyntc.devices import aireos_device as aireos_module
 
 
 @pytest.mark.parametrize(
@@ -161,7 +161,7 @@ def test_wait_for_ap_image_download_timeout(mock_ap_image_stats, aireos_device):
     with pytest.raises(aireos_module.FileTransferError) as fte:
         aireos_device._wait_for_ap_image_download(timeout=1)
     assert fte.value.message == (
-        "Failed waiting for AP image to be transferred to all devices:\n" "Total: 2\nDownloaded: 1"
+        "Failed waiting for AP image to be transferred to all devices:\nTotal: 2\nDownloaded: 1"
     )
 
 
@@ -480,7 +480,7 @@ def test_disable_wlans_all_fail(mock_disabled_wlans, mock_wlans, aireos_device, 
         aireos_device.disable_wlans("all")
 
     assert disable_err.value.message == (
-        "Unable to disable WLAN IDs on host\n" "Expected: [5, 15, 16, 20, 21, 22, 24]\n" "Found:    [16, 21, 24]\n"
+        "Unable to disable WLAN IDs on host\nExpected: [5, 15, 16, 20, 21, 22, 24]\nFound:    [16, 21, 24]\n"
     )
 
 
@@ -523,7 +523,7 @@ def test_disable_wlans_subset_fail(mock_disabled_wlans, mock_config, aireos_devi
         aireos_device.disable_wlans([15])
 
     assert disable_err.value.message == (
-        "Unable to disable WLAN IDs on host\n" "Expected: [15, 16, 21, 24]\n" "Found:    [16, 21, 24]\n"
+        "Unable to disable WLAN IDs on host\nExpected: [15, 16, 21, 24]\nFound:    [16, 21, 24]\n"
     )
 
 
@@ -600,7 +600,7 @@ def test_enable_wlans_all_fail(mock_enabled_wlans, mock_wlans, mock_config, aire
         aireos_device.enable_wlans("all")
 
     assert enable_err.value.message == (
-        "Unable to enable WLAN IDs on host\n" "Expected: [5, 15, 16, 20, 21, 22, 24]\n" "Found:    [5, 15, 20, 22]\n"
+        "Unable to enable WLAN IDs on host\nExpected: [5, 15, 16, 20, 21, 22, 24]\nFound:    [5, 15, 20, 22]\n"
     )
 
 
@@ -643,7 +643,7 @@ def test_enable_wlans_subset_fail(mock_enabled_wlans, mock_config, aireos_device
         aireos_device.enable_wlans([16])
 
     assert enable_err.value.message == (
-        "Unable to enable WLAN IDs on host\n" "Expected: [5, 15, 16, 20, 22]\n" "Found:    [5, 15, 20, 22]\n"
+        "Unable to enable WLAN IDs on host\nExpected: [5, 15, 16, 20, 22]\nFound:    [5, 15, 20, 22]\n"
     )
 
 
