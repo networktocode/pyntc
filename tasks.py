@@ -37,8 +37,8 @@ namespace.configure(
             "project_name": "pyntc",
             "python_ver": "3.12",
             "local": False,
-            "image_name": os.getenv("IMAGE_NAME", "pyntc"),
-            "image_ver": os.getenv("IMAGE_VER", "latest"),
+            "image_name": "pyntc",
+            "image_ver": "latest",
             "pwd": ".",
         }
     }
