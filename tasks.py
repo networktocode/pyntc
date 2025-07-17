@@ -76,12 +76,13 @@ def run_command(context, exec_cmd, port=None):
     Returns:
         result (obj): Contains Invoke result from running task.
     """
-    print("IN run_command")
     if is_truthy(context.pyntc.local):
         print(f"LOCAL - Running command {exec_cmd}")
         result = context.run(exec_cmd, pty=True)
     else:
-        print(f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}")
+        print(
+            f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}"
+        )
         if port:
             result = context.run(
                 f"docker run -it -p {port} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
@@ -115,15 +116,23 @@ def build(context, cache=True, force_rm=False, hide=False):
 
     result = context.run(command, hide=hide)
     if result.exited != 0:
-        print(f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}")
+        print(
+            f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}"
+        )
 
 
 @task
 def clean(context):
     """Remove the project specific image."""
-    print(f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}")
-    context.run(f"docker rmi {context.pyntc.image_name}:{context.pyntc.image_ver} --force")
-    print(f"Successfully removed image {context.pyntc.image_name}:{context.pyntc.image_ver}")
+    print(
+        f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}"
+    )
+    context.run(
+        f"docker rmi {context.pyntc.image_name}:{context.pyntc.image_ver} --force"
+    )
+    print(
+        f"Successfully removed image {context.pyntc.image_name}:{context.pyntc.image_ver}"
+    )
 
 
 @task
