@@ -36,7 +36,7 @@ namespace.configure(
             "python_ver": "3.12",
             "local": False,
             "image_name": "pyntc",
-            "image_ver": "2.0.2",
+            "image_ver": "latest",
             "pwd": ".",
         }
     }
