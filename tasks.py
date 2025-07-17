@@ -1,7 +1,5 @@
 """Tasks for use with Invoke."""
 
-import os
-
 from invoke import Collection, Exit
 from invoke import task as invoke_task
 
