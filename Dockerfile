@@ -2,12 +2,10 @@ ARG PYTHON_VER=3.11
 
 FROM python:${PYTHON_VER}-slim
 
-RUN pip install --upgrade pip \
-  && pip install poetry
+RUN which poetry || curl -sSL https://install.python-poetry.org | python3 -
 
 WORKDIR /local
 COPY . /local
 
-RUN which poetry || curl -sSL https://install.python-poetry.org | python3 - && \
-  poetry config virtualenvs.create false && \
-  poetry install --no-interaction --no-ansi --with dev
+RUN poetry config virtualenvs.create false \
+  && poetry install --no-interaction --no-ansi --with dev
