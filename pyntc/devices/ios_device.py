@@ -685,6 +685,80 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
+    def file_download(
+        self, protocol, src, path, username=None, password=None, dest="", file_system=None, read_timeout=2000
+    ):
+        """Download file from remote server.
+
+        Args:
+            protocol (str): Protocol to use for download (e.g., "scp", "ftp", "http", "https")
+            src (str): Remote server address. (e.g., "192.168.1.1", "my.server.local")
+            path (str): Path to file on remote server. (e.g., "image.bin", "/tmp/image.bin")
+            username (str, optional): Username for remote server.
+            password (str, optional): Password for remote server.
+            dest (str, optional): Destination name for file. Defaults to using the same name as the file on the remote server.
+            file_system (str, optional): File system to copy file to.
+            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
+
+        Raises:
+            SocketClosedError: Error raised if connection to device is closed.
+            FileTransferError: Error in transferring file.
+            FileTransferError: Error if unable to verify file was transferred successfully.
+        """
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        # Prepend leading slash to path if it doesn't have one
+        if not path.startswith("/"):
+            path = "/" + path
+
+        copy_command = f"copy {protocol}://"
+        if username:
+            copy_command += f"{username}"
+            if password:
+                copy_command += f":{password}"
+            copy_command += "@"
+        copy_command += f"{src}:{path} {file_system}{dest}"
+
+        self.show(copy_command, read_timeout=read_timeout)
+
+    def file_md5(self, filename, file_system=None, read_timeout=1000):
+        """Return the MD5 hash of a file on the device.
+
+        Args:
+            filename (str): Name of the file to get the MD5 hash of.
+            file_system (str, optional): File system the file is on. Defaults to the default file system.
+            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 1000.
+
+        Returns:
+            str: MD5 hash of the file.
+        """
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        command = f"verify /md5 {file_system}{filename}"
+        response = self.show(command, read_timeout=read_timeout)
+        md5_pattern = r"=\s+([a-f0-9]{32})"
+        match = re.search(md5_pattern, response)
+        if match:
+            return match.group(1)
+        raise FileTransferError(f"Unable to verify MD5 hash for file {filename}")
+
+    def verify_md5(self, filename, md5, file_system=None):
+        """Verify the MD5 hash of a file on the device.
+
+        Args:
+            filename (str): Name of the file to verify.
+            md5 (str): MD5 hash of the file.
+            file_system (str, optional): File system the file is on. Defaults to the default file system.
+
+        Returns:
+            bool: True if the MD5 hash matches, False otherwise.
+        """
+        return self.file_md5(filename, file_system) == md5
+
     def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
