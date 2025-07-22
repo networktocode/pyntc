@@ -685,18 +685,13 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def file_download(
-        self, protocol, src, path, username=None, password=None, dest="", file_system=None, read_timeout=2000
-    ):
+    def file_download(self, url, dest="", md5=None, file_system=None, read_timeout=2000):
         """Download file from remote server.
 
         Args:
-            protocol (str): Protocol to use for download (e.g., "scp", "ftp", "http", "https")
-            src (str): Remote server address. (e.g., "192.168.1.1", "my.server.local")
-            path (str): Path to file on remote server. (e.g., "image.bin", "/tmp/image.bin")
-            username (str, optional): Username for remote server.
-            password (str, optional): Password for remote server.
+            url (str): URL of the file to download. (e.g., "scp://user:password@192.168.1.1/image.bin")
             dest (str, optional): Destination name for file. Defaults to using the same name as the file on the remote server.
+            md5 (str, optional): Expected MD5 hash of the file to download. If provided, the file will be verified.
             file_system (str, optional): File system to copy file to.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
 
@@ -709,19 +704,31 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        # Prepend leading slash to path if it doesn't have one
-        if not path.startswith("/"):
-            path = "/" + path
+        filename = dest or os.path.basename(url)
+        try:
+            file_md5 = self.file_md5(filename, file_system)
+        except FileTransferError:
+            # File doesn't exist, download it
+            pass
+        else:
+            # File already exists
+            if not md5:
+                log.info("Host %s: File %s already exists on remote.", self.host, filename)
+                return True
+            if file_md5 != md5:
+                log.warning(
+                    "Host %s: File %s already exists on remote but MD5 hash mismatch. Downloading again.",
+                    self.host,
+                    filename,
+                )
 
-        copy_command = f"copy {protocol}://"
-        if username:
-            copy_command += f"{username}"
-            if password:
-                copy_command += f":{password}"
-            copy_command += "@"
-        copy_command += f"{src}:{path} {file_system}{dest}"
+        copy_command = f"copy {url} {file_system}{dest}"
 
         self.show(copy_command, read_timeout=read_timeout)
+
+        if not md5:
+            return True
+        return self.verify_md5(filename, md5, file_system)
 
     def file_md5(self, filename, file_system=None, read_timeout=1000):
         """Return the MD5 hash of a file on the device.
