@@ -730,6 +730,28 @@ class IOSDevice(BaseDevice):
             return True
         return self.verify_md5(filename, md5, file_system)
 
+    def file_upload(self, filename, url, file_system=None, read_timeout=2000):
+        """Upload file to remote server.
+
+        Examples:
+            # Upload file to remote server
+            >>> device.file_upload("image.bin", "scp://user:password@192.168.1.1/image.bin")
+            # Upload running config to remote server (override default file system)
+            >>> device.file_upload("running-config", "scp://user:password@192.168.1.1/config.txt", file_system="")
+
+        Args:
+            filename (str): Name of the file to upload.
+            url (str): URL of the file to upload to. (e.g., "scp://user:password@192.168.1.1/image.bin")
+            file_system (str, optional): File system the file is on.
+            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
+        """
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        copy_command = f"copy {file_system}{filename} {url}"
+        self.show(copy_command, read_timeout=read_timeout)
+
     def file_md5(self, filename, file_system=None, read_timeout=1000):
         """Return the MD5 hash of a file on the device.
 
