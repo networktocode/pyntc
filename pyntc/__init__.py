@@ -29,13 +29,13 @@ def ntc_device(device_type, *args, **kwargs):
     The ``*args`` and ``**kwargs`` are passed directly to the device initializer.
 
     Arguments:
-        device_type (string): A valid device_type
+        device_type (str): A valid device_type
             listed in `pyntc.devices.supported_devices`
-        args: Positional arguments to pass to the device initializer.
-        kwargs: Keyword arguments to pass to the device initializer.
+        args (tuple): Positional arguments to pass to the device initializer.
+        kwargs (dict): Keyword arguments to pass to the device initializer.
 
     Returns:
-        An instance of a subclass of ``pyntc.devices.BaseDevice``.
+        (pyntc.devices.BaseDevice): An instance of a subclass of ``pyntc.devices.BaseDevice``.
 
     Raises:
         UnsupportedDeviceError: if the device_type is unsupported.
