@@ -54,10 +54,10 @@ exclude_docs: |
   /media/*.gif
 
 validation:
-  absolute_links: warn
-  anchors: warn
-  omitted_files: warn
-  unrecognized_links: warn
+  absolute_links: "warn"
+  anchors: "warn"
+  omitted_files: "warn"
+  unrecognized_links: "warn"
 
 extra_css:
   - "assets/extra.css"
@@ -92,7 +92,7 @@ markdown_extensions:
       base_path: "docs"
   - "md_in_html"
   - "pymdownx.details"
-    # Need pymdownx.emoji for Grid icon search
+  # Need pymdownx.emoji for Grid icon search
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
@@ -113,7 +113,7 @@ plugins:
   - "search"
   - "gen-files":
       scripts:
-        - docs/generate_code_reference_pages.py
+        - "docs/generate_code_reference_pages.py"
   - "glightbox":
       manual: true # See https://blueswen.github.io/mkdocs-glightbox/flexibility/enable-by-image-or-page/
   - "section-index"
