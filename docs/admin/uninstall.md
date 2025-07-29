@@ -3,5 +3,5 @@
 Uninstall from environment.
 
 ```bash
-$ pip uninstall pyntc
+pip uninstall pyntc
 ```
