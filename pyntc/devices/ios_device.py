@@ -57,7 +57,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
-            kwargs: Additional arguments to pass to the Netmiko ConnectHandler.
+            kwargs (dict): Additional arguments to pass to the Netmiko ConnectHandler.
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -116,7 +116,7 @@ class IOSDevice(BaseDevice):
         """Determine the default file system or directory for device.
 
         Returns:
-            str: The name of the default file system or directory for the device.
+            (str): The name of the default file system or directory for the device.
 
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
@@ -266,7 +266,7 @@ class IOSDevice(BaseDevice):
         """Get current boot image.
 
         Returns:
-            dict: Key ``sys`` with value being the current boot image.
+            (dict): Key ``sys`` with value being the current boot image.
         """
         boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
         try:
@@ -328,11 +328,11 @@ class IOSDevice(BaseDevice):
 
         Args:
             command (str|list): The command or commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
+            **netmiko_args (dict): Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and output from sending ``command``.
-            list: When ``command`` is a list, the config session input and output from sending ``command``.
+            (str): When ``command`` is a str, the config session input and output from sending ``command``.
+            (list): When ``command`` is a list, the config session input and output from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -402,7 +402,7 @@ class IOSDevice(BaseDevice):
         Confirm that the device is either standalone or the active device in a high availability cluster.
 
         Returns:
-            bool: True when the device is considered active.
+            (bool): True when the device is considered active.
 
         Rasies:
             DeviceNotActiveError: When the device is not considered the active device.
@@ -445,7 +445,7 @@ class IOSDevice(BaseDevice):
         Get connection status of the device.
 
         Returns:
-            bool: True if the device is connected, else False.
+            (bool): True if the device is connected, else False.
         """
         return self._connected
 
@@ -457,7 +457,7 @@ class IOSDevice(BaseDevice):
         """Ensure device is in enable mode.
 
         Returns:
-            None: Device prompt is set to enable mode.
+            (None): Device prompt is set to enable mode.
         """
         # Netmiko reports enable and config mode as being enabled
         if not self.native.check_enable_mode():
@@ -473,7 +473,7 @@ class IOSDevice(BaseDevice):
         """Get uptime from device.
 
         Returns:
-            int: Uptime in seconds.
+            (int): Uptime in seconds.
         """
         if self._uptime is None:
             version_data = self._raw_version_data()
@@ -488,7 +488,7 @@ class IOSDevice(BaseDevice):
         """Get uptime in format dd:hh:mm.
 
         Returns:
-            str: Uptime of device.
+            (str): Uptime of device.
         """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
@@ -502,7 +502,7 @@ class IOSDevice(BaseDevice):
         """Get hostname of device.
 
         Returns:
-            str: Hostname of device.
+            (str): Hostname of device.
         """
         version_data = self._raw_version_data()
         if self._hostname is None:
@@ -517,7 +517,7 @@ class IOSDevice(BaseDevice):
         Get list of interfaces on device.
 
         Returns:
-            list: List of interfaces on device.
+            (list): List of interfaces on device.
         """
         if self._interfaces is None:
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
@@ -531,7 +531,7 @@ class IOSDevice(BaseDevice):
         Get list of VLANs on device.
 
         Returns:
-            list: List of VLANs on device.
+            (list): List of VLANs on device.
         """
         if self._vlans is None:
             if self.model.startswith("WS"):
@@ -547,7 +547,7 @@ class IOSDevice(BaseDevice):
         """Get fully qualified domain name.
 
         Returns:
-            str: Fully qualified domain name or ``N/A`` if not defined.
+            (str): Fully qualified domain name or ``N/A`` if not defined.
         """
         if self._fqdn is None:
             self._fqdn = "N/A"
@@ -560,7 +560,7 @@ class IOSDevice(BaseDevice):
         """Get the device model.
 
         Returns:
-            str: Device model.
+            (str): Device model.
         """
         version_data = self._raw_version_data()
         if self._model is None:
@@ -574,7 +574,7 @@ class IOSDevice(BaseDevice):
         """Get os version on device.
 
         Returns:
-            str: OS version on device.
+            (str): OS version on device.
         """
         version_data = self._raw_version_data()
         if self._os_version is None:
@@ -588,7 +588,7 @@ class IOSDevice(BaseDevice):
         """Get serial number of device.
 
         Returns:
-            str: Serial number of device.
+            (str): Serial number of device.
         """
         version_data = self._raw_version_data()
         if self._serial_number is None:
@@ -602,7 +602,7 @@ class IOSDevice(BaseDevice):
         """Get config register of device.
 
         Returns:
-            str: Config register.
+            (str): Config register.
         """
         # ios-specific facts
         version_data = self._raw_version_data()
@@ -671,7 +671,7 @@ class IOSDevice(BaseDevice):
             file_system (str, optional): File system to copy file to. Defaults to None.
 
         Returns:
-            bool: True if file copied succesfully and md5 hashes match. Otherwise, false.
+            (bool): True if file copied succesfully and md5 hashes match. Otherwise, false.
         """
         self.enable()
         if file_system is None:
@@ -698,7 +698,7 @@ class IOSDevice(BaseDevice):
             OSInstallError: Unable to install OS Error type
 
         Returns:
-            bool: False if no install is needed, true if the install completes successfully
+            (bool): False if no install is needed, true if the install completes successfully
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -759,7 +759,7 @@ class IOSDevice(BaseDevice):
         Determine if the current processor is the active processor.
 
         Returns:
-            bool: True if the processor is active or does not support HA, else False.
+            (bool): True if the processor is active or does not support HA, else False.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -826,8 +826,8 @@ class IOSDevice(BaseDevice):
         Determine the current redundancy state of the peer processor.
 
         Returns:
-            str: The redundancy state of the peer processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the peer processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -857,8 +857,8 @@ class IOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
-            kwargs: Additional arguments to pass to the Netmiko.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional arguments to pass to the Netmiko.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -890,7 +890,7 @@ class IOSDevice(BaseDevice):
         Get operating redundancy mode of the device.
 
         Returns:
-            str: The redundancy mode the device is operating in.
+            (str): The redundancy mode the device is operating in.
                 If the command is not supported, then "n/a" is returned.
 
         Example:
@@ -917,8 +917,8 @@ class IOSDevice(BaseDevice):
         Determine the current redundancy state of the processor.
 
         Returns:
-            str: The redundancy state of the current processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the current processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -960,7 +960,7 @@ class IOSDevice(BaseDevice):
         """Get running configuration.
 
         Returns:
-            str: Output of ``show running-config``.
+            (str): Output of ``show running-config``.
         """
         log.debug("Host %s: Show running config.", self.host)
         return self.show("show running-config")
@@ -972,7 +972,7 @@ class IOSDevice(BaseDevice):
             filename (str, optional): Name of file to save running configuration. Defaults to "startup-config".
 
         Returns:
-            bool: True if save is succesfull.
+            (bool): True if save is succesfull.
         """
         command = f"copy running-config {filename}"
         # Changed to send_command_timing to not require a direct prompt return.
@@ -1067,7 +1067,7 @@ class IOSDevice(BaseDevice):
             netmiko_args (dict): Additional arguments to pass to Netmiko's send_command method.
 
         Returns:
-            str: Output of command.
+            (str): Output of command.
         """
         self.enable()
         if isinstance(command, list):
@@ -1088,7 +1088,7 @@ class IOSDevice(BaseDevice):
         """Get startup configuration.
 
         Returns:
-            str: Startup configuration from device.
+            (str): Startup configuration from device.
         """
         log.debug("Host %s: Successfully executed command 'show startup-config'.", self.host)
         return self.show("show startup-config")

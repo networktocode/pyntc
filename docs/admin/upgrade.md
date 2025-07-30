@@ -3,5 +3,5 @@
 Upgrade from PyPI.
 
 ```bash
-$ pip install pyntc --upgrade
+pip install pyntc --upgrade
 ```

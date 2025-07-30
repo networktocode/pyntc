@@ -21,7 +21,7 @@ def get_log(name=None):
         name (str, optional): Sublogger name. Defaults to None.
 
     Returns:
-        logger: Return a logger instance in the :data:`APP` namespace.
+        (logger): Return a logger instance in the :data:`APP` namespace.
     """
     logger_name = f"{APP}.{name}" if name else APP
     # file handler
@@ -39,7 +39,7 @@ def init(**kwargs):
     directly to the :func:`logging.basicConfig` call in turn.
 
     Args:
-        **kwargs: Arguments to pass for logging configuration
+        **kwargs (dict): Arguments to pass for logging configuration
 
 
     """
@@ -64,7 +64,7 @@ def logger(level):
         level (str): defines the log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns:
-        string: Returns logger.<level> type of string.
+        (str): Returns logger.<level> type of string.
     """
     return getattr(get_log(), level)
 

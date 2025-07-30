@@ -33,8 +33,8 @@ class JunosDevice(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
-            args: Additional positional arguments to pass to the device.
-            kwargs: Additional keyword arguments to pass to the device.
+            args (tuple): Additional positional arguments to pass to the device.
+            kwargs (dict): Additional keyword arguments to pass to the device.
         """
         super().__init__(host, username, password, *args, device_type="juniper_junos_netconf", **kwargs)
 
@@ -126,7 +126,7 @@ class JunosDevice(BaseDevice):
         """Get os version on device.
 
         Returns:
-            str: OS version on device.
+            (str): OS version on device.
         """
         return self.os_version
 
@@ -175,7 +175,7 @@ class JunosDevice(BaseDevice):
         """Get connection status of device.
 
         Returns:
-            bool: True if connection is active. Otherwise, false.
+            (bool): True if connection is active. Otherwise, false.
         """
         return self.native.connected
 
@@ -184,7 +184,7 @@ class JunosDevice(BaseDevice):
         """Get device uptime in seconds.
 
         Returns:
-            int: Device uptime in seconds.
+            (int): Device uptime in seconds.
         """
         try:
             native_uptime_string = self.native.facts["RE0"]["up_time"]
@@ -203,7 +203,7 @@ class JunosDevice(BaseDevice):
         Get device uptime in format dd:hh:mm:ss.
 
         Returns:
-            str: Device uptime.
+            (str): Device uptime.
         """
         try:
             native_uptime_string = self.native.facts["RE0"]["up_time"]
@@ -220,7 +220,7 @@ class JunosDevice(BaseDevice):
         """Get device hostname.
 
         Returns:
-            str: Device hostname.
+            (str): Device hostname.
         """
         if self._hostname is None:
             self._hostname = self.native.facts.get("hostname")
@@ -232,7 +232,7 @@ class JunosDevice(BaseDevice):
         """Get list of interfaces.
 
         Returns:
-            list: List of interfaces.
+            (list): List of interfaces.
         """
         if self._interfaces is None:
             self._interfaces = self._get_interfaces()
@@ -244,7 +244,7 @@ class JunosDevice(BaseDevice):
         """Get fully qualified domain name.
 
         Returns:
-            str: Fully qualified domain name.
+            (str): Fully qualified domain name.
         """
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
@@ -256,7 +256,7 @@ class JunosDevice(BaseDevice):
         """Get device model.
 
         Returns:
-            str: Device model.
+            (str): Device model.
         """
         if self._model is None:
             self._model = self.native.facts.get("model")
@@ -268,7 +268,7 @@ class JunosDevice(BaseDevice):
         """Get OS version.
 
         Returns:
-            str: OS version.
+            (str): OS version.
         """
         if self._os_version is None:
             self._os_version = self.native.facts.get("version")
@@ -280,7 +280,7 @@ class JunosDevice(BaseDevice):
         """Get serial number.
 
         Returns:
-            str: Serial number.
+            (str): Serial number.
         """
         if self._serial_number is None:
             self._serial_number = self.native.facts.get("serialnumber")
@@ -293,7 +293,7 @@ class JunosDevice(BaseDevice):
         Args:
             src (str): Name of file to be transferred.
             dest (str, optional): Path on device to save file. Defaults to None.
-            kwargs: Additional keyword arguments to pass to the `file_copy` command.
+            kwargs (dict): Additional keyword arguments to pass to the `file_copy` command.
 
         Raises:
             FileTransferError: Raised when unable to verify file was transferred succesfully.
@@ -317,10 +317,10 @@ class JunosDevice(BaseDevice):
         Args:
             src (str): Source of local file.
             dest (str, optional): Path of file on device. Defaults to None.
-            kwargs: Additional keyword arguments to pass to the `file_copy` command.
+            kwargs (dict): Additional keyword arguments to pass to the `file_copy` command.
 
         Returns:
-            bool: True if hashes of the file match. Otherwise, false.
+            (bool): True if hashes of the file match. Otherwise, false.
         """
         if dest is None:
             dest = os.path.basename(src)
@@ -353,8 +353,8 @@ class JunosDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
-            kwargs: Additional keyword arguments to pass to the `reboot` command.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional keyword arguments to pass to the `reboot` command.
 
         Example:
             >>> device = JunosDevice(**connection_args)
@@ -395,7 +395,7 @@ class JunosDevice(BaseDevice):
         """Get running configuration.
 
         Returns:
-            str: Running configuration.
+            (str): Running configuration.
         """
         return self.show("show config")
 
@@ -409,7 +409,7 @@ class JunosDevice(BaseDevice):
             filename (str, optional): Filename to save current configuration. Defaults to None.
 
         Returns:
-            bool: True if new file created for save file. Otherwise, just returns if save is to default name.
+            (bool): True if new file created for save file. Otherwise, just returns if save is to default name.
         """
         if filename is None:
             self.cu.commit()
@@ -467,6 +467,6 @@ class JunosDevice(BaseDevice):
         """Get startup configuration.
 
         Returns:
-            str: Startup configuration.
+            (str): Startup configuration.
         """
         return self.show("show config")

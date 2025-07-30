@@ -9,13 +9,13 @@ def convert_dict_by_key(original, key_map, fill_in=False, whitelist=[], blacklis
         key_map (dict): Key map to use to convert dictionary.
         fill_in (dict): Whether the returned dictionary should contain
             keys and values from the original dictionary if not specified in the key map.
-        whitelist: If fill_in is True, and whitelist isn't empty, only fill in the keys
+        whitelist (list): If fill_in is True, and whitelist isn't empty, only fill in the keys
             in the whitelist in the returned dictionary.
-        blacklist: If fill_in is True, and blacklist isn't empty, fill in with all keys from
+        blacklist (list): If fill_in is True, and blacklist isn't empty, fill in with all keys from
             the original dictionary besides those in the blacklist.
 
     Returns:
-        A converted dictionary through the key map.
+        (dict): A converted dictionary through the key map.
     """
     converted = {}
     for converted_key in key_map:
@@ -49,13 +49,13 @@ def convert_list_by_key(original_list, key_map, fill_in=False, whitelist=[], bla
         key_map (dict): Key map to use to convert list.
         fill_in (dict): Whether the returned list should contain
             keys and values from the original dictionary if not specified in the key map.
-        whitelist: If fill_in is True, and whitelist isn't empty, only fill in the keys
+        whitelist (list): If fill_in is True, and whitelist isn't empty, only fill in the keys
             in the whitelist in the returned dictionary.
-        blacklist: If fill_in is True, and blacklist isn't empty, fill in with all keys from
+        blacklist (list): If fill_in is True, and blacklist isn't empty, fill in with all keys from
             the original dictionary besides those in the blacklist.
 
     Returns:
-        list: A converted list.
+        (list): A converted list.
     """
     converted_list = []
     for original in list(original_list):

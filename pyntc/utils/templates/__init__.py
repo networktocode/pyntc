@@ -15,7 +15,7 @@ def get_structured_data(template_name, rawtxt):
         rawtxt (str): Raw output from device.
 
     Returns:
-        list: A dict per entry returned by TextFSM.
+        (list): A dict per entry returned by TextFSM.
     """
     template_file = get_template(template_name)
     with open(template_file, encoding="utf-8") as template:
@@ -37,7 +37,7 @@ def get_template(template_name):
         template_name (str): Name of the template.
 
     Returns:
-        str: Path to the template.
+        (str): Path to the template.
     """
     template_dir = get_template_dir()
     return os.path.join(template_dir, template_name)
@@ -47,7 +47,7 @@ def get_template_dir():
     """Get directory of NTC_TEMPLATE os environment.
 
     Returns:
-        str: Path to NTC_TEMPLATES environment variable if set. Otherwise, path to this file.
+        (str): Path to NTC_TEMPLATES environment variable if set. Otherwise, path to this file.
     """
     try:
         return os.environ[TEMPLATE_PATH_ENV_VAR]

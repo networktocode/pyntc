@@ -39,7 +39,7 @@ class NXOSDevice(BaseDevice):
             timeout (int, optional): Timeout in seconds. Defaults to 30.
             port (int, optional): Port used to connect to device. Defaults to None.
             verify (bool, optional): SSL verification.
-            kwargs: Left for compatibility with other tools, for instance nautobot-inventory may pass additional kwargs.
+            kwargs (dict): Left for compatibility with other tools, for instance nautobot-inventory may pass additional kwargs.
 
         """
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
@@ -89,7 +89,7 @@ class NXOSDevice(BaseDevice):
         """Get current boot variables.
 
         Returns:
-            dict: e.g . {"kick": "router_kick.img", "sys": "router_sys.img"}
+            (dict): e.g . {"kick": "router_kick.img", "sys": "router_sys.img"}
         """
         boot_options = self.native.get_boot_options()
         log.debug("Host %s: the boot options are %s", self.host, boot_options)
@@ -137,7 +137,7 @@ class NXOSDevice(BaseDevice):
         """Get uptime of the device in seconds.
 
         Returns:
-            int: Uptime of the device in seconds.
+            (int): Uptime of the device in seconds.
         """
         if self._uptime is None:
             self._uptime = self.native.facts.get("uptime")
@@ -150,7 +150,7 @@ class NXOSDevice(BaseDevice):
         """Get uptime in format dd:hh:mm.
 
         Returns:
-            str: Uptime of device.
+            (str): Uptime of device.
         """
         if self._uptime_string is None:
             self._uptime_string = self.native.facts.get("uptime_string")
@@ -162,7 +162,7 @@ class NXOSDevice(BaseDevice):
         """Get hostname of the device.
 
         Returns:
-            str: Hostname of the device.
+            (str): Hostname of the device.
         """
         if self._hostname is None:
             self._hostname = self.native.facts.get("hostname")
@@ -175,7 +175,7 @@ class NXOSDevice(BaseDevice):
         """Get list of interfaces.
 
         Returns:
-            list: List of interfaces.
+            (list): List of interfaces.
         """
         if self._interfaces is None:
             self._interfaces = self.native.facts.get("interfaces")
@@ -188,7 +188,7 @@ class NXOSDevice(BaseDevice):
         """Get list of vlans.
 
         Returns:
-            list: List of vlans on the device.
+            (list): List of vlans on the device.
         """
         if self._vlans is None:
             self._vlans = self.native.facts.get("vlans")
@@ -201,7 +201,7 @@ class NXOSDevice(BaseDevice):
         """Get fully qualified domain name.
 
         Returns:
-            str: Fully qualified domain name.
+            (str): Fully qualified domain name.
         """
         if self._fqdn is None:
             self._fqdn = self.native.facts.get("fqdn")
@@ -214,7 +214,7 @@ class NXOSDevice(BaseDevice):
         """Get device model.
 
         Returns:
-            str: Model of device.
+            (str): Model of device.
         """
         if self._model is None:
             self._model = self.native.facts.get("model")
@@ -227,7 +227,7 @@ class NXOSDevice(BaseDevice):
         """Get device version.
 
         Returns:
-            str: Device version.
+            (str): Device version.
         """
         if self._os_version is None:
             self._os_version = self.native.facts.get("os_version")
@@ -240,7 +240,7 @@ class NXOSDevice(BaseDevice):
         """Get device serial number.
 
         Returns:
-            str: Device serial number.
+            (str): Device serial number.
         """
         if self._serial_number is None:
             self._serial_number = self.native.facts.get("serial_number")
@@ -289,7 +289,7 @@ class NXOSDevice(BaseDevice):
             file_system (str, optional): The file system for the remote file. Defaults to "bootflash:".
 
         Returns:
-            bool: True if the remote file exists. Otherwise, false.
+            (bool): True if the remote file exists. Otherwise, false.
         """
         dest = dest or os.path.basename(src)
         log.debug(
@@ -311,7 +311,7 @@ class NXOSDevice(BaseDevice):
             OSInstallError: Error if boot option is not set to new image.
 
         Returns:
-            bool: True if new image is boot option on device. Otherwise, false.
+            (bool): True if new image is boot option on device. Otherwise, false.
         """
         self.native.show("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
@@ -338,8 +338,8 @@ class NXOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
-            kwargs: Additional arguments to pass to reboot method.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional arguments to pass to reboot method.
 
         Raises:
             RebootTimerError: When the device is still unreachable after the timeout period.
@@ -385,7 +385,7 @@ class NXOSDevice(BaseDevice):
         """Get running configuration of device.
 
         Returns:
-            str: Running configuration of device.
+            (str): Running configuration of device.
         """
         log.debug("Host %s: Show running config.", self.host)
         return self.native.running_config
@@ -397,7 +397,7 @@ class NXOSDevice(BaseDevice):
             filename (str, optional): Filename to save running configuration to. Defaults to "startup-config".
 
         Returns:
-            bool: True if configuration is saved.
+            (bool): True if configuration is saved.
         """
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
         return self.native.save(filename=filename)
@@ -456,7 +456,7 @@ class NXOSDevice(BaseDevice):
             CommandError: Error message stating which command failed.
 
         Returns:
-            str: Results of the command ran.
+            (str): Results of the command ran.
         """
         log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
         if isinstance(command, list):
@@ -478,6 +478,6 @@ class NXOSDevice(BaseDevice):
         """Get startup configuration.
 
         Returns:
-            str: Startup configuration.
+            (str): Startup configuration.
         """
         return self.show("show startup-config", raw_text=True)

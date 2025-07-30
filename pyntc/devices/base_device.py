@@ -10,7 +10,7 @@ def fix_docs(cls):
     """Create docstring at runtime.
 
     Returns:
-        class: Returns the class passed in.
+        (class): Returns the class passed in.
     """
     for name, func in vars(cls).items():
         if hasattr(func, "__call__") and not func.__doc__:
@@ -34,7 +34,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
             device_type (str, optional): Denotes which device type. Defaults to None.
-            kwargs: Additional keyword arguments that may be used by subclasses.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
         """
         self.host = host
         self.username = username
@@ -59,7 +59,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 volume: Required by F5Device as F5 boots into a volume.
 
         Returns:
-            bool: True if image is currently being used by the device, else False.
+            (bool): True if image is currently being used by the device, else False.
         """
         raise NotImplementedError
 
@@ -78,7 +78,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         like system image and kickstart image.
 
         Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+            (dict): A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         raise NotImplementedError
 
@@ -217,7 +217,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote flash.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
-            kwargs: Additional keyword arguments that may be used by subclasses.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
@@ -237,7 +237,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote the remote device.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
-            kwargs: Additional keyword arguments that may be used by subclasses.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
@@ -245,14 +245,14 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 method is used to determine the correct file system to use.
 
         Returns:
-            True if the remote file exists, False if it doesn't.
+            (bool): True if the remote file exists, False if it doesn't.
         """
 
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name.
 
         Args:
-            image_name(str): The name of the image on the device to install.
+            image_name (str): The name of the image on the device to install.
 
         Keyword Args:
             kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
@@ -265,7 +265,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
 
         Returns:
-            True if system has been installed during function's call, False if OS has not been installed
+            (bool): True if system has been installed during function's call, False if OS has not been installed
 
         Raises:
             OSInstallError: When device finishes installation process, but the running image
@@ -289,7 +289,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Reload a device.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -326,12 +326,12 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Set boot variables like system image and kickstart image.
 
         Args:
-            image_name: The main system image file name.
+            image_name (str): The main system image file name.
 
         Keyword Args:
-            kickstart: Option for ``NXOSDevice`` for devices that require a kickstart image.
-            volume: Option for ``F5Device`` to set which volume should have image installed.
-            file_system: Option for ``ASADevice`` and ``IOSDevice`` to set which directory
+            kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
+            volume (str): Option for ``F5Device`` to set which volume should have image installed.
+            file_system (str): Option for ``ASADevice`` and ``IOSDevice`` to set which directory
                 to use when setting the boot path. The default will use the directory returned
                 by the ``_get_file_system()`` method.
             vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
@@ -353,7 +353,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             raw_text (bool): Whether to return raw text or structured data.
 
         Returns:
-            The output of the show command, which could be raw text or structured data.
+            (NotImplementedError): The output of the show command, which could be raw text or structured data.
         """
         raise NotImplementedError
 
@@ -378,7 +378,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Get current boot variables like system image and kickstart image.
 
         Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+            (dict): A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         warnings.warn("get_boot_options() is deprecated; use boot_options property.", DeprecationWarning)
         return self.boot_options

@@ -48,7 +48,7 @@ def convert_filename_to_version(filename):
         filename (str): The name of the file downloaded from Cisco.
 
     Returns:
-        str: The version number.
+        (str): The version number.
 
     Example:
         >>> version = convert_filename_to_version("AIR-CT5520-K9-8-8-125-0.aes")
@@ -83,7 +83,7 @@ class AIREOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
-            **kwargs: Additional keyword arguments for device customization.
+            **kwargs (dict): Additional keyword arguments for device customization.
         """
         super().__init__(host, username, password, device_type="cisco_aireos_ssh")
         self.native = None
@@ -393,7 +393,7 @@ class AIREOSDevice(BaseDevice):
         Boot Options for all APs associated with the controller.
 
         Returns:
-            dict: The name of each AP are the keys, and the values are the primary and backup values.
+            (dict): The name of each AP are the keys, and the values are the primary and backup values.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -431,7 +431,7 @@ class AIREOSDevice(BaseDevice):
         Stats of downloading the the image to all APs.
 
         Returns:
-            dict: The AP count, and the downloaded, unsupported, and failed APs.
+            (dict): The AP count, and the downloaded, unsupported, and failed APs.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -476,7 +476,7 @@ class AIREOSDevice(BaseDevice):
         Images that are candidates for booting on reload.
 
         Returns:
-            dict: The boot options on the device. The "sys" key is the expected image on reload.
+            (dict): The boot options on the device. The "sys" key is the expected image on reload.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -541,11 +541,11 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             command (str|list): The command or commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
+            **netmiko_args (dict): Any argument supported by ``netmiko.base_connection.BaseConnection.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and ouput from sending ``command``.
-            list: When ``command`` is a list, the config session input and ouput from sending ``command``.
+            (str): When ``command`` is a str, the config session input and ouput from sending ``command``.
+            (list): When ``command`` is a list, the config session input and ouput from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -619,7 +619,7 @@ class AIREOSDevice(BaseDevice):
         Confirm that the device is either standalone or the active device in a high availability cluster.
 
         Returns:
-            bool: True when the device is considered active.
+            (bool): True when the device is considered active.
 
         Rasies:
             DeviceNotActiveError: When the device is not considered the active device.
@@ -661,7 +661,7 @@ class AIREOSDevice(BaseDevice):
         Get connection status of the device.
 
         Returns:
-            bool: True if the device is connected, else False.
+            (bool): True if the device is connected, else False.
         """
         log.debug("Host %s: Connection status %s.", self.host, self._connected)
         return self._connected
@@ -728,7 +728,7 @@ class AIREOSDevice(BaseDevice):
         IDs for all disabled WLANs.
 
         Returns:
-            list: Disabled WLAN IDs.
+            (list): Disabled WLAN IDs.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -754,7 +754,7 @@ class AIREOSDevice(BaseDevice):
         Ensure device is in enable mode.
 
         Returns:
-            None: Device prompt is set to enable mode.
+            (None): Device prompt is set to enable mode.
         """
         # Netmiko reports enable and config mode as being enabled
         if not self.native.check_enable_mode():
@@ -821,7 +821,7 @@ class AIREOSDevice(BaseDevice):
         IDs for all enabled WLANs.
 
         Returns:
-            list: Enabled WLAN IDs.
+            (list): Enabled WLAN IDs.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -875,7 +875,7 @@ class AIREOSDevice(BaseDevice):
             read_timeout (int, optional): The Netmiko read_timeout to wait for device to complete transfer. Defaults to 1000.
 
         Returns:
-            bool: True when the file was transferred, False when the file is deemed to already be on the device.
+            (bool): True when the file was transferred, False when the file is deemed to already be on the device.
 
         Raises:
             FileTransferError: When an error is detected in transferring the file.
@@ -955,7 +955,7 @@ class AIREOSDevice(BaseDevice):
             src (str): The path to the file to be copied to the device.
             dest (str, optional): The name to use for storing the file on the device.
                 Defaults to use the name of the ``src`` file.
-            kwargs: Any additional arguments supported by Netmiko's ``file_copy`` method.
+            kwargs (dict): Any additional arguments supported by Netmiko's ``file_copy`` method.
 
         Raises:
             NotImplementedError: Function currently not implemented.
@@ -984,7 +984,7 @@ class AIREOSDevice(BaseDevice):
             vendor_specifics (dict): Any vendor specific arguments to pass to the install method.
 
         Returns:
-            bool: True when the install is successful, False when the version is deemed to already be running.
+            (bool): True when the install is successful, False when the version is deemed to already be running.
 
         Raises:
             OSInstallError: When the device is not booted with the specified image after reload.
@@ -1047,7 +1047,7 @@ class AIREOSDevice(BaseDevice):
         Determine if the current processor is the active processor.
 
         Returns:
-            bool: True if the processor is active or does not support HA, else False.
+            (bool): True if the processor is active or does not support HA, else False.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1115,8 +1115,8 @@ class AIREOSDevice(BaseDevice):
         Determine the redundancy state of the peer processor.
 
         Returns:
-            str: The redundancy state of the peer processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the peer processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1142,10 +1142,10 @@ class AIREOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
             controller (str): Which controller(s) to reboot (only applies to HA pairs).
             save_config (bool): Whether the configuration should be saved before reload.
-            kwargs: Additional arguments that are not used, but are accepted for backwards compatibility.
+            kwargs (dict): Additional arguments that are not used, but are accepted for backwards compatibility.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -1192,7 +1192,7 @@ class AIREOSDevice(BaseDevice):
         Get operating redundancy mode of the controller.
 
         Returns:
-            str: The redundancy mode the device is operating in.
+            (str): The redundancy mode the device is operating in.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1211,8 +1211,8 @@ class AIREOSDevice(BaseDevice):
         Determine the redundancy state of the current processor.
 
         Returns:
-            str: The redundancy state of the current processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the current processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1256,7 +1256,7 @@ class AIREOSDevice(BaseDevice):
         Save the configuration on the device.
 
         Returns:
-            bool: True if the save command did not fail.
+            (bool): True if the save command did not fail.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1273,7 +1273,7 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             image_name (str): The version to boot into on next reload.
-            **vendor_specifics: Additional vendor-specific arguments (unused).
+            **vendor_specifics (dict): Additional vendor-specific arguments (unused).
 
         Raises:
             NTCFileNotFoundError: When the version is not listed in ``boot_options``.
@@ -1317,11 +1317,11 @@ class AIREOSDevice(BaseDevice):
         Args:
             command (str|list): The commands to send to the device.
             expect_string (str): The expected prompt after running the command.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_command``.
+            **netmiko_args (dict): Any argument supported by ``netmiko.ConnectHandler.send_command``.
 
         Returns:
-            str: When ``command`` is str, the data returned from the device.
-            list: When ``command`` is list, the data returned from the device for each command.
+            (str): When ``command`` is str, the data returned from the device.
+            (list): When ``command`` is list, the data returned from the device for each command.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -1409,10 +1409,9 @@ class AIREOSDevice(BaseDevice):
 
         Args:
             image (str): The image that should be sent to the APs.
-            timeout (int): Removed, The max time to wait for all APs to download the image.
 
         Returns:
-            bool: True if AP images are transferred or swapped, False otherwise.
+            (bool): True if AP images are transferred or swapped, False otherwise.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1486,7 +1485,7 @@ class AIREOSDevice(BaseDevice):
         Get uptime of the device in seconds.
 
         Returns:
-            int: The number of seconds the device has been up.
+            (int): The number of seconds the device has been up.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1507,7 +1506,7 @@ class AIREOSDevice(BaseDevice):
         Get uptime of the device as a string in the format is dd::hh::mm.
 
         Returns:
-            str: The uptime of the device.
+            (str): The uptime of the device.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)
@@ -1524,7 +1523,7 @@ class AIREOSDevice(BaseDevice):
         All configured WLANs.
 
         Returns:
-            dict: WLAN IDs mapped to their operational data.
+            (dict): WLAN IDs mapped to their operational data.
 
         Example:
             >>> device = AIREOSDevice(**connection_args)

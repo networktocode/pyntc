@@ -52,7 +52,7 @@ class IOSXEWLCDevice(IOSDevice):
             OSInstallError: Unable to install OS Error type
 
         Returns:
-            bool: False if no install is needed, true if the install completes successfully
+            (bool): False if no install is needed, true if the install completes successfully
         """
         timeout = vendor_specifics.get("timeout", 5400)
         if not self._image_booted(image_name):
@@ -95,7 +95,7 @@ class IOSXEWLCDevice(IOSDevice):
             netmiko_args (dict): Additional arguments to pass to Netmiko's send_command method.
 
         Returns:
-            str: Output of command.
+            (str): Output of command.
         """
         self.enable()
         log.debug("Host %s: Successfully executed command 'show'.", self.host)

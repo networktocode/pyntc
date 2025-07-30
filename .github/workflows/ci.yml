@@ -70,6 +70,10 @@ jobs:
           poetry-version: "1.8.5"
       - name: "Checking: poetry lock file"
         run: "poetry lock --check"
+    needs:
+      - "ruff-format"
+      - "ruff-lint"
+      - "yamllint"
   yamllint:
     runs-on: "ubuntu-24.04"
     env:
@@ -83,6 +87,9 @@ jobs:
           poetry-version: "1.8.5"
       - name: "Linting: yamllint"
         run: "poetry run invoke yamllint"
+    needs:
+      - "ruff-format"
+      - "ruff-lint"
   pylint:
     runs-on: "ubuntu-24.04"
     strategy:
@@ -118,6 +125,8 @@ jobs:
         run: "docker image ls"
       - name: "Linting: Pylint"
         run: "poetry run invoke pylint"
+    needs:
+      - "poetry"
   pytest:
     strategy:
       fail-fast: true
@@ -153,6 +162,8 @@ jobs:
         run: "docker image ls"
       - name: "Run Tests"
         run: "poetry run invoke pytest"
+    needs:
+      - "poetry"
   publish_gh:
     name: "Publish to GitHub"
     runs-on: "ubuntu-24.04"

@@ -19,11 +19,7 @@ class BaseVlans(BaseFeature):
 
 
 class VlanNotInRangeError(NTCError):
-    """Vlan error.
-
-    Args:
-        NTCError (str): Vlan range error.
-    """
+    """Vlan error."""
 
     def __init__(self, lower, upper):
         """Exception for vlan range validation.
