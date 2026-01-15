@@ -1,0 +1,30 @@
+{
+    "cookiecutter": {
+        "codeowner_github_usernames": "@jeffkala @pszulczewski @pke11y",
+        "full_name": "Network to Code, LLC",
+        "email": "info@networktocode.com",
+        "github_org": "networktocode",
+        "description": "Python library focused on tasks related to device level and OS management.",
+        "project_name": "pyntc",
+        "project_slug": "pyntc",
+        "repo_url": "https://github.com/networktocode/pyntc",
+        "base_url": "pyntc",
+        "project_python_name": "pyntc",
+        "project_python_base_version": "3.10",
+        "project_with_config_settings": "no",
+        "generate_docs": "no",
+        "version": "2.0.2",
+        "original_publish_year": "2016",
+        "_drift_manager": {
+            "template": "https://github.com/networktocode-llc/cookiecutter-ntc.git",
+            "template_dir": "python",
+            "template_ref": "main",
+            "cookie_dir": "",
+            "pull_request_strategy": "create",
+            "post_actions": [],
+            "draft": false,
+            "baked_commit_ref": "",
+            "drift_managed_branch": "develop"
+        }
+    }
+}
