@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Kickoff functions for getting instance of device objects."""
 
 import os
@@ -96,3 +97,10 @@ def _get_config_from_file(filename=None):
     config.read(filename)
 
     return config, filename
+=======
+"""Initialization file for library."""
+
+from importlib import metadata
+
+__version__ = metadata.version(__name__)
+>>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

@@ -1,7 +1,13 @@
 ---
+<<<<<<< HEAD
 pyntc:
   python_ver: "3.11"
   # local: false
+=======
+"pyntc":
+  python_ver: "3.10"
+  local: false
+>>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
   # image_name: "pyntc"
   # image_ver: "latest"
   # pwd: "."
