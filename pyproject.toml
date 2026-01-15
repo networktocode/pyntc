@@ -23,7 +23,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.10,<3.14"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
