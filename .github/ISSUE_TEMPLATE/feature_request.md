@@ -5,11 +5,7 @@ about: Propose a new feature or enhancement
 ---
 
 ### Environment
-<<<<<<< HEAD
-* pyntc version:  <!-- Example: 2.0.2 -->
-=======
 * pyntc version:  <!-- Example: 1.0.0 -->
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 <!--
     Describe in detail the new functionality you are proposing.

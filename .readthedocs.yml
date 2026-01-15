@@ -6,13 +6,6 @@
 # Required
 version: 2
 
-<<<<<<< HEAD
-# Set the version of Python in the build environment.
-build:
-  os: "ubuntu-22.04"
-  tools:
-    python: "3.10"
-=======
 # Setup the build environment.
 build:
   os: "ubuntu-lts-latest"
@@ -28,16 +21,7 @@ build:
       # VIRTUAL_ENV needs to be set manually for now.
       # See https://github.com/readthedocs/readthedocs.org/pull/11152/
       - "VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only docs"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 mkdocs:
   configuration: "mkdocs.yml"
   fail_on_warning: true
-<<<<<<< HEAD
-
-# Use our docs/requirements.txt during installation.
-python:
-  install:
-    - requirements: "docs/requirements.txt"
-=======
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

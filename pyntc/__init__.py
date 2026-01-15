@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Kickoff functions for getting instance of device objects."""
 
 import os
@@ -6,7 +5,11 @@ import warnings
 from importlib import metadata
 
 from .devices import supported_devices
-from .errors import ConfFileNotFoundError, DeviceNameNotFoundError, UnsupportedDeviceError
+from .errors import (
+    ConfFileNotFoundError,
+    DeviceNameNotFoundError,
+    UnsupportedDeviceError,
+)
 
 try:
     from configparser import ConfigParser as SafeConfigParser
@@ -97,10 +100,3 @@ def _get_config_from_file(filename=None):
     config.read(filename)
 
     return config, filename
-=======
-"""Initialization file for library."""
-
-from importlib import metadata
-
-__version__ = metadata.version(__name__)
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

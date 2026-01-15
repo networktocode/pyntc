@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import os
 from unittest import mock
 
@@ -384,15 +383,3 @@ def iosxewlc_send_command(iosxewlc_device, iosxewlc_mock_path):
         return device
 
     return _mock
-=======
-"""Used to setup fixtures to be used through tests"""
-
-import pytest
-from click.testing import CliRunner
-
-
-@pytest.fixture
-def cli_runner():
-    """Provide CLI runner for Click tests."""
-    return CliRunner()
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

@@ -1,12 +1,9 @@
 """Tasks for use with Invoke."""
 
-<<<<<<< HEAD
-=======
 import os
 import re
 from pathlib import Path
 
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 from invoke import Collection, Exit
 from invoke import task as invoke_task
 
@@ -14,12 +11,7 @@ from invoke import task as invoke_task
 def is_truthy(arg):
     """Convert "truthy" strings into Booleans.
 
-<<<<<<< HEAD
-    Examples
-    --------
-=======
     Examples:
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
         >>> is_truthy('yes')
         True
     Args:
@@ -44,19 +36,11 @@ namespace.configure(
     {
         "pyntc": {
             "project_name": "pyntc",
-<<<<<<< HEAD
-            "python_ver": "3.12",
-            "local": False,
-            "image_name": "pyntc",
-            "image_ver": "latest",
-            "pwd": ".",
-=======
             "python_ver": "3.10",
             "local": is_truthy(os.getenv("INVOKE_PYNTC_LOCAL", "false")),
             "image_name": "pyntc",
-            "image_ver": os.getenv("INVOKE_PARSER_IMAGE_VER", "latest"),
+            "image_ver": os.getenv("INVOKE_PYNTC_IMAGE_VER", "latest"),
             "pwd": Path(__file__).parent,
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
         }
     }
 )
@@ -97,13 +81,7 @@ def run_command(context, exec_cmd, port=None):
         print(f"LOCAL - Running command {exec_cmd}")
         result = context.run(exec_cmd, pty=True)
     else:
-<<<<<<< HEAD
         print(f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}")
-=======
-        print(
-            f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}"
-        )
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
         if port:
             result = context.run(
                 f"docker run -it -p {port} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
@@ -118,12 +96,9 @@ def run_command(context, exec_cmd, port=None):
     return result
 
 
-<<<<<<< HEAD
-=======
 # ------------------------------------------------------------------------------
 # BUILD
 # ------------------------------------------------------------------------------
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 @task(
     help={
         "cache": "Whether to use Docker's cache when building images (default enabled)",
@@ -143,12 +118,7 @@ def build(context, cache=True, force_rm=False, hide=False):
 
     result = context.run(command, hide=hide)
     if result.exited != 0:
-<<<<<<< HEAD
         print(f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}")
-=======
-        print(
-            f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}"
-        )
 
 
 @task
@@ -169,19 +139,12 @@ def generate_packages(context):
 def lock(context, check=False):
     """Generate poetry.lock inside the library container."""
     run_command(context, f"poetry {'check' if check else 'lock --no-update'}")
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 
 @task
 def clean(context):
     """Remove the project specific image."""
-<<<<<<< HEAD
     print(f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}")
-=======
-    print(
-        f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}"
-    )
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     context.run(f"docker rmi {context.pyntc.image_name}:{context.pyntc.image_ver} --force")
     print(f"Successfully removed image {context.pyntc.image_name}:{context.pyntc.image_ver}")
 
@@ -194,11 +157,6 @@ def rebuild(context):
 
 
 @task
-<<<<<<< HEAD
-def pytest(context, args=""):
-    """Run pytest test cases."""
-    exec_cmd = f"pytest {args}"
-=======
 def coverage(context):
     """Run the coverage report against pytest."""
     exec_cmd = "coverage run --source=pyntc -m pytest"
@@ -211,7 +169,6 @@ def coverage(context):
 def pytest(context):
     """Run pytest test cases."""
     exec_cmd = "pytest -vv --doctest-modules pyntc/ && coverage run --source=pyntc -m pytest && coverage report"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     run_command(context, exec_cmd)
 
 
@@ -293,29 +250,16 @@ def cli(context):
     context.run(f"{dev}", pty=True)
 
 
-<<<<<<< HEAD
-@task
-def tests(context):
-=======
 @task(
     help={
         "lint-only": "Only run linters; unit tests will be excluded. (default: False)",
     }
 )
 def tests(context, lint_only=False):
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     """Run all tests for the specified name and Python version.
 
     Args:
         context (obj): Used to run specific commands
-<<<<<<< HEAD
-    """
-    ruff(context)
-    pylint(context)
-    yamllint(context)
-    pytest(context)
-
-=======
         lint_only (bool): If True, only run linters and skip unit tests.
     """
     # If we are not running locally, start the docker containers so we don't have to for each test
@@ -333,16 +277,10 @@ def tests(context, lint_only=False):
     if not lint_only:
         print("Running unit tests...")
         pytest(context)
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     print("All tests have passed!")
 
 
 @task
-<<<<<<< HEAD
-def docs(context):
-    """Build and serve docs locally for development."""
-    exec_cmd = "mkdocs serve -v --dev-addr=0.0.0.0:8001"
-=======
 def build_and_check_docs(context):
     """Build documentation and test the configuration."""
     command = "mkdocs build --no-directory-urls --strict"
@@ -364,7 +302,6 @@ def build_and_check_docs(context):
 def docs(context):
     """Build and serve docs locally for development."""
     exec_cmd = "mkdocs serve -v"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     run_command(context, exec_cmd, port="8001:8001")
 
 

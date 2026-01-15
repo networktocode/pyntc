@@ -1,10 +1,6 @@
 ---
 dev_addr: "127.0.0.1:8001"
-<<<<<<< HEAD
-edit_uri: "edit/develop/docs"
-=======
 edit_uri: "edit/main/pyntc/docs"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 site_dir: "pyntc/static/pyntc/docs"
 site_name: "Pyntc Documentation"
 site_url: "https://pyntc.readthedocs.io/en/latest/"
@@ -18,18 +14,13 @@ theme:
     - "python"
     - "yaml"
   features:
-<<<<<<< HEAD
     - "content.code.annotate"
-    - "content.code.copy"
     - "content.tabs.link"
     - "navigation.footer"
-=======
     - "content.action.edit"
     - "content.action.view"
     - "content.code.copy"
-    - "navigation.footer"
     - "navigation.indexes"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
     - "navigation.tabs"
     - "navigation.tabs.sticky"
     - "navigation.tracking"
@@ -54,16 +45,6 @@ theme:
       toggle:
         icon: "material/weather-night"
         name: "Switch to light mode"
-<<<<<<< HEAD
-
-validation:
-  absolute_links: "warn"
-  anchors: "warn"
-  omitted_files: "warn"
-  unrecognized_links: "warn"
-
-=======
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 extra_css:
   - "assets/extra.css"
 
@@ -93,15 +74,9 @@ markdown_extensions:
   - "toc":
       permalink: true
   - "attr_list"
-<<<<<<< HEAD
-  - "markdown_data_tables":
-      base_path: "docs"
-  - "md_in_html"
-=======
   - "md_in_html"
   - "markdown_data_tables":
       base_path: "docs"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
   - "pymdownx.details"
   # Need pymdownx.emoji for Grid icon search
   - pymdownx.emoji:
@@ -126,11 +101,7 @@ plugins:
       scripts:
         - "docs/generate_code_reference_pages.py"
   - "glightbox":
-<<<<<<< HEAD
-      manual: true # See https://blueswen.github.io/mkdocs-glightbox/flexibility/enable-by-image-or-page/
-=======
       manual: true  # See https://blueswen.github.io/mkdocs-glightbox/flexibility/enable-by-image-or-page/
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
   - "section-index"
   - "mkdocstrings":
       default_handler: "python"
@@ -143,24 +114,17 @@ plugins:
             show_root_members_full_path: true
             show_source: false
 
-<<<<<<< HEAD
-=======
 validation:
   absolute_links: "warn"
   anchors: "warn"
   omitted_files: "warn"
   unrecognized_links: "warn"
 
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 nav:
   - Overview: "index.md"
   - User Guide:
       - Library Overview: "user/lib_overview.md"
       - Getting Started: "user/lib_getting_started.md"
-<<<<<<< HEAD
-=======
-      - Using the Library: "user/lib_use_cases.md"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
       - Frequently Asked Questions: "user/faq.md"
   - Administrator Guide:
       - Install and Configure: "admin/install.md"
@@ -168,7 +132,6 @@ nav:
       - Uninstall: "admin/uninstall.md"
       - Release Notes:
           - "admin/release_notes/index.md"
-<<<<<<< HEAD
           - v0.0: "admin/release_notes/version_0.0.md"
           - v0.14: "admin/release_notes/version_0.14.md"
           - v0.15: "admin/release_notes/version_0.15.md"
@@ -179,14 +142,10 @@ nav:
           - v0.20: "admin/release_notes/version_0.20.md"
           - v1.0: "admin/release_notes/version_1.0.md"
           - v2.0: "admin/release_notes/version_2.0.md"
-=======
-          - v1.0: "admin/release_notes/version_1.0.md"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
   - Developer Guide:
       - Extending the Library: "dev/extending.md"
       - Contributing to the Library: "dev/contributing.md"
       - Development Environment: "dev/dev_environment.md"
-<<<<<<< HEAD
       - Code Reference:
           - pyntc: "code-reference/pyntc/__init__.md"
           - pyntc.errors: "code-reference/pyntc/errors.md"
@@ -213,7 +172,3 @@ nav:
           - pyntc.utils.converters: "code-reference/pyntc/utils/converters.md"
           - pyntc.utils.templates: "code-reference/pyntc/utils/templates/__init__.md"
           - pyntc.arch_decision: "dev/arch_decision.md"
-=======
-      - Release Checklist: "dev/release_checklist.md"
-      - Architecture Design Records: "dev/arch_decision.md"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

@@ -306,8 +306,5 @@ invoke.yml
 docs/README.md
 docs/CHANGELOG.md
 public
-<<<<<<< HEAD
-=======
 /compose.yaml
 /dump.sql
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)

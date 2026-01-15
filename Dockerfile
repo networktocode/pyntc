@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-ARG PYTHON_VER=3.11
-=======
 ARG PYTHON_VER="3.10"
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 FROM python:${PYTHON_VER}-slim
 
@@ -12,11 +8,7 @@ FROM python:${PYTHON_VER}-slim
 # This also makes it so that Poetry will *not* be included in the "final" image since it's not installed to /usr/local/
 ARG POETRY_HOME=/opt/poetry
 ARG POETRY_INSTALLER_PARALLEL=true
-<<<<<<< HEAD
-ARG POETRY_VERSION=1.8.2
-=======
 ARG POETRY_VERSION=2.1.3
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
 ARG POETRY_VIRTUALENVS_CREATE=false
 ADD https://install.python-poetry.org /tmp/install-poetry.py
 RUN python /tmp/install-poetry.py
@@ -31,8 +23,4 @@ WORKDIR /local
 COPY . /local
 
 # Install the app
-<<<<<<< HEAD
-RUN poetry install --with dev
-=======
 RUN poetry install --with dev --all-extras
->>>>>>> 2122990 (Cookie initially baked targeting develop by NetworkToCode Cookie Drift Manager Tool)
