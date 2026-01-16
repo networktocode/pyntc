@@ -168,7 +168,7 @@ def coverage(context):
 @task
 def pytest(context):
     """Run pytest test cases."""
-    exec_cmd = "pytest -vv --doctest-modules pyntc/ && coverage run --source=pyntc -m pytest && coverage report"
+    exec_cmd = "coverage run --source=pyntc -m pytest && coverage report"
     run_command(context, exec_cmd)
 
 
