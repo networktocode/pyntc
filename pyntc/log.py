@@ -10,9 +10,7 @@ APP = "pyntc"
 FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 """ Logging format to use. """
 
-DEBUG_FORMAT = (
-    "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s: %(message)s"
-)
+DEBUG_FORMAT = "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s: %(message)s"
 """ Logging format used when debug output is enabled. """
 
 
