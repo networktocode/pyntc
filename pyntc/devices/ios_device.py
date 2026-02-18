@@ -12,9 +12,9 @@ from netmiko.exceptions import ReadTimeout
 if TYPE_CHECKING:
     from netmiko.base_connection import BaseConnection
 
-from pyntc import log
-from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
-from pyntc.errors import (
+from pyntc import log  # pylint: disable=wrong-import-position
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs  # pylint: disable=wrong-import-position
+from pyntc.errors import (  # pylint: disable=wrong-import-position
     CommandError,
     CommandListError,
     DeviceNotActiveError,
@@ -26,8 +26,8 @@ from pyntc.errors import (
     RebootTimeoutError,
     SocketClosedError,
 )
-from pyntc.utils import get_structured_data
-from pyntc.utils.models import FilePullSpec
+from pyntc.utils import get_structured_data  # pylint: disable=wrong-import-position
+from pyntc.utils.models import FilePullSpec  # pylint: disable=wrong-import-position
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
@@ -45,7 +45,10 @@ INSTALL_MODE_FILE_NAME = "packages.conf"
 class FileTransferURLPull(CiscoIosFileTransfer):
     """Custom FileTransfer class to optionally allow downloading files from a url."""
 
-    def __init__(
+    # Netmiko's FileTransfer class requires a source_file to exist.
+    # When doing a url pull, the source_file is the FilePullSpec, which doesn't exist on the filesystem,
+    # so we have to override the __init__ method to get around this, and not call super().__init__(), since it assumes the file exists.
+    def __init__(  # pylint: disable=super-init-not-called, too-many-positional-arguments
         self,
         ssh_conn: "BaseConnection",
         source_file: Union[str, "FilePullSpec"],
@@ -150,7 +153,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
             elif self.direction == "get":
                 remote_file = self.source_file
         remote_sha512_cmd = f"{base_cmd} {self.file_system}/{remote_file}"
-        dest_sha512 = self.ssh_ctl_chan._send_command_str(remote_sha512_cmd, read_timeout=300)
+        dest_sha512 = self.ssh_ctl_chan._send_command_str(remote_sha512_cmd, read_timeout=300)  # pylint: disable=protected-access
         dest_sha512 = self.process_md5(dest_sha512)  # Process MD5 still does what we want for parsing the output.
         return dest_sha512
 
@@ -159,8 +162,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
         if self.source_sha512:
             dest_sha512 = self.remote_sha512()
             return self.source_sha512 == dest_sha512
-        else:
-            return super().compare_md5()
+        return super().compare_md5()
 
 
 @fix_docs
