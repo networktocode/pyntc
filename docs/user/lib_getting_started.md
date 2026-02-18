@@ -250,6 +250,33 @@ interface GigabitEthernet1
 >>>
 ```
 
+#### File Copy with URL
+
+All devices that support file copy also support copying files directly from a URL to the device.  This is useful for larger files like OS images.  To do this, you need to use the `FilePullSpec` data model to specify the source file information and then pass that to the `file_copy` method. Currently only supported on Cisco IOS devices. Tested with ftp, http, https, sftp, and tftp urls.
+
+```python
+from pyntc.utils.models import FilePullSpec
+
+>>> source_file = FilePullSpec(
+...     download_url='http://example.com/newconfig.cfg',
+...     checksum='abc123def456',
+...     hashing_algorithm='md5',
+...     file_name='newconfig.cfg'
+... )
+>>> for device in devices:
+...    device.file_copy(source_file)
+...
+>>>
+```
+
+We recommend setting up the ip client on the device to be able to use this feature. For instance, on a Cisco IOS device you would need to set the source interface for the ip client when using http or https urls.  You can do this with the `config` method:
+
+```python
+>>> csr1.config('ip http client source-interface GigabitEthernet1')
+>>>
+```
+
+
 ### Save Configs
 
 - `save` method

@@ -1,11 +1,9 @@
 """Module for using a Cisco IOS device over SSH."""
 
-from typing import Callable, Optional, Any, Type, Union
-from typing import TYPE_CHECKING
-import contextlib
 import os
 import re
 import time
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 from netmiko import ConnectHandler
 from netmiko.cisco import CiscoIosFileTransfer
@@ -59,6 +57,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
         progress4: Optional[Callable[..., Any]] = None,
         hash_supported: bool = True,
     ) -> None:
+        """Uses Netmiko's FileTransfer class to transfer files to and from the device, but also supports pulling files directly from a URL to the device using the device's own download capabilities."""
         self.ssh_ctl_chan = ssh_conn
         self.source_file = source_file
         self.dest_file = dest_file
@@ -86,9 +85,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
             self.source_md5 = self.file_md5(source_file) if hash_supported else None
             self.file_size = os.stat(source_file).st_size
         elif direction == "get":
-            self.source_md5 = (
-                self.remote_md5(remote_file=source_file) if hash_supported else None
-            )
+            self.source_md5 = self.remote_md5(remote_file=source_file) if hash_supported else None
             self.file_size = self.remote_file_size(remote_file=source_file)
         elif direction == "url_pull":
             if not isinstance(source_file, FilePullSpec):
@@ -96,10 +93,16 @@ class FileTransferURLPull(CiscoIosFileTransfer):
             # For url_pull, source_file is the URL and dest_file is the filename to save as on the device
             if source_file.hashing_algorithm and source_file.hashing_algorithm.lower() not in {"md5", "sha512"}:
                 raise ValueError("When direction is 'url_pull', hashing_algorithm must be either 'md5' or 'sha512'.")
-            self.source_md5 = source_file.checksum if hash_supported and source_file.hashing_algorithm.lower() == "md5" else None
-            self.source_sha512 = source_file.checksum if hash_supported and source_file.hashing_algorithm.lower() == "sha512" else None
+            self.source_md5 = (
+                source_file.checksum if hash_supported and source_file.hashing_algorithm.lower() == "md5" else None
+            )
+            self.source_sha512 = (
+                source_file.checksum if hash_supported and source_file.hashing_algorithm.lower() == "sha512" else None
+            )
             self.file_size = source_file.file_size
-            self.direction = "put"  # FileTransfer only supports put and get, so treat url_pull as put for the transfer process
+            self.direction = (
+                "put"  # FileTransfer only supports put and get, so treat url_pull as put for the transfer process
+            )
         else:
             raise ValueError("Invalid direction specified")
 
@@ -117,12 +120,18 @@ class FileTransferURLPull(CiscoIosFileTransfer):
             if current_prompt in output:
                 return
             # Assume that the filename and address are sent with the url.
-            if re.search(r"(confirm|Address or name of remote host|Source filename|Destination filename)", output, re.IGNORECASE):
+            if re.search(
+                r"(confirm|Address or name of remote host|Source filename|Destination filename)", output, re.IGNORECASE
+            ):
                 output = self.ssh_ctl_chan.send_command("", expect_string=expect_regex, read_timeout=300)
             if re.search(r"Password", output, re.IGNORECASE):
-                output = self.ssh_ctl_chan.send_command(self.source_file.token, expect_string=expect_regex, read_timeout=300, cmd_verify=False)
+                output = self.ssh_ctl_chan.send_command(
+                    self.source_file.token, expect_string=expect_regex, read_timeout=300, cmd_verify=False
+                )
             if re.search(r"Source username", output, re.IGNORECASE):
-                output = self.ssh_ctl_chan.send_command(self.source_file.username, expect_string=expect_regex, read_timeout=300)
+                output = self.ssh_ctl_chan.send_command(
+                    self.source_file.username, expect_string=expect_regex, read_timeout=300
+                )
             if re.search(r"yes/no|Are you sure you want to continue connecting", output, re.IGNORECASE):
                 output = self.ssh_ctl_chan.send_command("yes", expect_string=expect_regex, read_timeout=300)
 
@@ -133,9 +142,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
         else:
             super().transfer_file()
 
-    def remote_sha512(
-        self, base_cmd: str = "verify /sha512", remote_file: Optional[str] = None
-    ) -> str:
+    def remote_sha512(self, base_cmd: str = "verify /sha512", remote_file: Optional[str] = None) -> str:
         """Calculate the sha512 hash of the file on the device."""
         if remote_file is None:
             if self.direction == "put":
@@ -144,7 +151,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
                 remote_file = self.source_file
         remote_sha512_cmd = f"{base_cmd} {self.file_system}/{remote_file}"
         dest_sha512 = self.ssh_ctl_chan._send_command_str(remote_sha512_cmd, read_timeout=300)
-        dest_sha512 = self.process_md5(dest_sha512) # Process MD5 still does what we want for parsing the output.
+        dest_sha512 = self.process_md5(dest_sha512)  # Process MD5 still does what we want for parsing the output.
         return dest_sha512
 
     def compare_md5(self) -> bool:
@@ -154,6 +161,7 @@ class FileTransferURLPull(CiscoIosFileTransfer):
             return self.source_sha512 == dest_sha512
         else:
             return super().compare_md5()
+
 
 @fix_docs
 class IOSDevice(BaseDevice):
