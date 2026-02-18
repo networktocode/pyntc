@@ -221,7 +221,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. If no file_system is provided, then the ``get_file_system``
+                remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
         """
         raise NotImplementedError
@@ -241,7 +241,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. If no file_system is provided, then the ``get_file_system``
+                remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
 
         Returns:
