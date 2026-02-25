@@ -618,7 +618,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             filename (str): The name of the file to check for on the remote device.
-            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            hashing_algorithm (str): The hashing algorithm to use. Valid choices are "md5" and "sha512" (default: "md5").
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
@@ -803,7 +803,7 @@ class IOSDevice(BaseDevice):
                 command = f"{command} vrf {src.vrf}"
 
             # _send_command currently checks for % and raises an error, but during the file copy
-            # their may be a % warning that does not indicate a failure so we will use send_command directly.
+            # there may be a % warning that does not indicate a failure so we will use send_command directly.
             output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
 
             while current_prompt not in output:
