@@ -613,15 +613,12 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Config register %s", self.host, self._config_register)
         return self._config_register
 
-    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None, **kwargs):
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
         """Get the checksum of a remote file.
 
         Args:
             filename (str): The name of the file to check for on the remote device.
             hashing_algorithm (str): The hashing algorithm to use (default: "md5").
-            kwargs (dict): Additional keyword arguments that may be used by subclasses.
-
-        Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
@@ -639,14 +636,17 @@ class IOSDevice(BaseDevice):
             file_system = self._get_file_system()
         cmd = f"verify /{hashing_algorithm} {file_system}/{filename}"
         result = self.native.send_command_timing(cmd, read_timeout=300)
-        if match := re.search(r"=\s+(\S+)", result):
-            log.debug(
-                "Host %s: Remote checksum for file %s with hashing algorithm %s is %s.",
-                self.host,
-                filename,
-                hashing_algorithm,
-                match[1],
-            )
+
+        patterns = [r"=\s+(\S+)", r"^([a-fA-F0-9]+)$"]
+        for pattern in patterns:
+            if match := re.search(pattern, result):
+                log.debug(
+                    "Host %s: Remote checksum for file %s with hashing algorithm %s is %s.",
+                    self.host,
+                    filename,
+                    hashing_algorithm,
+                    match[1],
+                )
             return match[1]
         log.error(
             "Host %s: Unable to get remote checksum for file %s with hashing algorithm %s",
@@ -658,7 +658,7 @@ class IOSDevice(BaseDevice):
             cmd, f"Unable to get remote checksum for file {filename} with hashing algorithm {hashing_algorithm}"
         )
 
-    def check_file_exists(self, filename, file_system=None, **kwargs):
+    def check_file_exists(self, filename, file_system=None):
         """Check if a remote file exists by filename.
 
         Args:
@@ -666,7 +666,6 @@ class IOSDevice(BaseDevice):
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
-            kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
         Returns:
             (bool): True if the remote file exists, False if it doesn't.
@@ -676,8 +675,7 @@ class IOSDevice(BaseDevice):
         """
         cmd = f"dir {file_system or self._get_file_system()}/{filename}"
         result = self.native.send_command(cmd, read_timeout=30)
-        print(f"Result: {result}")
-        log.info(
+        log.debug(
             "Host %s: Checking if file %s exists on remote with command '%s' and result: %s",
             self.host,
             filename,
@@ -690,7 +688,25 @@ class IOSDevice(BaseDevice):
         if re.search(rf"Directory of .*{filename}", result):
             log.debug("Host %s: File %s exists on remote.", self.host, filename)
             return True
-        raise CommandError(cmd, f"Unable to determine if file {filename} exists on remote.")
+        raise CommandError(cmd, f"Unable to determine if file {filename} exists on remote: {result}")
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+        """Verify a file on the remote device by and validate the checksums.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, file_system=file_system
+        )
 
     def file_copy(self, src, dest=None, file_system=None):
         """Copy file to device.
@@ -788,7 +804,7 @@ class IOSDevice(BaseDevice):
 
             # _send_command currently checks for % and raises an error, but during the file copy
             # their may be a % warning that does not indicate a failure so we will use send_command directly.
-            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=900)
+            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
 
             while current_prompt not in output:
                 # Check for success message in output to break loop and avoid waiting for next prompt
@@ -805,7 +821,7 @@ class IOSDevice(BaseDevice):
                     if re.search(prompt, output, re.IGNORECASE):
                         is_password = "Password" in prompt
                         output = self.native.send_command(
-                            answer, expect_string=expect_regex, read_timeout=900, cmd_verify=not is_password
+                            answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
                         )
                         break  # Exit the for loop and check the new output for the next prompt
 

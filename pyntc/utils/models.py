@@ -17,6 +17,7 @@ class FileCopyModel:
         checksum (str): The expected checksum of the file.
         file_name (str): The name of the file to be saved on the device.
         hashing_algorithm (str, optional): The hashing algorithm to use for checksum verification. Defaults to "md5".
+        timeout (int, optional): The timeout for the download operation in seconds. Defaults to 900.
         file_size (int, optional): The expected size of the file in bytes. Optional but can be used for an additional layer of verification.
         username (str, optional): The username for authentication if required by the URL. Optional if credentials are included in the URL.
         token (str, optional): The password or token for authentication if required by the URL. Optional if credentials are included in the URL.
@@ -28,6 +29,7 @@ class FileCopyModel:
     checksum: str
     file_name: str
     hashing_algorithm: str = "md5"
+    timeout: int = 900  # Timeout for the download operation in seconds
     file_size: Optional[int] = None  # Size in bytes
     username: Optional[str] = None
     token: Optional[str] = None  # Password/Token

@@ -487,6 +487,7 @@ class TestIOSDevice(unittest.TestCase):
             checksum="12345",
             file_name="test.bin",
             hashing_algorithm="md5",
+            timeout=900,
         )
         self.assertEqual(src.clean_url, "sftp://1.1.1.1/test.bin")
         self.assertEqual(src.username, "user")
@@ -536,6 +537,7 @@ class TestIOSDevice(unittest.TestCase):
             checksum="12345",
             file_name="test.bin",
             hashing_algorithm="md5",
+            timeout=300,
         )
         self.assertEqual(src.clean_url, src.download_url)
         self.assertIsNone(src.username)
@@ -557,14 +559,11 @@ class TestIOSDevice(unittest.TestCase):
             self.device.remote_file_copy(src, file_system="flash:")
 
             # Verify the command sent was correct
-            self.device.native.send_command.assert_any_call(
-                "copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900
-            )
             self.device.native.send_command.assert_has_calls(
                 [
-                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900),
+                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=300),
                     mock.call(
-                        "", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                        "", expect_string=mock.ANY, read_timeout=300, cmd_verify=True
                     ),  # Respond to "Address or name of remote host"
                 ]
             )

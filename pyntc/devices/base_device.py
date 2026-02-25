@@ -298,10 +298,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             (str): The hex digest of the file.
         """
         # Initialize the hash object dynamically
-        try:
-            file_hash = hashlib.new(hashing_algorithm.lower())
-        except ValueError as e:
-            raise ValueError(f"Unsupported hashing algorithm: {hashing_algorithm}") from e
+        file_hash = hashlib.new(hashing_algorithm.lower())
 
         with open(filepath, "rb") as f:
             # Read in chunks to handle large firmware files without RAM spikes
@@ -321,6 +318,11 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             filename (str): The name of the file to check for on the remote device.
             hashing_algorithm (str): The hashing algorithm to use (default: "md5").
             kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
 
         Returns:
             (bool): True if the checksums match, False otherwise.
@@ -351,12 +353,15 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             hashing_algorithm (str): The hashing algorithm to use (default: "md5").
             kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
         Returns:
             (bool): True if the file is verified successfully, False otherwise.
         """
-        return self.check_file_exists(filename, **kwargs) and self.compare_file_checksum(
-            checksum, filename, hashing_algorithm, **kwargs
-        )
+        raise NotImplementedError
 
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name.
