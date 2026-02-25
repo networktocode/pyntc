@@ -8,8 +8,7 @@ import pytest
 from pyntc.devices import IOSDevice
 from pyntc.devices import ios_device as ios_module
 from pyntc.devices.base_device import RollbackError
-from pyntc.devices.ios_device import CiscoIosFileTransfer, FileTransferURLPull
-from pyntc.utils.models import FilePullSpec
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.ios import send_command, send_command_expect
 
@@ -103,7 +102,7 @@ class TestIOSDevice(unittest.TestCase):
         self.assertTrue(result)
         self.device.native.send_command_timing.assert_any_call("copy running-config startup-config")
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists(self, mock_ft):
         self.device.native.send_command.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
@@ -115,7 +114,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertTrue(result)
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_bad_md5(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
@@ -127,7 +126,7 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     def test_file_copy_remote_exists_not(self, mock_ft):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
@@ -139,85 +138,92 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy(self, mock_open, mock_ft):
+    def test_file_copy(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_verify_file.side_effect = [False, True]
+        mock_get_local_checksum.return_value = "dummy_checksum"
         self.device.file_copy("path/to/source_file")
 
-        mock_ft.assert_called_with(
-            self.device.native, "path/to/source_file", "source_file", direction="put", file_system="flash:"
-        )
+        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
         mock_open.assert_called_once()
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_different_dest(self, mock_open, mock_ft):
+    def test_file_copy_different_dest(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
 
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_verify_file.side_effect = [False, True]
         self.device.file_copy("source_file", "dest_file")
 
-        mock_ft.assert_called_with(
-            self.device.native, "source_file", "dest_file", direction="put", file_system="flash:"
-        )
+        mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="flash:")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
         mock_open.assert_called_once()
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail(self, mock_open, mock_ft):
+    def test_file_copy_fail(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = Exception
-        mock_ft_instance.check_file_exists.return_value = False
+        mock_verify_file.return_value = False
 
         with self.assertRaises(ios_module.FileTransferError):
             self.device.file_copy("source_file")
 
         mock_open.assert_not_called()
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_socket_closed_good_md5(self, mock_open, mock_ft):
+    def test_file_copy_socket_closed_good_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = OSError
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
-        mock_ft_instance.compare_md5.side_effect = [True, True]
+        mock_verify_file.side_effect = [False, True]
+        mock_ft_instance.compare_md5.return_value = True
 
         self.device.file_copy("path/to/source_file")
 
-        mock_ft.assert_called_with(
-            self.device.native, "path/to/source_file", "source_file", direction="put", file_system="flash:"
-        )
+        mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
-        mock_ft_instance.compare_md5.assert_has_calls([mock.call(), mock.call()])
+        mock_ft_instance.compare_md5.assert_has_calls([mock.call()])
         mock_open.assert_called_once()
 
-    @mock.patch("pyntc.devices.ios_device.FileTransferURLPull", autospec=True)
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail_socket_closed_bad_md5(self, mock_open, mock_ft):
+    def test_file_copy_fail_socket_closed_bad_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = OSError
         mock_ft_instance.check_file_exists.return_value = False
+        mock_verify_file.return_value = False
+        mock_get_local_checksum.return_value = "dummy_checksum"
         mock_ft_instance.compare_md5.return_value = False
 
         with self.assertRaises(ios_module.SocketClosedError):
@@ -421,234 +427,173 @@ class TestIOSDevice(unittest.TestCase):
         mock_wait.assert_not_called()
         mock_reboot.assert_not_called()
 
+    def test_get_local_checksum(self):
+        # Create a temporary file with known content
+        test_file_path = "test_file.txt"
+        test_content = "This is a test file for checksum."
+        with open(test_file_path, "w") as f:
+            f.write(test_content)
 
-class TestFileTransferURLPull(unittest.TestCase):
-    @mock.patch.object(IOSDevice, "open")
-    @mock.patch.object(IOSDevice, "close")
-    @mock.patch("netmiko.cisco.cisco_ios.CiscoIosSSH", autospec=True)
-    def setUp(self, mock_miko, mock_close, mock_open):
-        self.device = IOSDevice("host", "user", "pass")
-        mock_miko.send_command_timing.side_effect = send_command
-        mock_miko.send_command_expect.side_effect = send_command_expect
-        mock_miko.device_type = "cisco_ios"
-        self.device.native = mock_miko  # Mock the native connection for testing
-        self.source_file = FilePullSpec(
-            download_url="http://example.com/file.bin",
-            checksum="abc123",
-            file_name="file.bin",
+        import hashlib
+
+        with self.subTest("Test get_local_checksum returns correct md5 checksum"):
+            expected_checksum = hashlib.md5(test_content.encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path)
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum returns correct sha512 checksum"):
+            expected_checksum = hashlib.sha512(test_content.encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path, hashing_algorithm="sha512")
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum with add_newline=True"):
+            expected_checksum = hashlib.md5((test_content + "\n").encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path, add_newline=True)
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum with invalid hashing algorithm"):
+            with self.assertRaises(ValueError):
+                self.device.get_local_checksum(test_file_path, hashing_algorithm="invalid_algo")
+
+        # Clean up the temporary file
+        os.remove(test_file_path)
+
+    def test_check_file_exists(self):
+        with self.subTest("Test check_file_exists returns True when file exists"):
+            self.device.native.send_command_expect.side_effect = None
+            self.device.native.send_command.return_value = "Directory of flash:/file.txt\n"
+            self.assertTrue(self.device.check_file_exists("file.txt", file_system="flash:"))
+
+        with self.subTest("Test check_file_exists returns False when file does not exist"):
+            self.device.native.send_command_expect.side_effect = None
+            self.device.native.send_command.return_value = "%Error opening flash:/file.txt\n"
+            self.assertFalse(self.device.check_file_exists("file.txt", file_system="flash:"))
+
+    def test_get_remote_checksum(self):
+        with self.subTest("Test get_remote_checksum returns correct md5 checksum"):
+            self.device.native.send_command_timing.side_effect = None
+            self.device.native.send_command_timing.return_value = "MD5 (flash:/file.txt) = dummy_checksum"
+            self.assertEqual(self.device.get_remote_checksum("file.txt", file_system="flash:"), "dummy_checksum")
+
+        with self.subTest("Test get_remote_checksum with invalid hashing algorithm"):
+            with self.assertRaises(ValueError):
+                self.device.get_remote_checksum("file.txt", hashing_algorithm="invalid_algo", file_system="flash:")
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_success(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="sftp://user:test@1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
             hashing_algorithm="md5",
-            file_size=1024,
-            username="user",
-            token="pass",
-            vrf="VRF1",
-            ftp_passive=True,
         )
-        self.dest_file = "file.bin"
+        self.assertEqual(src.clean_url, "sftp://1.1.1.1/test.bin")
+        self.assertEqual(src.username, "user")
+        self.assertEqual(src.token, "test")
 
-    def tearDown(self):
-        # Reset the mock so we don't have transient test effects
-        self.device.native.reset_mock()
+        # Scenario: First verify_file fails (needs copy), second verify_file succeeds (copy worked)
+        mock_verify.side_effect = [False, True]
 
-    def test_init(self):
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        self.assertEqual(
-            ft.direction, "put"
-        )  # The class should set direction to "put" if using url_pull as Netmiko only supports "put" or "get"
-        self.assertEqual(ft.source_file, self.source_file)
-        self.assertEqual(ft.dest_file, self.dest_file)
-        self.assertEqual(ft.source_md5, self.source_file.checksum)
-        self.assertIsNone(ft.source_sha512)
-        self.assertTrue(ft.pull_from_url)
-
-    def test_init_sha512(self):
-        self.source_file.hashing_algorithm = "sha512"
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        self.assertEqual(
-            ft.direction, "put"
-        )  # The class should set direction to "put" if using url_pull as Netmiko only supports "put" or "get"
-        self.assertEqual(ft.source_file, self.source_file)
-        self.assertIsNone(ft.source_md5)
-        self.assertEqual(ft.source_sha512, self.source_file.checksum)
-        self.assertTrue(ft.pull_from_url)
-
-    @mock.patch.object(CiscoIosFileTransfer, "transfer_file")
-    @mock.patch("pyntc.devices.ios_device.os", return_value=1024)
-    @mock.patch.object(FileTransferURLPull, "file_md5", return_value="abc123")
-    @mock.patch.object(FileTransferURLPull, "pull_file")
-    def test_transfer_file_pull_file(self, mock_pull_file, mock_file_md5, mock_os, mock_transfer_file):
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        ft.transfer_file()
-        mock_pull_file.assert_called_once()
-        mock_transfer_file.assert_not_called()
-
-    @mock.patch.object(CiscoIosFileTransfer, "transfer_file")
-    @mock.patch("pyntc.devices.ios_device.os", return_value=1024)
-    @mock.patch.object(FileTransferURLPull, "file_md5", return_value="abc123")
-    @mock.patch.object(FileTransferURLPull, "pull_file")
-    def test_transfer_file_transfer_file(self, mock_pull_file, mock_file_md5, mock_os, mock_transfer_file):
-        ft2 = FileTransferURLPull(
-            self.device.native, "test1.txt", self.dest_file, direction="put", file_system="flash:"
-        )
-        ft2.transfer_file()
-        mock_pull_file.assert_not_called()
-        mock_transfer_file.assert_called_once()
-
-    @mock.patch.object(CiscoIosFileTransfer, "compare_md5")
-    @mock.patch.object(FileTransferURLPull, "remote_sha512", return_value="abc123")
-    @mock.patch("pyntc.devices.ios_device.os", return_value=1024)
-    @mock.patch.object(FileTransferURLPull, "file_md5", return_value="abc123")
-    @mock.patch.object(FileTransferURLPull, "pull_file")
-    def test_compare_md5_sha512(self, mock_pull_file, mock_file_md5, mock_os, mock_remote_sha512, mock_compare_md5):
-        self.source_file.hashing_algorithm = "sha512"
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        ft.compare_md5()
-        mock_compare_md5.assert_not_called()
-        mock_remote_sha512.assert_called_once()
-
-    @mock.patch.object(CiscoIosFileTransfer, "compare_md5")
-    @mock.patch.object(FileTransferURLPull, "remote_sha512", return_value="abc123")
-    @mock.patch("pyntc.devices.ios_device.os", return_value=1024)
-    @mock.patch.object(FileTransferURLPull, "file_md5", return_value="abc123")
-    @mock.patch.object(FileTransferURLPull, "pull_file")
-    def test_compare_md5(self, mock_pull_file, mock_file_md5, mock_os, mock_remote_sha512, mock_compare_md5):
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        ft.compare_md5()
-        mock_compare_md5.assert_called_once()
-        mock_remote_sha512.assert_not_called()
-
-    def test_remote_sha512(self):
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        with mock.patch.object(self.device.native, "_send_command_str", return_value="= abc123") as mock_send_command:
-            result = ft.remote_sha512()
-            mock_send_command.assert_called_once_with("verify /sha512 flash:/file.bin", read_timeout=300)
-            self.assertEqual(result, "abc123")
-
-    def test_pull_file(self):
-        self.device.native.find_prompt.return_value = "router#"
-        ft = FileTransferURLPull(
-            self.device.native, self.source_file, self.dest_file, direction="url_pull", file_system="flash:"
-        )
-        with mock.patch.object(
-            self.device.native,
-            "send_command",
-            return_value="copy http://example.com/file.bin flash:/file.bin\nCopy complete\nrouter#",
-        ) as mock_send_command:
-            ft.pull_file()
-            mock_send_command.assert_called_once_with(
-                "copy http://example.com/file.bin flash:file.bin",  # HTTP does not use VRF in the command
-                expect_string="(Destination filename|router\\#|confirm|Password|Address or name of remote host|Source username|Source filename|yes/no|Are you sure you want to continue connecting)",
-                read_timeout=300,
-            )
-        source_file = FilePullSpec(
-            download_url="sftp://example.com/file.bin",
-            checksum="abc123",
-            file_name="file.bin",
-            hashing_algorithm="md5",
-            file_size=1024,
-            username="user",
-            token="pass",
-            vrf="VRF1",
-            ftp_passive=True,
-        )
-        ft2 = FileTransferURLPull(
-            self.device.native,
-            source_file=source_file,
-            dest_file=self.dest_file,
-            direction="url_pull",
-            file_system="flash:",
-        )
-        with mock.patch.object(
-            self.device.native,
-            "send_command",
-            return_value="copy sftp://example.com/file.bin flash:file.bin vrf VRF1\nCopy complete\nrouter#",
-        ) as mock_send_command:
-            ft2.pull_file()
-            mock_send_command.assert_called_once_with(
-                "copy sftp://example.com/file.bin flash:file.bin vrf VRF1",
-                expect_string="(Destination filename|router\\#|confirm|Password|Address or name of remote host|Source username|Source filename|yes/no|Are you sure you want to continue connecting)",
-                read_timeout=300,
-            )
-
-    def test_pull_file_all_prompts(self):
-        self.device.native.find_prompt.return_value = "router#"
-        source_file = FilePullSpec(
-            download_url="sftp://example.com/file.bin",
-            checksum="abc123",
-            file_name="file.bin",
-            hashing_algorithm="md5",
-            file_size=1024,
-            username="user",
-            token="pass",
-            vrf="VRF1",
-            ftp_passive=True,
-        )
-        ft = FileTransferURLPull(
-            self.device.native,
-            source_file=source_file,
-            dest_file=self.dest_file,
-            direction="url_pull",
-            file_system="flash:",
-        )
-        responses = [
-            "Address or name of remote host [example.com]?",
-            "Source username [user]?",
-            "Source filename [file.bin]?",
-            "Destination filename [file.bin]?",
-            "%Warning: There is a file already existing with this name\nDo you want to over write? [confirm]",
-            "Password: ",
-            "1024 bytes copied in 2 secs\nrouter#",
+        # Simulate the prompt sequence:
+        # 1. Initial command -> gets "Address or name of remote host"
+        # 2. Responds with "" -> gets "Copy complete"
+        self.device.native.send_command.side_effect = [
+            "Address or name of remote host [1.1.1.1]?",
+            "Source username?",
+            "Password:",
+            "123456 bytes copied in 10.2 secs. Copy complete.",
         ]
+        self.device.native.find_prompt.return_value = "Router#"
 
-        # Shared expect_string to keep the assertion clean
-        expect_regex = r"(Destination filename|router\#|confirm|Password|Address or name of remote host|Source username|Source filename|yes/no|Are you sure you want to continue connecting)"
+        with self.subTest("Test successful copy with interactive prompts"):
+            self.device.remote_file_copy(src, dest="test.bin", file_system="flash:")
 
-        with mock.patch.object(self.device.native, "send_command", side_effect=responses) as mock_send_command:
-            ft.pull_file()
+            # Verify the command sent was correct
+            self.device.native.send_command.assert_any_call(
+                "copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900
+            )
+            self.device.native.send_command.assert_has_calls(
+                [
+                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900),
+                    mock.call(
+                        "", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                    ),  # Respond to "Address or name of remote host"
+                    mock.call(
+                        "user", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                    ),  # Respond to "Source username?"
+                    mock.call(
+                        "test", expect_string=mock.ANY, read_timeout=900, cmd_verify=False
+                    ),  # Respond to "Password:"
+                ]
+            )
 
-            # Define the expected sequence of calls
-            expected_calls = [
-                # The initial copy command
-                mock.call(
-                    "copy sftp://example.com/file.bin flash:file.bin vrf VRF1",
-                    expect_string=expect_regex,
-                    read_timeout=300,
-                ),
-                # The response to the "Address or name of remote host" prompt (sending a newline/empty string to accept the default)
-                mock.call("", expect_string=expect_regex, read_timeout=300),
-                # The response to the "Source username" prompt (sending the username)
-                mock.call("user", expect_string=expect_regex, read_timeout=300),
-                # The response to the "Source filename" prompt (sending a newline/empty string to accept the default)
-                mock.call("", expect_string=expect_regex, read_timeout=300),
-                # The response to the "Destination filename" prompt (sending a newline/empty string to accept the default)
-                mock.call("", expect_string=expect_regex, read_timeout=300),
-                # The response to the confirm overwrite prompt (sending a newline/empty string to accept)
-                mock.call("", expect_string=expect_regex, read_timeout=300),
-                # The response to the Password prompt
-                mock.call(
-                    "pass",
-                    expect_string=expect_regex,
-                    read_timeout=300,
-                    cmd_verify=False,  # Don't verify the command for password input
-                ),
-            ]
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_no_dest(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="sftp://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+        )
+        self.assertEqual(src.clean_url, src.download_url)
+        self.assertIsNone(src.username)
+        self.assertIsNone(src.token)
 
-            # Use any_order=False to ensure the conversation happened in the right sequence
-            mock_send_command.assert_has_calls(expected_calls, any_order=False)
+        # Scenario: First verify_file fails (needs copy), second verify_file succeeds (copy worked)
+        mock_verify.side_effect = [False, True]
 
-            # Verify it didn't loop more times than necessary
-            self.assertEqual(mock_send_command.call_count, 7)
+        # Simulate the prompt sequence:
+        # 1. Initial command -> gets "Address or name of remote host"
+        # 2. Responds with "" -> gets "Copy complete"
+        self.device.native.send_command.side_effect = [
+            "Address or name of remote host [1.1.1.1]?",
+            "123456 bytes copied in 10.2 secs. Copy complete.",
+        ]
+        self.device.native.find_prompt.return_value = "Router#"
+
+        with self.subTest("Test successful copy with interactive prompts"):
+            self.device.remote_file_copy(src, file_system="flash:")
+
+            # Verify the command sent was correct
+            self.device.native.send_command.assert_any_call(
+                "copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900
+            )
+            self.device.native.send_command.assert_has_calls(
+                [
+                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900),
+                    mock.call(
+                        "", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                    ),  # Respond to "Address or name of remote host"
+                ]
+            )
+
+    def test_remote_file_copy_type_error(self):
+        with self.subTest("Test raises TypeError if src is not FileCopyModel"):
+            with self.assertRaises(TypeError):
+                self.device.remote_file_copy("not_a_model")
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_failure_on_error_output(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="tftp://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+        )
+        mock_verify.return_value = False
+        self.device.native.find_prompt.return_value = "Router#"
+
+        # Simulate a network error returned by the device
+        self.device.native.send_command.return_value = "%Error opening tftp://1.1.1.1/test.bin (Timed out)"
+
+        with self.subTest("Test raises FileTransferError when device returns Error string"):
+            from pyntc.errors import FileTransferError
+
+            with self.assertRaises(FileTransferError):
+                self.device.remote_file_copy(src)
 
 
 if __name__ == "__main__":

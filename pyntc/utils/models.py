@@ -9,19 +9,19 @@ HASHING_ALGORITHMS = {"md5", "sha1", "sha224", "sha384", "sha256", "sha512", "sh
 
 
 @dataclass
-class FilePullSpec:
+class FileCopyModel:
     """Data class to represent the specification for pulling a file from a URL to a network device.
 
     Args:
         download_url (str): The URL to download the file from. Can include credentials, but it's recommended to use the username and token fields instead for security reasons.
         checksum (str): The expected checksum of the file.
         file_name (str): The name of the file to be saved on the device.
-        hashing_algorithm (str): The hashing algorithm to use for checksum verification. Defaults to "md5".
+        hashing_algorithm (str, optional): The hashing algorithm to use for checksum verification. Defaults to "md5".
         file_size (int, optional): The expected size of the file in bytes. Optional but can be used for an additional layer of verification.
         username (str, optional): The username for authentication if required by the URL. Optional if credentials are included in the URL.
         token (str, optional): The password or token for authentication if required by the URL. Optional if credentials are included in the URL.
         vrf (str, optional): The VRF to use for the download if the device supports VRFs. Optional.
-        ftp_passive (bool): Whether to use passive mode for FTP downloads. Defaults to True.
+        ftp_passive (bool, optional): Whether to use passive mode for FTP downloads. Defaults to True.
     """
 
     download_url: str

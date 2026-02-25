@@ -189,7 +189,7 @@ def pylint(context):
     Args:
         context (obj): Used to run specific commands
     """
-    exec_cmd = 'pylint pyntc'
+    exec_cmd = "pylint --verbose pyntc"
     run_command(context, exec_cmd)
 
 

@@ -1,9 +1,11 @@
 """The module contains the base class that all device classes must inherit from."""
 
+import hashlib
 import importlib
 import warnings
 
 from pyntc.errors import FeatureNotFoundError, NTCError
+from pyntc.utils.models import FileCopyModel
 
 
 def fix_docs(cls):
@@ -247,6 +249,114 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         Returns:
             (bool): True if the remote file exists, False if it doesn't.
         """
+
+    def check_file_exists(self, filename, **kwargs):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+        """
+        raise NotImplementedError
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (str): The checksum of the remote file.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def get_local_checksum(filepath, hashing_algorithm="md5", add_newline=False):
+        """Get the checksum of a local file using a specified algorithm.
+
+        Args:
+            filepath (str): The path to the local file.
+            hashing_algorithm (str): The hashing algorithm to use (e.g., "md5", "sha256").
+            add_newline (bool): Whether to append a newline before final hashing (Some devices may require this).
+
+        Returns:
+            (str): The hex digest of the file.
+        """
+        # Initialize the hash object dynamically
+        try:
+            file_hash = hashlib.new(hashing_algorithm.lower())
+        except ValueError as e:
+            raise ValueError(f"Unsupported hashing algorithm: {hashing_algorithm}") from e
+
+        with open(filepath, "rb") as f:
+            # Read in chunks to handle large firmware files without RAM spikes
+            for chunk in iter(lambda: f.read(4096), b""):
+                file_hash.update(chunk)
+
+        if add_newline:
+            file_hash.update(b"\n")
+
+        return file_hash.hexdigest()
+
+    def compare_file_checksum(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Compare the checksum of a local file with a remote file.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Returns:
+            (bool): True if the checksums match, False otherwise.
+        """
+        return checksum == self.get_remote_checksum(filename, hashing_algorithm, **kwargs)
+
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs):
+        """Copy a file to a remote device.
+
+        Args:
+            src (FileCopyModel): The source file model.
+            dest (str): The destination file path on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+        """
+        raise NotImplementedError
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Verify a file on the remote device by and validate the checksums.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename, **kwargs) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, **kwargs
+        )
 
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name.
