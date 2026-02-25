@@ -809,7 +809,9 @@ class IOSDevice(BaseDevice):
                         )
                         break  # Exit the for loop and check the new output for the next prompt
 
-            if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            if not self.verify_file(
+                src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
+            ):
                 log.error(
                     "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
                     self.host,
