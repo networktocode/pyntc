@@ -343,7 +343,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         raise NotImplementedError
 
     def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
-        """Verify a file on the remote device by and validate the checksums.
+        """Verify a file on the remote device by confirming the file exists and validate the checksum.
 
         Args:
             checksum (str): The checksum of the file.

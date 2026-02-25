@@ -272,7 +272,7 @@ from pyntc.utils.models import FileCopyModel
 >>>
 ```
 
-We recommend setting up the ip client on the device to be able to use this feature. For instance, on a Cisco IOS device you would need to set the source interface for the ip client when using http or https urls.  You can do this with the `config` method:
+Before using this feature you may need to configure a client on the device. For instance, on a Cisco IOS device you would need to set the source interface for the ip http client when using http or https urls.  You can do this with the `config` method:
 
 ```python
 >>> csr1.config('ip http client source-interface GigabitEthernet1')
