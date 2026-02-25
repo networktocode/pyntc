@@ -809,13 +809,13 @@ class IOSDevice(BaseDevice):
                         )
                         break  # Exit the for loop and check the new output for the next prompt
 
-        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
-            log.error(
-                "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
-                self.host,
-                FileTransferError.default_message,
-            )
-            raise FileTransferError
+            if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+                log.error(
+                    "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
+                    self.host,
+                    FileTransferError.default_message,
+                )
+                raise FileTransferError
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
