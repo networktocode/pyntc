@@ -189,7 +189,7 @@ def pylint(context):
     Args:
         context (obj): Used to run specific commands
     """
-    exec_cmd = 'find . -name "*.py" | grep -vE "tests/unit" | xargs pylint'
+    exec_cmd = "pylint --verbose pyntc"
     run_command(context, exec_cmd)
 
 

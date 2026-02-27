@@ -22,6 +22,7 @@ from pyntc.errors import (
     SocketClosedError,
 )
 from pyntc.utils import get_structured_data
+from pyntc.utils.models import FileCopyModel
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
@@ -105,6 +106,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Device entered config mode.", self.host)
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+        """Create a FileTransfer instance for copying a file to the device."""
         if dest is None:
             dest = os.path.basename(src)
 
@@ -611,6 +613,101 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Config register %s", self.host, self._config_register)
         return self._config_register
 
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid choices are "md5" and "sha512" (default: "md5").
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (str): The checksum of the remote file.
+
+        Raises:
+            ValueError: If an unsupported hashing algorithm is provided.
+            CommandError: If there is an error in executing the command to get the remote checksum.
+        """
+        if hashing_algorithm not in {"md5", "sha512"}:
+            raise ValueError("hashing_algorithm must be either 'md5' or 'sha512' for Cisco IOS devices.")
+        if file_system is None:
+            file_system = self._get_file_system()
+        cmd = f"verify /{hashing_algorithm} {file_system}/{filename}"
+        result = self.native.send_command_timing(cmd, read_timeout=300)
+
+        patterns = [r"=\s+(\S+)", r"^([a-fA-F0-9]+)$"]
+        for pattern in patterns:
+            if match := re.search(pattern, result):
+                log.debug(
+                    "Host %s: Remote checksum for file %s with hashing algorithm %s is %s.",
+                    self.host,
+                    filename,
+                    hashing_algorithm,
+                    match[1],
+                )
+            return match[1]
+        log.error(
+            "Host %s: Unable to get remote checksum for file %s with hashing algorithm %s",
+            self.host,
+            filename,
+            hashing_algorithm,
+        )
+        raise CommandError(
+            cmd, f"Unable to get remote checksum for file {filename} with hashing algorithm {hashing_algorithm}"
+        )
+
+    def check_file_exists(self, filename, file_system=None):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+
+        Raises:
+            CommandError: If there is an error in executing the command to check if the file exists.
+        """
+        cmd = f"dir {file_system or self._get_file_system()}/{filename}"
+        result = self.native.send_command(cmd, read_timeout=30)
+        log.debug(
+            "Host %s: Checking if file %s exists on remote with command '%s' and result: %s",
+            self.host,
+            filename,
+            cmd,
+            result,
+        )
+        if re.search(r"No such file|No files found|Path does not exist|Error opening", result):
+            log.debug("Host %s: File %s does not exist on remote.", self.host, filename)
+            return False
+        if re.search(rf"Directory of .*{filename}", result):
+            log.debug("Host %s: File %s exists on remote.", self.host, filename)
+            return True
+        raise CommandError(cmd, f"Unable to determine if file {filename} exists on remote: {result}")
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+        """Verify a file on the remote device by and validate the checksums.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, file_system=file_system
+        )
+
     def file_copy(self, src, dest=None, file_system=None):
         """Copy file to device.
 
@@ -628,7 +725,11 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        if not self.file_copy_remote_exists(src, dest, file_system):
+        dest = dest or os.path.basename(src)
+        local_checksum = self.get_local_checksum(src)
+        log.debug("Host %s: Local checksum for file %s is %s.", self.host, src, local_checksum)
+
+        if not self.verify_file(local_checksum, dest, file_system=file_system):
             file_copy = self._file_copy_instance(src, dest, file_system=file_system)
             #        if not self.fc.verify_space_available():
             #            raise FileTransferError('Not enough space available.')
@@ -642,7 +743,7 @@ class IOSDevice(BaseDevice):
                 # compare hashes
                 if not file_copy.compare_md5():
                     log.error("Host %s: Socket closed error %s", self.host, error)
-                    raise SocketClosedError(message=error)
+                    raise SocketClosedError(message=error) from error
                 log.error("Host %s: OS error  %s", self.host, error)
             except:  # noqa E722
                 log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
@@ -653,7 +754,7 @@ class IOSDevice(BaseDevice):
             # Ensure connection to device is still open after long transfers
             self.open()
 
-            if not self.file_copy_remote_exists(src, dest, file_system):
+            if not self.verify_file(local_checksum, dest, file_system=file_system):
                 log.error(
                     "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
                     self.host,
@@ -661,9 +762,82 @@ class IOSDevice(BaseDevice):
                 )
                 raise FileTransferError
 
+    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
+        """Copy a file to a remote device.
+
+        Args:
+            src (FileCopyModel): The source file model.
+            dest (str): The destination file path on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Raises:
+            TypeError: If src is not an instance of FileCopyModel.
+            FileTransferError: If there is an error during file transfer or if the file cannot be verified after transfer.
+        """
+        if not isinstance(src, FileCopyModel):
+            raise TypeError("src must be an instance of FileCopyModel")
+        if file_system is None:
+            file_system = self._get_file_system()
+        if dest is None:
+            dest = src.file_name
+        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            current_prompt = self.native.find_prompt()
+
+            # Define prompt mapping for expected prompts during file copy
+            prompt_answers = {
+                r"Password": src.token,
+                r"Source username": src.username,
+                r"yes/no|Are you sure you want to continue connecting": "yes",
+                r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",  # Press Enter
+            }
+            keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
+            expect_regex = f"({'|'.join(keys)})"
+
+            command = f"copy {src.clean_url} {file_system}{dest}"
+            if src.vrf and src.scheme not in {"http", "https"}:
+                command = f"{command} vrf {src.vrf}"
+
+            # _send_command currently checks for % and raises an error, but during the file copy
+            # there may be a % warning that does not indicate a failure so we will use send_command directly.
+            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
+
+            while current_prompt not in output:
+                # Check for success message in output to break loop and avoid waiting for next prompt
+                if re.search(r"Copy complete|bytes copied in|File transfer successful", output, re.IGNORECASE):
+                    log.info(
+                        "Host %s: File %s transferred successfully with output: %s", self.host, src.file_name, output
+                    )
+                    break
+                # Check for errors explicitly to avoid infinite loops on failure
+                if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
+                    log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
+                    raise FileTransferError
+                for prompt, answer in prompt_answers.items():
+                    if re.search(prompt, output, re.IGNORECASE):
+                        is_password = "Password" in prompt
+                        output = self.native.send_command(
+                            answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
+                        )
+                        break  # Exit the for loop and check the new output for the next prompt
+
+            if not self.verify_file(
+                src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
+            ):
+                log.error(
+                    "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
+                    self.host,
+                    FileTransferError.default_message,
+                )
+                raise FileTransferError
+
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        """Copy file to device.
+        """Check if file exists on remote device.
 
         Args:
             src (str): Source of file.
