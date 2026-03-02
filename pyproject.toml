@@ -1,33 +1,29 @@
-# This file has been modified by NetworktoCode, LLC.
-
 [tool.poetry]
 name = "pyntc"
 version = "2.0.2"
-description = "SDK to simplify common workflows for Network Devices."
-authors = ["Network to Code, LLC <info@networktocode.com>"]
+description = "Python library focused on tasks related to device level and OS management."
+authors = ["Network to Code, LLC <opensource@networktocode.com>"]
 readme = "README.md"
+homepage = "https://pyntc.readthedocs.io/"
+repository = "https://github.com/networktocode/pyntc"
+documentation = "https://pyntc.readthedocs.io/"
 license = "Apache-2.0"
-keywords = ["network", "os-upgrades", "network devices"]
 classifiers = [
     "Intended Audience :: Developers",
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
-homepage = "https://pyntc.readthedocs.io"
-repository = "https://github.com/networktocode/pyntc"
-documentation = "https://pyntc.readthedocs.io"
-
 include = [
     "LICENSE",
     "README.md",
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.10,<3.14"
 f5-sdk = "^3.0.21"
 junos-eznc = "^2.6"
 netmiko = "^4.0"
@@ -40,6 +36,7 @@ scp = "^0.14"
 pyntc = 'pyntc.cli:main'
 
 [tool.poetry.group.dev.dependencies]
+coverage = "*"
 requests_mock = "*"
 pytest = "*"
 mock = "*"
@@ -50,9 +47,11 @@ yamllint = "^1.35.1"
 invoke = "^2.2.0"
 toml = "^0.10.2"
 attrs = "^23.2.0"
-towncrier = "^24.8.0"
+towncrier = ">=23.6.0,<=24.8.0"
 ruff = "*"
 Markdown = "*"
+
+[tool.poetry.group.docs.dependencies]
 # Rendering docs to HTML
 mkdocs = "1.6.1"
 # Embedding YAML files into Markdown documents as tables
@@ -75,6 +74,7 @@ mkdocs-section-index = "0.3.10"
 mkdocstrings = "0.27.0"
 # Python-specific extension to mkdocstrings
 mkdocstrings-python = "1.13.0"
+griffe = "1.1.1"
 
 [tool.pyntc]
 string_required = "some string"
@@ -86,7 +86,7 @@ file = "README.md"
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -129,7 +129,7 @@ ignore=[".venv", "tests"]
 
 [tool.pylint.basic]
 # No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.
-no-docstring-rgx = "^(_|test_)"
+no-docstring-rgx = "^(_|test_|Meta$)"
 
 
 [tool.pylint.messages_control]
@@ -157,7 +157,7 @@ notes = """,
     """
 
 [build-system]
-requires = ["poetry_core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
@@ -170,10 +170,15 @@ addopts = "-vv --doctest-modules -p no:warnings --ignore-glob='*mock*'"
 [tool.towncrier]
 package = "pyntc"
 directory = "changes"
-filename = "docs/release_notes.md"
-template = "changes/towncrier_template.j2"
+filename = "docs/admin/release_notes/version_X.Y.md"
+template = "towncrier_template.j2"
 start_string = "<!-- towncrier release notes start -->"
 issue_format = "[#{issue}](https://github.com/networktocode/pyntc/issues/{issue})"
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Breaking Changes"
+showcontent = true
 
 [[tool.towncrier.type]]
 directory = "security"

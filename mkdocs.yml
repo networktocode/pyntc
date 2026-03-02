@@ -1,6 +1,6 @@
 ---
 dev_addr: "127.0.0.1:8001"
-edit_uri: "edit/develop/docs"
+edit_uri: "edit/main/pyntc/docs"
 site_dir: "pyntc/static/pyntc/docs"
 site_name: "Pyntc Documentation"
 site_url: "https://pyntc.readthedocs.io/en/latest/"
@@ -15,9 +15,12 @@ theme:
     - "yaml"
   features:
     - "content.code.annotate"
-    - "content.code.copy"
     - "content.tabs.link"
     - "navigation.footer"
+    - "content.action.edit"
+    - "content.action.view"
+    - "content.code.copy"
+    - "navigation.indexes"
     - "navigation.tabs"
     - "navigation.tabs.sticky"
     - "navigation.tracking"
@@ -42,13 +45,6 @@ theme:
       toggle:
         icon: "material/weather-night"
         name: "Switch to light mode"
-
-validation:
-  absolute_links: "warn"
-  anchors: "warn"
-  omitted_files: "warn"
-  unrecognized_links: "warn"
-
 extra_css:
   - "assets/extra.css"
 
@@ -78,9 +74,9 @@ markdown_extensions:
   - "toc":
       permalink: true
   - "attr_list"
+  - "md_in_html"
   - "markdown_data_tables":
       base_path: "docs"
-  - "md_in_html"
   - "pymdownx.details"
   # Need pymdownx.emoji for Grid icon search
   - pymdownx.emoji:
@@ -105,7 +101,7 @@ plugins:
       scripts:
         - "docs/generate_code_reference_pages.py"
   - "glightbox":
-      manual: true # See https://blueswen.github.io/mkdocs-glightbox/flexibility/enable-by-image-or-page/
+      manual: true  # See https://blueswen.github.io/mkdocs-glightbox/flexibility/enable-by-image-or-page/
   - "section-index"
   - "mkdocstrings":
       default_handler: "python"
@@ -117,6 +113,12 @@ plugins:
             show_root_heading: true
             show_root_members_full_path: true
             show_source: false
+
+validation:
+  absolute_links: "warn"
+  anchors: "warn"
+  omitted_files: "warn"
+  unrecognized_links: "warn"
 
 nav:
   - Overview: "index.md"

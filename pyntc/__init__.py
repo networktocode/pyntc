@@ -5,7 +5,11 @@ import warnings
 from importlib import metadata
 
 from .devices import supported_devices
-from .errors import ConfFileNotFoundError, DeviceNameNotFoundError, UnsupportedDeviceError
+from .errors import (
+    ConfFileNotFoundError,
+    DeviceNameNotFoundError,
+    UnsupportedDeviceError,
+)
 
 try:
     from configparser import ConfigParser as SafeConfigParser
