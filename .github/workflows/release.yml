@@ -1,6 +1,6 @@
 ---
 name: "Release"
-on: # yamllint disable-line rule:truthy rule:comments
+on:  # yamllint disable-line rule:truthy rule:comments
   release:
     types: ["published"]
 

@@ -171,4 +171,5 @@ nav:
           - pyntc.utils: "code-reference/pyntc/utils/__init__.md"
           - pyntc.utils.converters: "code-reference/pyntc/utils/converters.md"
           - pyntc.utils.templates: "code-reference/pyntc/utils/templates/__init__.md"
+          - pyntc.utils.models: "code-reference/pyntc/utils/models.md"
           - pyntc.arch_decision: "dev/arch_decision.md"
