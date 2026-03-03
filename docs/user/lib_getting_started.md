@@ -250,6 +250,35 @@ interface GigabitEthernet1
 >>>
 ```
 
+#### Remote File Copy (Download to Device)
+
+Some devices support copying files directly from a URL to the device. This is useful for larger files like OS images.  To do this, you need to use the `FileCopyModel` data model to specify the source file information and then pass that to the `remote_file_copy` method. Currently only supported on Cisco IOS devices. Tested with ftp, http, https, sftp, and tftp urls.
+
+- `remote_file_copy` method
+
+```python
+from pyntc.utils.models import FileCopyModel
+
+>>> source_file = FileCopyModel(
+...     download_url='sftp://example.com/newconfig.cfg',
+...     checksum='abc123def456',
+...     hashing_algorithm='md5',
+...     file_name='newconfig.cfg',
+        vrf='Mgmt-vrf'
+... )
+>>> for device in devices:
+...    device.remote_file_copy(source_file)
+...
+>>>
+```
+
+Before using this feature you may need to configure a client on the device. For instance, on a Cisco IOS device you would need to set the source interface for the ip http client when using http or https urls.  You can do this with the `config` method:
+
+```python
+>>> csr1.config('ip http client source-interface GigabitEthernet1')
+>>>
+```
+
 ### Save Configs
 
 - `save` method

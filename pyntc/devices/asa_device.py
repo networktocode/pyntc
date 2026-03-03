@@ -4,7 +4,7 @@ import os
 import re
 import time
 from collections import Counter
-from ipaddress import ip_address, IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
+from ipaddress import IPv4Address, IPv4Interface, IPv6Address, IPv6Interface, ip_address
 from typing import Dict, Iterable, List, Optional, Union
 
 from netmiko import ConnectHandler
@@ -38,6 +38,7 @@ class ASADevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, host: str, username: str, password: str, secret="", port=None, **kwargs):  # nosec
         """
         Pyntc Device constructor for Cisco ASA.
@@ -48,6 +49,7 @@ class ASADevice(BaseDevice):
             password (str): The password to authenticate to the device.
             secret (str, optional): The password to escalate privilege on the device. Defaults to 22.
             port (int, optional): Port used to establish connection. Defaults to 22.
+            kwargs (dict): Additional keyword arguments to pass to the Netmiko connection handler.
         """
         super().__init__(host, username, password, device_type="cisco_asa_ssh")
 
@@ -116,7 +118,7 @@ class ASADevice(BaseDevice):
         """Determine the default file system or directory for device.
 
         Returns:
-            str: The name of the default file system or directory for the device.
+            (str): The name of the default file system or directory for the device.
 
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
@@ -141,7 +143,7 @@ class ASADevice(BaseDevice):
             host (str): Whether to get IP Addresses for `self` or `peer` device.
 
         Returns:
-            dict: The list of ``ip_interface`` objects mapped to their associated interface.
+            (dict): The list of ``ip_interface`` objects mapped to their associated interface.
 
         Example:
             >>> dev = ASADevice(**connection_args)
@@ -162,7 +164,7 @@ class ASADevice(BaseDevice):
         results = {
             interface: [IPv4Interface(f"{address}/{netmask}")] for interface, address, netmask in re_ip_addresses
         }
-        log.debug("Host %s: ip interfaces %s", self.host)
+        log.debug("Host %s: ip interfaces %s", self.host, results)
         return results
 
     def _get_ipv6_addresses(self, host: str) -> Dict[str, List[IPv6Address]]:
@@ -173,7 +175,7 @@ class ASADevice(BaseDevice):
             host (str): Whether to get IP Addresses for `self` or `peer` device.
 
         Returns:
-            dict: The list of ``ip_interface`` objects mapped to their associated interface.
+            (dict): The list of ``ip_interface`` objects mapped to their associated interface.
 
         Example:
             >>> dev = ASADevice(**connection_args)
@@ -362,7 +364,7 @@ class ASADevice(BaseDevice):
         Determine boot image.
 
         Returns:
-            dict: Key: 'sys' Value: Current boot image.
+            (dict): Key: 'sys' Value: Current boot image.
         """
         show_boot_out = self.show("show boot | i BOOT variable")
         # Improve regex to get only the first boot $var in the sequence!
@@ -398,7 +400,7 @@ class ASADevice(BaseDevice):
         """Send configuration commands to a device.
 
         Args:
-            commands (str, list): String with single command, or list with multiple commands.
+            command (str, list): String with single command, or list with multiple commands.
 
         Raises:
             CommandListError: Message stating which command failed and the response from the device.
@@ -447,7 +449,7 @@ class ASADevice(BaseDevice):
         """Ensure device is in enable mode.
 
         Returns:
-            None: Device prompt is set to enable mode.
+            (None): Device prompt is set to enable mode.
         """
         # Netmiko reports enable and config mode as being enabled
         if not self.native.check_enable_mode():
@@ -560,7 +562,7 @@ class ASADevice(BaseDevice):
                 Defaults to discover the default directory of the device.
 
         Returns:
-            bool: True if the file exists on the device and the md5 hashes match. Otherwise, false.
+            (bool): True if the file exists on the device and the md5 hashes match. Otherwise, false.
 
         Example:
         >>> status = file_copy_remote_exists("path/to/asa-image.bin")
@@ -586,12 +588,13 @@ class ASADevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image to be installed.
+            vendor_specifics (dict): Vendor specific arguments to pass to the install process.
 
         Raises:
             OSInstallError: Message stating the end device could not boot into the new image.
 
         Returns:
-            bool: True if new image is installed correctly. False if device is already running image_name.
+            (bool): True if new image is installed correctly. False if device is already running image_name.
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -693,7 +696,7 @@ class ASADevice(BaseDevice):
         """
         protocol = f"ipv{self.ip_address.version}"
 
-        log.debug("Host %s: IP protocol for paramiko is %s.", self.host)
+        log.debug("Host %s: IP protocol for paramiko is %s.", self.host, protocol)
         return protocol
 
     def is_active(self):
@@ -701,7 +704,7 @@ class ASADevice(BaseDevice):
         Determine if the current processor is the active processor.
 
         Returns:
-            bool: True if the processor is active or does not support HA, else False.
+            (bool): True if the processor is active or does not support HA, else False.
 
         Example:
             >>> device = ASADevice(**connection_args)
@@ -822,8 +825,8 @@ class ASADevice(BaseDevice):
         common state will be returned.
 
         Returns:
-            str: The redundancy state of the peer processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the peer processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = ASADevice(**connection_args)
@@ -860,7 +863,8 @@ class ASADevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional arguments to pass to the reboot method.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -932,7 +936,7 @@ class ASADevice(BaseDevice):
         Operating redundancy mode of the device.
 
         Returns:
-            str: The redundancy mode the device is operating in.
+            (str): The redundancy mode the device is operating in.
                 If the command is not supported, then "n/a" is returned.
 
         Example:
@@ -961,8 +965,8 @@ class ASADevice(BaseDevice):
         common state will be returned.
 
         Returns:
-            str: The redundancy state of the processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = ASADevice(**connection_args)
@@ -1012,7 +1016,7 @@ class ASADevice(BaseDevice):
         Get current running config on device.
 
         Returns:
-            str: Running configuration on device.
+            (str): Running configuration on device.
         """
         return self.show("show running-config")
 
@@ -1024,7 +1028,7 @@ class ASADevice(BaseDevice):
             filename (str, optional): Name of startup configuration file. Defaults to "startup-config".
 
         Returns:
-            bool: True if configuration saved succesfully.
+            (bool): True if configuration saved succesfully.
         """
         command = f"copy running-config {filename}"
         # Changed to send_command_timing to not require a direct prompt return.
@@ -1044,6 +1048,7 @@ class ASADevice(BaseDevice):
 
         Args:
             image_name (str): AName of image.
+            vendor_specifics (dict): Vendor specific arguments to pass to the set_boot_options process.
 
         Raises:
             NTCFileNotFoundError: File not found on device.
@@ -1088,7 +1093,7 @@ class ASADevice(BaseDevice):
             expect_string (str, optional): Expected response from running command on device. Defaults to None.
 
         Returns:
-            str: Output from running command on device.
+            (str): Output from running command on device.
         """
         self.enable()
         log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
@@ -1118,7 +1123,7 @@ class ASADevice(BaseDevice):
         """Get uptime from device.
 
         Returns:
-            int: Uptime in seconds.
+            (int): Uptime in seconds.
         """
         if self._uptime is None:
             version_data = self._raw_version_data()
@@ -1132,7 +1137,7 @@ class ASADevice(BaseDevice):
         """Get uptime in format dd:hh:mm.
 
         Returns:
-            str: Uptime of device.
+            (str): Uptime of device.
         """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
@@ -1146,7 +1151,7 @@ class ASADevice(BaseDevice):
         """Get hostname of device.
 
         Returns:
-            str: Hostname of device.
+            (str): Hostname of device.
         """
         version_data = self._raw_version_data()
         if self._hostname is None:
@@ -1160,7 +1165,7 @@ class ASADevice(BaseDevice):
         Get list of interfaces on device.
 
         Returns:
-            list: List of interfaces on device.
+            (list): List of interfaces on device.
         """
         if self._interfaces is None:
             self._interfaces = list(x["interface"] for x in self._interfaces_detailed_list())
@@ -1172,7 +1177,7 @@ class ASADevice(BaseDevice):
         """Get the device model.
 
         Returns:
-            str: Device model.
+            (str): Device model.
         """
         version_data = self._raw_version_data()
         if self._model is None:
@@ -1185,7 +1190,7 @@ class ASADevice(BaseDevice):
         """Get os version on device.
 
         Returns:
-            str: OS version on device.
+            (str): OS version on device.
         """
         version_data = self._raw_version_data()
         if self._os_version is None:
@@ -1198,7 +1203,7 @@ class ASADevice(BaseDevice):
         """Get serial number of device.
 
         Returns:
-            str: Serial number of device.
+            (str): Serial number of device.
         """
         version_data = self._raw_version_data()
         if self._serial_number is None:
@@ -1211,7 +1216,7 @@ class ASADevice(BaseDevice):
         """Get vlan ids from device.
 
         Returns:
-            list: List of vlans
+            (list): List of vlans
         """
         if self._vlans is None:
             self._vlans = self._show_vlan()

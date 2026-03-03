@@ -306,3 +306,6 @@ invoke.yml
 docs/README.md
 docs/CHANGELOG.md
 public
+/compose.yaml
+/dump.sql
+/pyntc/static/pyntc/docs

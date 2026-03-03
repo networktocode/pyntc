@@ -2,6 +2,7 @@ import os
 from unittest import mock
 
 import pytest
+
 from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice, supported_devices
 
 

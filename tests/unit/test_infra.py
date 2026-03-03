@@ -1,11 +1,11 @@
 import os
+
 import mock
 import pytest
 
 from pyntc import ntc_device, ntc_device_by_name
-from pyntc.errors import UnsupportedDeviceError, ConfFileNotFoundError
-from pyntc.devices import EOSDevice, NXOSDevice, IOSDevice
-
+from pyntc.devices import EOSDevice, IOSDevice, NXOSDevice
+from pyntc.errors import ConfFileNotFoundError, UnsupportedDeviceError
 
 BAD_DEVICE_TYPE = "238nzsvkn3981"
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")

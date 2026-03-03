@@ -1,16 +1,18 @@
 """The module contains the base class that all device classes must inherit from."""
 
+import hashlib
 import importlib
 import warnings
 
 from pyntc.errors import FeatureNotFoundError, NTCError
+from pyntc.utils.models import FileCopyModel
 
 
 def fix_docs(cls):
     """Create docstring at runtime.
 
     Returns:
-        class: Returns the class passed in.
+        (class): Returns the class passed in.
     """
     for name, func in vars(cls).items():
         if hasattr(func, "__call__") and not func.__doc__:
@@ -26,9 +28,7 @@ def fix_docs(cls):
 class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Base Device ABC."""
 
-    def __init__(
-        self, host, username, password, device_type=None, **kwargs
-    ):  # noqa: D403  # pylint: disable=unused-argument
+    def __init__(self, host, username, password, device_type=None, **kwargs):  # noqa: D403  # pylint: disable=unused-argument
         """PyNTC base device implementation.
 
         Args:
@@ -36,6 +36,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
             device_type (str, optional): Denotes which device type. Defaults to None.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
         """
         self.host = host
         self.username = username
@@ -60,7 +61,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 volume: Required by F5Device as F5 boots into a volume.
 
         Returns:
-            bool: True if image is currently being used by the device, else False.
+            (bool): True if image is currently being used by the device, else False.
         """
         raise NotImplementedError
 
@@ -79,7 +80,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         like system image and kickstart image.
 
         Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+            (dict): A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         raise NotImplementedError
 
@@ -218,10 +219,11 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote flash.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. If no file_system is provided, then the ``get_file_system``
+                remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
         """
         raise NotImplementedError
@@ -237,21 +239,135 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             dest (str): The destination file path to be saved on remote the remote device.
                 If none is supplied, the implementing class should use the basename
                 of the source path.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
 
         Keyword Args:
             file_system (str): Supported only for IOS and NXOS. The file system for the
-                remote fle. If no file_system is provided, then the ``get_file_system``
+                remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
 
         Returns:
-            True if the remote file exists, False if it doesn't.
+            (bool): True if the remote file exists, False if it doesn't.
         """
+
+    def check_file_exists(self, filename, **kwargs):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+        """
+        raise NotImplementedError
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (str): The checksum of the remote file.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def get_local_checksum(filepath, hashing_algorithm="md5", add_newline=False):
+        """Get the checksum of a local file using a specified algorithm.
+
+        Args:
+            filepath (str): The path to the local file.
+            hashing_algorithm (str): The hashing algorithm to use (e.g., "md5", "sha256").
+            add_newline (bool): Whether to append a newline before final hashing (Some devices may require this).
+
+        Returns:
+            (str): The hex digest of the file.
+        """
+        # Initialize the hash object dynamically
+        file_hash = hashlib.new(hashing_algorithm.lower())
+
+        with open(filepath, "rb") as f:
+            # Read in chunks to handle large firmware files without RAM spikes
+            for chunk in iter(lambda: f.read(4096), b""):
+                file_hash.update(chunk)
+
+        if add_newline:
+            file_hash.update(b"\n")
+
+        return file_hash.hexdigest()
+
+    def compare_file_checksum(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Compare the checksum of a local file with a remote file.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the checksums match, False otherwise.
+        """
+        return checksum == self.get_remote_checksum(filename, hashing_algorithm, **kwargs)
+
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs):
+        """Copy a file to a remote device.
+
+        Args:
+            src (FileCopyModel): The source file model.
+            dest (str): The destination file path on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+        """
+        raise NotImplementedError
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Verify a file on the remote device by confirming the file exists and validate the checksum.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        raise NotImplementedError
 
     def install_os(self, image_name, **vendor_specifics):
         """Install the OS from specified image_name.
 
         Args:
-            image_name(str): The name of the image on the device to install.
+            image_name (str): The name of the image on the device to install.
 
         Keyword Args:
             kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
@@ -261,9 +377,10 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 the ``_get_file_system`` method.
             timeout (int): Option for ``IOSDevice`` and ``NXOSDevice`` to set the wait time for
                 device installation to complete.
+            vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
 
         Returns:
-            True if system has been installed during function's call, False if OS has not been installed
+            (bool): True if system has been installed during function's call, False if OS has not been installed
 
         Raises:
             OSInstallError: When device finishes installation process, but the running image
@@ -287,7 +404,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Reload a device.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -324,14 +441,15 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Set boot variables like system image and kickstart image.
 
         Args:
-            image_name: The main system image file name.
+            image_name (str): The main system image file name.
 
         Keyword Args:
-            kickstart: Option for ``NXOSDevice`` for devices that require a kickstart image.
-            volume: Option for ``F5Device`` to set which volume should have image installed.
-            file_system: Option for ``ASADevice`` and ``IOSDevice`` to set which directory
+            kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
+            volume (str): Option for ``F5Device`` to set which volume should have image installed.
+            file_system (str): Option for ``ASADevice`` and ``IOSDevice`` to set which directory
                 to use when setting the boot path. The default will use the directory returned
                 by the ``_get_file_system()`` method.
+            vendor_specifics (kwargs): Additional keyword arguments that may be used by subclasses.
 
         Raises:
             ValueError: When the boot options returned by the ``boot_options``
@@ -350,7 +468,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             raw_text (bool): Whether to return raw text or structured data.
 
         Returns:
-            The output of the show command, which could be raw text or structured data.
+            (NotImplementedError): The output of the show command, which could be raw text or structured data.
         """
         raise NotImplementedError
 
@@ -375,7 +493,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """Get current boot variables like system image and kickstart image.
 
         Returns:
-            A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
+            (dict): A dictionary, e.g. {'kick': router_kick.img, 'sys': 'router_sys.img'}
         """
         warnings.warn("get_boot_options() is deprecated; use boot_options property.", DeprecationWarning)
         return self.boot_options

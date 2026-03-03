@@ -8,7 +8,7 @@ from netmiko import ConnectHandler, FileTransfer
 from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -22,6 +22,7 @@ from pyntc.errors import (
     SocketClosedError,
 )
 from pyntc.utils import get_structured_data
+from pyntc.utils.models import FileCopyModel
 
 BASIC_FACTS_KM = {"model": "hardware", "os_version": "version", "serial_number": "serial", "hostname": "hostname"}
 RE_SHOW_REDUNDANCY = re.compile(
@@ -43,6 +44,7 @@ class IOSDevice(BaseDevice):
     vendor = "cisco"
     active_redundancy_states = {None, "active"}
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(  # nosec
         self, host, username, password, secret="", port=None, confirm_active=True, **kwargs
     ):  # noqa: D403
@@ -56,6 +58,7 @@ class IOSDevice(BaseDevice):
             secret (str): The password to escalate privilege on the device.
             port (int): The port to use to establish the connection. Defaults to 22.
             confirm_active (bool): Determines if device's high availability state should be validated before leaving connection open.
+            kwargs (dict): Additional arguments to pass to the Netmiko ConnectHandler.
         """
         super().__init__(host, username, password, device_type="cisco_ios_ssh")
 
@@ -73,6 +76,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             command (str): The command that was sent to the device.
+            command_response (str): The response from the device after sending ``command``.
 
         Raises:
             CommandError: When ``command_response`` reports an error in sending ``command``.
@@ -102,6 +106,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Device entered config mode.", self.host)
 
     def _file_copy_instance(self, src, dest=None, file_system="flash:"):
+        """Create a FileTransfer instance for copying a file to the device."""
         if dest is None:
             dest = os.path.basename(src)
 
@@ -113,7 +118,7 @@ class IOSDevice(BaseDevice):
         """Determine the default file system or directory for device.
 
         Returns:
-            str: The name of the default file system or directory for the device.
+            (str): The name of the default file system or directory for the device.
 
         Raises:
             FileSystemNotFound: When the module is unable to determine the default file system.
@@ -263,7 +268,7 @@ class IOSDevice(BaseDevice):
         """Get current boot image.
 
         Returns:
-            dict: Key ``sys`` with value being the current boot image.
+            (dict): Key ``sys`` with value being the current boot image.
         """
         boot_path_regex = r"(?:BOOT variable\s+=\s+(\S+)\s*$|BOOT path-list\s+:\s*(\S+)\s*$)"
         try:
@@ -325,11 +330,11 @@ class IOSDevice(BaseDevice):
 
         Args:
             command (str|list): The command or commands to send to the device.
-            **netmiko_args: Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
+            **netmiko_args (dict): Any argument supported by ``netmiko.ConnectHandler.send_config_set``.
 
         Returns:
-            str: When ``command`` is a str, the config session input and output from sending ``command``.
-            list: When ``command`` is a list, the config session input and output from sending ``command``.
+            (str): When ``command`` is a str, the config session input and output from sending ``command``.
+            (list): When ``command`` is a list, the config session input and output from sending ``command``.
 
         Raises:
             TypeError: When sending an argument in ``**netmiko_args`` that is not supported.
@@ -399,7 +404,7 @@ class IOSDevice(BaseDevice):
         Confirm that the device is either standalone or the active device in a high availability cluster.
 
         Returns:
-            bool: True when the device is considered active.
+            (bool): True when the device is considered active.
 
         Rasies:
             DeviceNotActiveError: When the device is not considered the active device.
@@ -442,7 +447,7 @@ class IOSDevice(BaseDevice):
         Get connection status of the device.
 
         Returns:
-            bool: True if the device is connected, else False.
+            (bool): True if the device is connected, else False.
         """
         return self._connected
 
@@ -454,7 +459,7 @@ class IOSDevice(BaseDevice):
         """Ensure device is in enable mode.
 
         Returns:
-            None: Device prompt is set to enable mode.
+            (None): Device prompt is set to enable mode.
         """
         # Netmiko reports enable and config mode as being enabled
         if not self.native.check_enable_mode():
@@ -470,7 +475,7 @@ class IOSDevice(BaseDevice):
         """Get uptime from device.
 
         Returns:
-            int: Uptime in seconds.
+            (int): Uptime in seconds.
         """
         if self._uptime is None:
             version_data = self._raw_version_data()
@@ -485,7 +490,7 @@ class IOSDevice(BaseDevice):
         """Get uptime in format dd:hh:mm.
 
         Returns:
-            str: Uptime of device.
+            (str): Uptime of device.
         """
         if self._uptime_string is None:
             version_data = self._raw_version_data()
@@ -499,7 +504,7 @@ class IOSDevice(BaseDevice):
         """Get hostname of device.
 
         Returns:
-            str: Hostname of device.
+            (str): Hostname of device.
         """
         version_data = self._raw_version_data()
         if self._hostname is None:
@@ -514,7 +519,7 @@ class IOSDevice(BaseDevice):
         Get list of interfaces on device.
 
         Returns:
-            list: List of interfaces on device.
+            (list): List of interfaces on device.
         """
         if self._interfaces is None:
             self._interfaces = list(x["intf"] for x in self._interfaces_detailed_list())
@@ -528,7 +533,7 @@ class IOSDevice(BaseDevice):
         Get list of VLANs on device.
 
         Returns:
-            list: List of VLANs on device.
+            (list): List of VLANs on device.
         """
         if self._vlans is None:
             if self.model.startswith("WS"):
@@ -544,7 +549,7 @@ class IOSDevice(BaseDevice):
         """Get fully qualified domain name.
 
         Returns:
-            str: Fully qualified domain name or ``N/A`` if not defined.
+            (str): Fully qualified domain name or ``N/A`` if not defined.
         """
         if self._fqdn is None:
             self._fqdn = "N/A"
@@ -557,7 +562,7 @@ class IOSDevice(BaseDevice):
         """Get the device model.
 
         Returns:
-            str: Device model.
+            (str): Device model.
         """
         version_data = self._raw_version_data()
         if self._model is None:
@@ -571,7 +576,7 @@ class IOSDevice(BaseDevice):
         """Get os version on device.
 
         Returns:
-            str: OS version on device.
+            (str): OS version on device.
         """
         version_data = self._raw_version_data()
         if self._os_version is None:
@@ -585,7 +590,7 @@ class IOSDevice(BaseDevice):
         """Get serial number of device.
 
         Returns:
-            str: Serial number of device.
+            (str): Serial number of device.
         """
         version_data = self._raw_version_data()
         if self._serial_number is None:
@@ -599,7 +604,7 @@ class IOSDevice(BaseDevice):
         """Get config register of device.
 
         Returns:
-            str: Config register.
+            (str): Config register.
         """
         # ios-specific facts
         version_data = self._raw_version_data()
@@ -607,6 +612,101 @@ class IOSDevice(BaseDevice):
 
         log.debug("Host %s: Config register %s", self.host, self._config_register)
         return self._config_register
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid choices are "md5" and "sha512" (default: "md5").
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (str): The checksum of the remote file.
+
+        Raises:
+            ValueError: If an unsupported hashing algorithm is provided.
+            CommandError: If there is an error in executing the command to get the remote checksum.
+        """
+        if hashing_algorithm not in {"md5", "sha512"}:
+            raise ValueError("hashing_algorithm must be either 'md5' or 'sha512' for Cisco IOS devices.")
+        if file_system is None:
+            file_system = self._get_file_system()
+        cmd = f"verify /{hashing_algorithm} {file_system}/{filename}"
+        result = self.native.send_command_timing(cmd, read_timeout=300)
+
+        patterns = [r"=\s+(\S+)", r"^([a-fA-F0-9]+)$"]
+        for pattern in patterns:
+            if match := re.search(pattern, result):
+                log.debug(
+                    "Host %s: Remote checksum for file %s with hashing algorithm %s is %s.",
+                    self.host,
+                    filename,
+                    hashing_algorithm,
+                    match[1],
+                )
+            return match[1]
+        log.error(
+            "Host %s: Unable to get remote checksum for file %s with hashing algorithm %s",
+            self.host,
+            filename,
+            hashing_algorithm,
+        )
+        raise CommandError(
+            cmd, f"Unable to get remote checksum for file {filename} with hashing algorithm {hashing_algorithm}"
+        )
+
+    def check_file_exists(self, filename, file_system=None):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+
+        Raises:
+            CommandError: If there is an error in executing the command to check if the file exists.
+        """
+        cmd = f"dir {file_system or self._get_file_system()}/{filename}"
+        result = self.native.send_command(cmd, read_timeout=30)
+        log.debug(
+            "Host %s: Checking if file %s exists on remote with command '%s' and result: %s",
+            self.host,
+            filename,
+            cmd,
+            result,
+        )
+        if re.search(r"No such file|No files found|Path does not exist|Error opening", result):
+            log.debug("Host %s: File %s does not exist on remote.", self.host, filename)
+            return False
+        if re.search(rf"Directory of .*{filename}", result):
+            log.debug("Host %s: File %s exists on remote.", self.host, filename)
+            return True
+        raise CommandError(cmd, f"Unable to determine if file {filename} exists on remote: {result}")
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+        """Verify a file on the remote device by and validate the checksums.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, file_system=file_system
+        )
 
     def file_copy(self, src, dest=None, file_system=None):
         """Copy file to device.
@@ -625,7 +725,11 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        if not self.file_copy_remote_exists(src, dest, file_system):
+        dest = dest or os.path.basename(src)
+        local_checksum = self.get_local_checksum(src)
+        log.debug("Host %s: Local checksum for file %s is %s.", self.host, src, local_checksum)
+
+        if not self.verify_file(local_checksum, dest, file_system=file_system):
             file_copy = self._file_copy_instance(src, dest, file_system=file_system)
             #        if not self.fc.verify_space_available():
             #            raise FileTransferError('Not enough space available.')
@@ -639,7 +743,7 @@ class IOSDevice(BaseDevice):
                 # compare hashes
                 if not file_copy.compare_md5():
                     log.error("Host %s: Socket closed error %s", self.host, error)
-                    raise SocketClosedError(message=error)
+                    raise SocketClosedError(message=error) from error
                 log.error("Host %s: OS error  %s", self.host, error)
             except:  # noqa E722
                 log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
@@ -650,7 +754,7 @@ class IOSDevice(BaseDevice):
             # Ensure connection to device is still open after long transfers
             self.open()
 
-            if not self.file_copy_remote_exists(src, dest, file_system):
+            if not self.verify_file(local_checksum, dest, file_system=file_system):
                 log.error(
                     "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
                     self.host,
@@ -658,9 +762,82 @@ class IOSDevice(BaseDevice):
                 )
                 raise FileTransferError
 
+    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
+        """Copy a file to a remote device.
+
+        Args:
+            src (FileCopyModel): The source file model.
+            dest (str): The destination file path on the remote device.
+            kwargs (dict): Additional keyword arguments that may be used by subclasses.
+
+        Keyword Args:
+            file_system (str): Supported only for IOS and NXOS. The file system for the
+                remote file. If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Raises:
+            TypeError: If src is not an instance of FileCopyModel.
+            FileTransferError: If there is an error during file transfer or if the file cannot be verified after transfer.
+        """
+        if not isinstance(src, FileCopyModel):
+            raise TypeError("src must be an instance of FileCopyModel")
+        if file_system is None:
+            file_system = self._get_file_system()
+        if dest is None:
+            dest = src.file_name
+        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            current_prompt = self.native.find_prompt()
+
+            # Define prompt mapping for expected prompts during file copy
+            prompt_answers = {
+                r"Password": src.token,
+                r"Source username": src.username,
+                r"yes/no|Are you sure you want to continue connecting": "yes",
+                r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",  # Press Enter
+            }
+            keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
+            expect_regex = f"({'|'.join(keys)})"
+
+            command = f"copy {src.clean_url} {file_system}{dest}"
+            if src.vrf and src.scheme not in {"http", "https"}:
+                command = f"{command} vrf {src.vrf}"
+
+            # _send_command currently checks for % and raises an error, but during the file copy
+            # there may be a % warning that does not indicate a failure so we will use send_command directly.
+            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
+
+            while current_prompt not in output:
+                # Check for success message in output to break loop and avoid waiting for next prompt
+                if re.search(r"Copy complete|bytes copied in|File transfer successful", output, re.IGNORECASE):
+                    log.info(
+                        "Host %s: File %s transferred successfully with output: %s", self.host, src.file_name, output
+                    )
+                    break
+                # Check for errors explicitly to avoid infinite loops on failure
+                if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
+                    log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
+                    raise FileTransferError
+                for prompt, answer in prompt_answers.items():
+                    if re.search(prompt, output, re.IGNORECASE):
+                        is_password = "Password" in prompt
+                        output = self.native.send_command(
+                            answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
+                        )
+                        break  # Exit the for loop and check the new output for the next prompt
+
+            if not self.verify_file(
+                src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
+            ):
+                log.error(
+                    "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
+                    self.host,
+                    FileTransferError.default_message,
+                )
+                raise FileTransferError
+
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        """Copy file to device.
+        """Check if file exists on remote device.
 
         Args:
             src (str): Source of file.
@@ -668,7 +845,7 @@ class IOSDevice(BaseDevice):
             file_system (str, optional): File system to copy file to. Defaults to None.
 
         Returns:
-            bool: True if file copied succesfully and md5 hashes match. Otherwise, false.
+            (bool): True if file copied succesfully and md5 hashes match. Otherwise, false.
         """
         self.enable()
         if file_system is None:
@@ -689,12 +866,13 @@ class IOSDevice(BaseDevice):
             image_name (str): Name of the IOS image to boot into
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 30.
+            vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
 
         Raises:
             OSInstallError: Unable to install OS Error type
 
         Returns:
-            bool: False if no install is needed, true if the install completes successfully
+            (bool): False if no install is needed, true if the install completes successfully
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -718,7 +896,10 @@ class IOSDevice(BaseDevice):
                     )
                     # Set a higher read_timeout and send it in
                     try:
-                        self.show(command, read_timeout=read_timeout)
+                        install_message = self.show(command, read_timeout=read_timeout)
+                        if install_message.startswith("FAILED:"):
+                            log.error("Host %s: OS install error for image %s", self.host, image_name)
+                            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
                     except CommandError:
@@ -752,7 +933,7 @@ class IOSDevice(BaseDevice):
         Determine if the current processor is the active processor.
 
         Returns:
-            bool: True if the processor is active or does not support HA, else False.
+            (bool): True if the processor is active or does not support HA, else False.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -819,8 +1000,8 @@ class IOSDevice(BaseDevice):
         Determine the current redundancy state of the peer processor.
 
         Returns:
-            str: The redundancy state of the peer processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the peer processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -850,7 +1031,8 @@ class IOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional arguments to pass to the Netmiko.
 
         Raises:
             ReloadTimeoutError: When the device is still unreachable after the timeout period.
@@ -882,7 +1064,7 @@ class IOSDevice(BaseDevice):
         Get operating redundancy mode of the device.
 
         Returns:
-            str: The redundancy mode the device is operating in.
+            (str): The redundancy mode the device is operating in.
                 If the command is not supported, then "n/a" is returned.
 
         Example:
@@ -909,8 +1091,8 @@ class IOSDevice(BaseDevice):
         Determine the current redundancy state of the processor.
 
         Returns:
-            str: The redundancy state of the current processor.
-            None: When the processor does not support redundancy.
+            (str): The redundancy state of the current processor.
+            (None): When the processor does not support redundancy.
 
         Example:
             >>> device = IOSDevice(**connection_args)
@@ -952,7 +1134,7 @@ class IOSDevice(BaseDevice):
         """Get running configuration.
 
         Returns:
-            str: Output of ``show running-config``.
+            (str): Output of ``show running-config``.
         """
         log.debug("Host %s: Show running config.", self.host)
         return self.show("show running-config")
@@ -964,7 +1146,7 @@ class IOSDevice(BaseDevice):
             filename (str, optional): Name of file to save running configuration. Defaults to "startup-config".
 
         Returns:
-            bool: True if save is succesfull.
+            (bool): True if save is succesfull.
         """
         command = f"copy running-config {filename}"
         # Changed to send_command_timing to not require a direct prompt return.
@@ -983,6 +1165,7 @@ class IOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of image to set as boot variable.
+            vendor_specifics (dict, optional): Vendor specific arguments to pass to the set_boot_options command.
 
         Raises:
             NTCFileNotFoundError: Error if file is not found on device.
@@ -1055,9 +1238,10 @@ class IOSDevice(BaseDevice):
         Args:
             command (str): Command to be ran.
             expect_string (str, optional): Expected string from command output. Defaults to None.
+            netmiko_args (dict): Additional arguments to pass to Netmiko's send_command method.
 
         Returns:
-            str: Output of command.
+            (str): Output of command.
         """
         self.enable()
         if isinstance(command, list):
@@ -1078,7 +1262,7 @@ class IOSDevice(BaseDevice):
         """Get startup configuration.
 
         Returns:
-            str: Startup configuration from device.
+            (str): Startup configuration from device.
         """
         log.debug("Host %s: Successfully executed command 'show startup-config'.", self.host)
         return self.show("show startup-config")

@@ -5,7 +5,11 @@ import warnings
 from importlib import metadata
 
 from .devices import supported_devices
-from .errors import ConfFileNotFoundError, DeviceNameNotFoundError, UnsupportedDeviceError
+from .errors import (
+    ConfFileNotFoundError,
+    DeviceNameNotFoundError,
+    UnsupportedDeviceError,
+)
 
 try:
     from configparser import ConfigParser as SafeConfigParser
@@ -26,14 +30,16 @@ def ntc_device(device_type, *args, **kwargs):
     """
     Instantiate an instance of a ``pyntc.devices.BaseDevice`` by ``device_type``.
 
-    The ``*args`` and ``*kwargs`` are passed directly to the device initializer.
+    The ``*args`` and ``**kwargs`` are passed directly to the device initializer.
 
     Arguments:
-        device_type (string): A valid device_type
-            listed in ``pyntc.devices.supported_devices``
+        device_type (str): A valid device_type
+            listed in `pyntc.devices.supported_devices`
+        args (tuple): Positional arguments to pass to the device initializer.
+        kwargs (dict): Keyword arguments to pass to the device initializer.
 
     Returns:
-        An instance of a subclass of ``pyntc.devices.BaseDevice``.
+        (pyntc.devices.BaseDevice): An instance of a subclass of ``pyntc.devices.BaseDevice``.
 
     Raises:
         UnsupportedDeviceError: if the device_type is unsupported.

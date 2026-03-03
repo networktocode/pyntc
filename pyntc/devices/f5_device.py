@@ -28,6 +28,7 @@ class F5Device(BaseDevice):
             host (str): The address of the network device.
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
+            kwargs (dict): Additional keyword arguments.
         """
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
@@ -63,7 +64,7 @@ class F5Device(BaseDevice):
             checksum (str): checksum used against image.
 
         Returns:
-            bool: True if md5 matches. Otherwise, false.
+            (bool): True if md5 matches. Otherwise, false.
         """
         md5sum = self._file_copy_remote_md5(filename)
 
@@ -80,7 +81,7 @@ class F5Device(BaseDevice):
 
     def _file_copy_local_md5(self, filepath, blocksize=2**20):
         if self._file_copy_local_file_exists(filepath):
-            md5_check = hashlib.md5()  # nosec
+            md5_check = hashlib.md5()  # noqa: S324
             with open(filepath, "rb") as file_name:
                 buf = file_name.read(blocksize)
                 while buf:
@@ -101,7 +102,7 @@ class F5Device(BaseDevice):
         """Get name of active volume on the device.
 
         Returns:
-            str: Name of active volume.
+            (str): Name of active volume.
         """
         volumes = self._get_volumes()
         for _volume in volumes:
@@ -118,7 +119,7 @@ class F5Device(BaseDevice):
             >>> "vg-db-sda" 30.98 GB  [23.89 GB  used / 7.10 GB free]
 
         Returns:
-            int: Number of gigabytes of free space.
+            (int): Number of gigabytes of free space.
         """
         free_space = None
         free_space_output = self.api_handler.tm.util.bash.exec_cmd("run", utilCmdArgs='-c "vgdisplay -s --units G"')
@@ -184,9 +185,10 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Name of image.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Returns:
-            bool: True if booted volume is equal to active volume. Otherwise, false.
+            (bool): True if booted volume is equal to active volume. Otherwise, false.
         """
         volume = vendor_specifics.get("volume")
         log.debug("Host %s: Checking if image %s has been booted.", self.host, image_name)
@@ -199,7 +201,7 @@ class F5Device(BaseDevice):
             image_name (str): Name of image.
 
         Returns:
-            bool: True if image exists on device. Otherwise, false.
+            (bool): True if image exists on device. Otherwise, false.
         """
         all_images_output = self.api_handler.tm.util.unix_ls.exec_cmd("run", utilCmdArgs="/shared/images")
 
@@ -241,7 +243,7 @@ class F5Device(BaseDevice):
             checksum (str): Expected checksum.
 
         Returns:
-            bool: True if expected checksum matches file checksum. Otherwise, false.
+            (bool): True if expected checksum matches file checksum. Otherwise, false.
         """
         if self._image_exists(image_name):
             image = os.path.join("/shared/images", image_name)
@@ -299,12 +301,12 @@ class F5Device(BaseDevice):
                 headers["Content-Range"] = content_range
                 # pylint: disable=missing-timeout
                 # TODO Add timeout to requests.post, missing timeout can cause the method to hang indefinitely
-                requests.post(
+                requests.post(  # noqa: S113
                     upload_uri,
                     auth=(self.username, self.password),
                     data=payload,
                     headers=headers,
-                    verify=False,  # nosec
+                    verify=False,  # noqa: S501
                 )
 
                 start += len(payload)
@@ -319,7 +321,7 @@ class F5Device(BaseDevice):
             uptime (float): Uptime represented in a float.
 
         Returns:
-            str: Uptime in a string.
+            (str): Uptime in a string.
         """
         days = uptime / (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
@@ -338,7 +340,7 @@ class F5Device(BaseDevice):
             volume_name (str): Volume name.
 
         Returns:
-            bool: True if volume exists. Otherwise, false.
+            (bool): True if volume exists. Otherwise, false.
         """
         result = self.api_handler.tm.sys.software.volumes.volume.exists(name=volume_name)
 
@@ -353,7 +355,7 @@ class F5Device(BaseDevice):
             timeout (int, optional): Timeout value. Defaults to 600.
 
         Returns:
-            bool: True if device boots into specified voluem successfully. Otherwise, false.
+            (bool): True if device boots into specified voluem successfully. Otherwise, false.
         """
         end_time = time.time() + timeout
         time.sleep(60)
@@ -415,7 +417,7 @@ class F5Device(BaseDevice):
         """Get active volume.
 
         Returns:
-            dict: Key is ``active volume`` with value being the current active volume.
+            (dict): Key is ``active volume`` with value being the current active volume.
         """
         active_volume = self._get_active_volume()
 
@@ -453,7 +455,7 @@ class F5Device(BaseDevice):
         """Get uptime of device in seconds.
 
         Returns:
-            float: Uptime of device.
+            (float): Uptime of device.
         """
         if self._uptime is None:
             self._uptime = self._get_uptime()
@@ -467,7 +469,7 @@ class F5Device(BaseDevice):
         Get uptime of device in format dd:hh:mm:ss.
 
         Returns:
-            str: Uptime of device.
+            (str): Uptime of device.
         """
         if self._uptime_string is None:
             self._uptime_string = self._uptime_to_string(self._get_uptime())
@@ -479,7 +481,7 @@ class F5Device(BaseDevice):
         """Get hostname of device.
 
         Returns:
-            str: Hostname.
+            (str): Hostname.
         """
         if self._hostname is None:
             fqdn_split = self.fqdn.split(".")
@@ -492,7 +494,7 @@ class F5Device(BaseDevice):
         """Get list of images on the device.
 
         Returns:
-            list: List of images.
+            (list): List of images.
         """
         if self._interfaces is None:
             self._interfaces = self._get_interfaces_list()
@@ -504,7 +506,7 @@ class F5Device(BaseDevice):
         """Get list of vlans on device.
 
         Returns:
-            list: List of vlans.
+            (list): List of vlans.
         """
         if self._vlans is None:
             self._vlans = self._get_vlans()
@@ -516,7 +518,7 @@ class F5Device(BaseDevice):
         """Get fully-qualified domain name.
 
         Returns:
-            str: Fully qualified domain name.
+            (str): Fully qualified domain name.
         """
         if self._fqdn is None:
             settings = self.api_handler.tm.sys.global_settings.load()
@@ -529,7 +531,7 @@ class F5Device(BaseDevice):
         """Get model of device.
 
         Returns:
-            str: Model of device.
+            (str): Model of device.
         """
         if self._model is None:
             self._model = self._get_model()
@@ -541,7 +543,7 @@ class F5Device(BaseDevice):
         """Get version of device.
 
         Returns:
-            str: Version on device.
+            (str): Version on device.
         """
         if self._os_version is None:
             self._os_version = self._get_version()
@@ -553,7 +555,7 @@ class F5Device(BaseDevice):
         """Get serial number of device.
 
         Returns:
-            str: Serial number of device.
+            (str): Serial number of device.
         """
         if self._serial_number is None:
             self._serial_number = self._get_serial_number()
@@ -566,6 +568,7 @@ class F5Device(BaseDevice):
         Args:
             src (str): Source of file.
             dest (str, optional): Destination to save file. Defaults to None.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             FileTransferError: Error in verifying if file existed before transfer.
@@ -590,12 +593,13 @@ class F5Device(BaseDevice):
         Args:
             src (str): Source of file.
             dest (str, optional): Destination to save file. Defaults to None.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             NotImplementedError: Destination must be ``/shared/images``.
 
         Returns:
-            bool: True if image specified exists on device. Otherwise, false.
+            (bool): True if image specified exists on device. Otherwise, false.
         """
         if dest and not dest.startswith("/shared/images"):
             log.error("Host %s: Support only for images - destination is always /shared/images.", self.host)
@@ -607,7 +611,7 @@ class F5Device(BaseDevice):
         if not self._image_match(image_name=file_basename, checksum=local_md5sum):
             log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
             return False
-        log.debug("Host %s: File %s already exists on remote.", self.host)
+        log.debug("Host %s: File %s already exists on remote.", self.host, src)
         return True
 
     def image_installed(self, image_name, volume):
@@ -621,7 +625,7 @@ class F5Device(BaseDevice):
             RuntimeError: Either image name or volume were not specified.
 
         Returns:
-            bool: True if file exists on volume. Otherwise, false.
+            (bool): True if file exists on volume. Otherwise, false.
         """
         if not image_name or not volume:
             raise RuntimeError("image_name and volume must be specified")
@@ -655,12 +659,13 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Image name.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Raises:
             NTCFileNotFoundError: Error is image is not found on device.
 
         Returns:
-            bool: True if image is installed successfully. Otherwise, false.
+            (bool): True if image is installed successfully. Otherwise, false.
         """
         volume = vendor_specifics.get("volume")
         if not self.image_installed(image_name, volume):
@@ -687,7 +692,8 @@ class F5Device(BaseDevice):
 
         Args:
             volume (str, optional): Active volume to reboot. Defaults to None.
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional keyword arguments.
 
         Raises:
             RuntimeError: If device is unreachable after timeout period, raise an error.
@@ -747,6 +753,7 @@ class F5Device(BaseDevice):
 
         Args:
             image_name (str): Name of image.
+            vendor_specifics (dict): Vendor specific arguments.
 
         Raises:
             NTCFileNotFoundError: Error if file is not found on device.

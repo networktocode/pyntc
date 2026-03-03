@@ -10,7 +10,7 @@ from pyeapi.client import Node as EOSNative
 from pyeapi.eapilib import CommandError as EOSCommandError
 
 from pyntc import log
-from pyntc.devices.base_device import BaseDevice, fix_docs, RollbackError
+from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import (
     CommandError,
@@ -23,7 +23,6 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import convert_list_by_key
-
 
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
@@ -41,6 +40,7 @@ class EOSDevice(BaseDevice):
 
     vendor = "arista"
 
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, host, username, password, transport="http", port=None, timeout=None, **kwargs):  # noqa: D403
         """PyNTC Device implementation for Arista EOS.
 
@@ -50,7 +50,8 @@ class EOSDevice(BaseDevice):
             password (str): The password to authenticate with the device.
             transport (str): The protocol to communicate with the device. Defaults to http.
             port (int): The port to use to establish the connection. Defaults to None.
-            timeout(int): Timeout value used for connection with the device. Defaults to None.
+            timeout (int): Timeout value used for connection with the device. Defaults to None.
+            kwargs (dict): Additional keyword arguments.
         """
         super().__init__(host, username, password, device_type="arista_eos_eapi")
         self.transport = transport
@@ -175,7 +176,7 @@ class EOSDevice(BaseDevice):
         """Get current running software.
 
         Returns:
-            dict: Key is ``sys`` with value being the image on the device.
+            (dict): Key is ``sys`` with value being the image on the device.
         """
         image = self.show("show boot-config")["softwareImage"]
         image = image.replace("flash:/", "")
@@ -220,7 +221,7 @@ class EOSDevice(BaseDevice):
         """Ensure device is in enable mode.
 
         Returns:
-            None: Device prompt is set to enable mode.
+            (None): Device prompt is set to enable mode.
         """
         # Netmiko reports enable and config mode as being enabled
         if not self.native_ssh.check_enable_mode():
@@ -237,7 +238,7 @@ class EOSDevice(BaseDevice):
         Get uptime of the device in seconds.
 
         Returns:
-            int: Uptime of the device.
+            (int): Uptime of the device.
         """
         if self._uptime is None:
             sh_version_output = self.show("show version")
@@ -252,7 +253,7 @@ class EOSDevice(BaseDevice):
         Get uptime of the device in the format of dd::hh::mm.
 
         Returns:
-            str: Uptime in string format.
+            (str): Uptime in string format.
         """
         if self._uptime_string is None:
             self._uptime_string = self._uptime_to_string(self.uptime)
@@ -264,7 +265,7 @@ class EOSDevice(BaseDevice):
         """Get hostname from device.
 
         Returns:
-            str: Hostname of the device.
+            (str): Hostname of the device.
         """
         if self._hostname is None:
             sh_hostname_output = self.show("show hostname")
@@ -278,7 +279,7 @@ class EOSDevice(BaseDevice):
         """Get list of interfaces on device.
 
         Returns:
-            list: List of interfaces
+            (list): List of interfaces
         """
         if self._interfaces is None:
             iface_detailed_list = self._interfaces_status_list()
@@ -292,7 +293,7 @@ class EOSDevice(BaseDevice):
         """Get list of VLANS on device.
 
         Returns:
-            list: List of VLANS on device.
+            (list): List of VLANS on device.
         """
         if self._vlans is None:
             vlans = EOSVlans(self)
@@ -306,7 +307,7 @@ class EOSDevice(BaseDevice):
         """Get fully-qualified domain name of device.
 
         Returns:
-            str: Fully-qualified domain name of device.
+            (str): Fully-qualified domain name of device.
         """
         if self._fqdn is None:
             sh_hostname_output = self.show("show hostname")
@@ -320,7 +321,7 @@ class EOSDevice(BaseDevice):
         """Get model of device.
 
         Returns:
-            str: Model of device.
+            (str): Model of device.
         """
         if self._model is None:
             sh_version_output = self.show("show version")
@@ -334,7 +335,7 @@ class EOSDevice(BaseDevice):
         """Get OS version on device.
 
         Returns:
-            str: OS version of device.
+            (str): OS version of device.
         """
         if self._os_version is None:
             sh_version_output = self.show("show version")
@@ -348,7 +349,7 @@ class EOSDevice(BaseDevice):
         """Get serial number of device.
 
         Returns:
-            str: Serial number of device.
+            (str): Serial number of device.
         """
         if self._serial_number is None:
             sh_version_output = self.show("show version")
@@ -401,12 +402,12 @@ class EOSDevice(BaseDevice):
         """Copy file to remote device if it exists.
 
         Args:
-            src (string): source file
-            dest (string, optional): Destintion file. Defaults to None.
-            file_system (string, optional): Describes device file system. Defaults to None.
+            src (str): source file
+            dest (str, optional): Destintion file. Defaults to None.
+            file_system (str, optional): Describes device file system. Defaults to None.
 
         Returns:
-            bool: True if remote file exists.
+            (bool): True if remote file exists.
         """
         self.enable()
         if file_system is None:
@@ -425,12 +426,13 @@ class EOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image name to be installed.
+            vendor_specifics (dict): Vendor specific options for installing OS, such as timeout.
 
         Raises:
             OSInstallError: Error in installing new OS.
 
         Returns:
-            bool: True if device OS is succesfully installed.
+            (bool): True if device OS is succesfully installed.
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
@@ -475,7 +477,8 @@ class EOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload: Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            kwargs (dict): Additional keyword arguments, such as confirm.
 
         Raises:
             RebootTimeoutError: When the device is still unreachable after the timeout period.
@@ -515,7 +518,7 @@ class EOSDevice(BaseDevice):
         """Return running config.
 
         Returns:
-            str: Running configuration.
+            (str): Running configuration.
         """
         log.debug("Host %s: Show running config.", self.host)
         return self.show("show running-config", raw_text=True)
@@ -524,7 +527,7 @@ class EOSDevice(BaseDevice):
         """Show running configuration.
 
         Returns:
-            str: Running configuration.
+            (str): Running configuration.
         """
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
         self.show(f"copy running-config {filename}")
@@ -535,6 +538,7 @@ class EOSDevice(BaseDevice):
 
         Args:
             image_name (str): Name of the image file.
+            vendor_specifics (dict): Vendor specific options, such as file_system.
 
         Raises:
             NTCFileNotFoundError: File not found on device.
@@ -597,7 +601,7 @@ class EOSDevice(BaseDevice):
         """Get startup configuration.
 
         Returns:
-            str: Startup configuration.
+            (str): Startup configuration.
         """
         log.debug("Host %s: show startup-config", self.host)
         return self.show("show startup-config", raw_text=True)

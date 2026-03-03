@@ -55,12 +55,7 @@ def test_command_error():
 
 def test_command_list_error():
     error_message = (
-        "\n"
-        "Command fail failed with message: '% invalid command'\n"
-        "Command List: \n"
-        "\tcommand 1\n"
-        "\tfail\n"
-        "\tcommand 2\n"
+        "\nCommand fail failed with message: '% invalid command'\nCommand List: \n\tcommand 1\n\tfail\n\tcommand 2\n"
     )
     error_class = ntc_errors.CommandListError
     error = error_class(
@@ -75,7 +70,7 @@ def test_command_list_error():
 
 
 def test_device_not_active_error():
-    expected = "ntc_host is not the active device.\n\n" "device state: standby hot\n" "peer state:   active\n"
+    expected = "ntc_host is not the active device.\n\ndevice state: standby hot\npeer state:   active\n"
     error_class = ntc_errors.DeviceNotActiveError
     error = error_class("ntc_host", "standby hot", "active")
     with pytest.raises(error_class) as err:
@@ -170,7 +165,7 @@ def test_peer_failed_to_form_error():
         raise error
 
     assert err.value.message == (
-        'host1 was unable to form a redundancy state of "standby hot" with peer.\n' 'The current state is "disabled".'
+        'host1 was unable to form a redundancy state of "standby hot" with peer.\nThe current state is "disabled".'
     )
 
 

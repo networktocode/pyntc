@@ -5,9 +5,10 @@ import unittest
 import mock
 import pytest
 
-from pyntc.devices import ios_device as ios_module
 from pyntc.devices import IOSDevice
+from pyntc.devices import ios_device as ios_module
 from pyntc.devices.base_device import RollbackError
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.ios import send_command, send_command_expect
 
@@ -137,14 +138,17 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
 
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy(self, mock_open, mock_ft):
+    def test_file_copy(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
 
         mock_ft_instance = mock_ft.return_value
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_verify_file.side_effect = [False, True]
+        mock_get_local_checksum.return_value = "dummy_checksum"
         self.device.file_copy("path/to/source_file")
 
         mock_ft.assert_called_with(self.device.native, "path/to/source_file", "source_file", file_system="flash:")
@@ -153,14 +157,16 @@ class TestIOSDevice(unittest.TestCase):
         mock_ft_instance.transfer_file.assert_any_call()
         mock_open.assert_called_once()
 
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_different_dest(self, mock_open, mock_ft):
+    def test_file_copy_different_dest(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
 
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
+        mock_verify_file.side_effect = [False, True]
         self.device.file_copy("source_file", "dest_file")
 
         mock_ft.assert_called_with(self.device.native, "source_file", "dest_file", file_system="flash:")
@@ -169,29 +175,33 @@ class TestIOSDevice(unittest.TestCase):
         mock_ft_instance.transfer_file.assert_any_call()
         mock_open.assert_called_once()
 
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail(self, mock_open, mock_ft):
+    def test_file_copy_fail(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = Exception
-        mock_ft_instance.check_file_exists.return_value = False
+        mock_verify_file.return_value = False
 
         with self.assertRaises(ios_module.FileTransferError):
             self.device.file_copy("source_file")
 
         mock_open.assert_not_called()
 
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_socket_closed_good_md5(self, mock_open, mock_ft):
+    def test_file_copy_socket_closed_good_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = OSError
-        mock_ft_instance.check_file_exists.side_effect = [False, True]
-        mock_ft_instance.compare_md5.side_effect = [True, True]
+        mock_verify_file.side_effect = [False, True]
+        mock_ft_instance.compare_md5.return_value = True
 
         self.device.file_copy("path/to/source_file")
 
@@ -199,17 +209,21 @@ class TestIOSDevice(unittest.TestCase):
         mock_ft_instance.enable_scp.assert_any_call()
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
-        mock_ft_instance.compare_md5.assert_has_calls([mock.call(), mock.call()])
+        mock_ft_instance.compare_md5.assert_has_calls([mock.call()])
         mock_open.assert_called_once()
 
+    @mock.patch.object(IOSDevice, "get_local_checksum")
+    @mock.patch.object(IOSDevice, "verify_file")
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail_socket_closed_bad_md5(self, mock_open, mock_ft):
+    def test_file_copy_fail_socket_closed_bad_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
         mock_ft_instance.transfer_file.side_effect = OSError
         mock_ft_instance.check_file_exists.return_value = False
+        mock_verify_file.return_value = False
+        mock_get_local_checksum.return_value = "dummy_checksum"
         mock_ft_instance.compare_md5.return_value = False
 
         with self.assertRaises(ios_module.SocketClosedError):
@@ -388,6 +402,197 @@ class TestIOSDevice(unittest.TestCase):
     def test_install_os_error(self, mock_wait, mock_reboot, mock_set_boot, mock_image_booted, mock_raw_version_data):
         mock_raw_version_data.return_value = DEVICE_FACTS
         self.assertRaises(ios_module.OSInstallError, self.device.install_os, BOOT_IMAGE)
+
+    @mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+    @mock.patch.object(IOSDevice, "_image_booted", side_effect=[False, True])
+    @mock.patch.object(IOSDevice, "set_boot_options")
+    @mock.patch.object(IOSDevice, "show")
+    @mock.patch.object(IOSDevice, "reboot")
+    @mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+    @mock.patch.object(IOSDevice, "_raw_version_data")
+    def test_install_os_not_enough_space(
+        self,
+        mock_raw_version_data,
+        mock_wait,
+        mock_reboot,
+        mock_show,
+        mock_set_boot,
+        mock_image_booted,
+        mock_os_version,
+    ):
+        mock_raw_version_data.return_value = DEVICE_FACTS
+        mock_os_version.return_value = "17.4.3"
+        mock_show.return_value = "FAILED: There is not enough free disk available to perform this operation on switch 1. At least 1276287 KB of free disk is required"
+        self.assertRaises(ios_module.OSInstallError, self.device.install_os, image_name=BOOT_IMAGE, install_mode=True)
+        mock_wait.assert_not_called()
+        mock_reboot.assert_not_called()
+
+    def test_get_local_checksum(self):
+        # Create a temporary file with known content
+        test_file_path = "test_file.txt"
+        test_content = "This is a test file for checksum."
+        with open(test_file_path, "w") as f:
+            f.write(test_content)
+
+        import hashlib
+
+        with self.subTest("Test get_local_checksum returns correct md5 checksum"):
+            expected_checksum = hashlib.md5(test_content.encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path)
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum returns correct sha512 checksum"):
+            expected_checksum = hashlib.sha512(test_content.encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path, hashing_algorithm="sha512")
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum with add_newline=True"):
+            expected_checksum = hashlib.md5((test_content + "\n").encode()).hexdigest()
+            actual_checksum = self.device.get_local_checksum(test_file_path, add_newline=True)
+            self.assertEqual(actual_checksum, expected_checksum)
+
+        with self.subTest("Test get_local_checksum with invalid hashing algorithm"):
+            with self.assertRaises(ValueError):
+                self.device.get_local_checksum(test_file_path, hashing_algorithm="invalid_algo")
+
+        # Clean up the temporary file
+        os.remove(test_file_path)
+
+    def test_check_file_exists(self):
+        with self.subTest("Test check_file_exists returns True when file exists"):
+            self.device.native.send_command_expect.side_effect = None
+            self.device.native.send_command.return_value = "Directory of flash:/file.txt\n"
+            self.assertTrue(self.device.check_file_exists("file.txt", file_system="flash:"))
+
+        with self.subTest("Test check_file_exists returns False when file does not exist"):
+            self.device.native.send_command_expect.side_effect = None
+            self.device.native.send_command.return_value = "%Error opening flash:/file.txt\n"
+            self.assertFalse(self.device.check_file_exists("file.txt", file_system="flash:"))
+
+    def test_get_remote_checksum(self):
+        with self.subTest("Test get_remote_checksum returns correct md5 checksum"):
+            self.device.native.send_command_timing.side_effect = None
+            self.device.native.send_command_timing.return_value = "MD5 (flash:/file.txt) = dummy_checksum"
+            self.assertEqual(self.device.get_remote_checksum("file.txt", file_system="flash:"), "dummy_checksum")
+
+        with self.subTest("Test get_remote_checksum with invalid hashing algorithm"):
+            with self.assertRaises(ValueError):
+                self.device.get_remote_checksum("file.txt", hashing_algorithm="invalid_algo", file_system="flash:")
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_success(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="sftp://user:test@1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+        )
+        self.assertEqual(src.clean_url, "sftp://1.1.1.1/test.bin")
+        self.assertEqual(src.username, "user")
+        self.assertEqual(src.token, "test")
+
+        # Scenario: First verify_file fails (needs copy), second verify_file succeeds (copy worked)
+        mock_verify.side_effect = [False, True]
+
+        # Simulate the prompt sequence:
+        # 1. Initial command -> gets "Address or name of remote host"
+        # 2. Responds with "" -> gets "Copy complete"
+        self.device.native.send_command.side_effect = [
+            "Address or name of remote host [1.1.1.1]?",
+            "Source username?",
+            "Password:",
+            "123456 bytes copied in 10.2 secs. Copy complete.",
+        ]
+        self.device.native.find_prompt.return_value = "Router#"
+
+        with self.subTest("Test successful copy with interactive prompts"):
+            self.device.remote_file_copy(src, dest="test.bin", file_system="flash:")
+
+            # Verify the command sent was correct
+            self.device.native.send_command.assert_any_call(
+                "copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900
+            )
+            self.device.native.send_command.assert_has_calls(
+                [
+                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=900),
+                    mock.call(
+                        "", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                    ),  # Respond to "Address or name of remote host"
+                    mock.call(
+                        "user", expect_string=mock.ANY, read_timeout=900, cmd_verify=True
+                    ),  # Respond to "Source username?"
+                    mock.call(
+                        "test", expect_string=mock.ANY, read_timeout=900, cmd_verify=False
+                    ),  # Respond to "Password:"
+                ]
+            )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_no_dest(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="sftp://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=300,
+        )
+        self.assertEqual(src.clean_url, src.download_url)
+        self.assertIsNone(src.username)
+        self.assertIsNone(src.token)
+
+        # Scenario: First verify_file fails (needs copy), second verify_file succeeds (copy worked)
+        mock_verify.side_effect = [False, True]
+
+        # Simulate the prompt sequence:
+        # 1. Initial command -> gets "Address or name of remote host"
+        # 2. Responds with "" -> gets "Copy complete"
+        self.device.native.send_command.side_effect = [
+            "Address or name of remote host [1.1.1.1]?",
+            "123456 bytes copied in 10.2 secs. Copy complete.",
+        ]
+        self.device.native.find_prompt.return_value = "Router#"
+
+        with self.subTest("Test successful copy with interactive prompts"):
+            self.device.remote_file_copy(src, file_system="flash:")
+
+            # Verify the command sent was correct
+            self.device.native.send_command.assert_has_calls(
+                [
+                    mock.call("copy sftp://1.1.1.1/test.bin flash:test.bin", expect_string=mock.ANY, read_timeout=300),
+                    mock.call(
+                        "", expect_string=mock.ANY, read_timeout=300, cmd_verify=True
+                    ),  # Respond to "Address or name of remote host"
+                ]
+            )
+
+    def test_remote_file_copy_type_error(self):
+        with self.subTest("Test raises TypeError if src is not FileCopyModel"):
+            with self.assertRaises(TypeError):
+                self.device.remote_file_copy("not_a_model")
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_failure_on_error_output(self, mock_verify):
+        # Setup file model
+        src = FileCopyModel(
+            download_url="tftp://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+        )
+        mock_verify.return_value = False
+        self.device.native.find_prompt.return_value = "Router#"
+
+        # Simulate a network error returned by the device
+        self.device.native.send_command.return_value = "%Error opening tftp://1.1.1.1/test.bin (Timed out)"
+
+        with self.subTest("Test raises FileTransferError when device returns Error string"):
+            from pyntc.errors import FileTransferError
+
+            with self.assertRaises(FileTransferError):
+                self.device.remote_file_copy(src)
 
 
 if __name__ == "__main__":
@@ -1262,6 +1467,7 @@ def test_install_os_install_mode_with_retries(
     mock_has_reload_happened_recently.side_effect = [False, False, True]
     mock_image_booted.side_effect = [False, True]
     mock_sleep.return_value = None
+    mock_show.return_value = "show must go on"
     # Call the install os function
     actual = ios_device.install_os(image_name, install_mode=True)
 
