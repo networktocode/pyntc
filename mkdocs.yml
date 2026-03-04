@@ -142,6 +142,7 @@ nav:
           - v0.20: "admin/release_notes/version_0.20.md"
           - v1.0: "admin/release_notes/version_1.0.md"
           - v2.0: "admin/release_notes/version_2.0.md"
+          - v2.1: "admin/release_notes/version_2.1.md"
   - Developer Guide:
       - Extending the Library: "dev/extending.md"
       - Contributing to the Library: "dev/contributing.md"
@@ -171,4 +172,5 @@ nav:
           - pyntc.utils: "code-reference/pyntc/utils/__init__.md"
           - pyntc.utils.converters: "code-reference/pyntc/utils/converters.md"
           - pyntc.utils.templates: "code-reference/pyntc/utils/templates/__init__.md"
+          - pyntc.utils.models: "code-reference/pyntc/utils/models.md"
           - pyntc.arch_decision: "dev/arch_decision.md"
