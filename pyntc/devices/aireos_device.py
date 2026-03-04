@@ -345,7 +345,7 @@ class AIREOSDevice(BaseDevice):
                 log.debug("Host %s: Device rebooted.", self.host)
                 return
             except:  # noqa E722 # nosec # pylint: disable=bare-except
-                pass
+                time.sleep(10)
 
         # TODO: Get proper hostname parameter
         log.error("Host %s: Device timed out while rebooting.", self.host)
