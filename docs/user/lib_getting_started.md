@@ -252,7 +252,7 @@ interface GigabitEthernet1
 
 #### Remote File Copy (Download to Device)
 
-Some devices support copying files directly from a URL to the device. This is useful for larger files like OS images.  To do this, you need to use the `FileCopyModel` data model to specify the source file information and then pass that to the `remote_file_copy` method. Currently only supported on Cisco IOS devices. Tested with ftp, http, https, sftp, and tftp urls.
+Some devices support copying files directly from a URL to the device. This is useful for larger files like OS images.  To do this, you need to use the `FileCopyModel` data model to specify the source file information and then pass that to the `remote_file_copy` method. Currently only supported on Cisco IOS and Juniper Junos devices. Tested with ftp, http, https, sftp, and tftp urls.
 
 - `remote_file_copy` method
 
