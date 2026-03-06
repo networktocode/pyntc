@@ -243,7 +243,7 @@ class IOSDevice(BaseDevice):
                 if self._has_reload_happened_recently():
                     return
             except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                pass
+                time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -865,7 +865,7 @@ class IOSDevice(BaseDevice):
         Args:
             image_name (str): Name of the IOS image to boot into
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
-            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 30.
+            read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
             vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
 
         Raises:

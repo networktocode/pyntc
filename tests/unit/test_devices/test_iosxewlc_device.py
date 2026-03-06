@@ -8,7 +8,8 @@ from pyntc.errors import CommandError
 
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
-def test_wait_for_device_reboot_returns(mock_show, mock_open, iosxewlc_device):
+@mock.patch("pyntc.devices.iosxewlc_device.time.sleep")
+def test_wait_for_device_reboot_returns(mock_sleep, mock_show, mock_open, iosxewlc_device):
     timeout = 3
     iosxewlc_device._wait_for_device_reboot(timeout=timeout)
     mock_open.assert_called()
@@ -17,7 +18,8 @@ def test_wait_for_device_reboot_returns(mock_show, mock_open, iosxewlc_device):
 
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
-def test_wait_for_device_reboot_multiple_iterations(mock_show, mock_open, iosxewlc_device):
+@mock.patch("pyntc.devices.iosxewlc_device.time.sleep")
+def test_wait_for_device_reboot_multiple_iterations(mock_sleep, mock_show, mock_open, iosxewlc_device):
     timeout = 3
     mock_open.side_effect = [Exception("Cannot connect"), Exception("Cannot connect"), None]
     iosxewlc_device._wait_for_device_reboot(timeout=timeout)
@@ -27,7 +29,8 @@ def test_wait_for_device_reboot_multiple_iterations(mock_show, mock_open, iosxew
 @mock.patch.object(IOSXEWLCDevice, "hostname", new_callable=mock.PropertyMock)
 @mock.patch.object(IOSXEWLCDevice, "open")
 @mock.patch.object(IOSXEWLCDevice, "show")
-def test_wait_for_device_reboot_timeout(mock_show, mock_open, mock_hostname, iosxewlc_device):
+@mock.patch("pyntc.devices.iosxewlc_device.time.sleep")
+def test_wait_for_device_reboot_timeout(mock_sleep, mock_show, mock_open, mock_hostname, iosxewlc_device):
     timeout = 3
     mock_hostname.return_value = "ntc-iosxewlc-01"
     mock_open.side_effect = [Exception("Cannot connect")]
