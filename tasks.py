@@ -37,7 +37,7 @@ namespace.configure(
         "pyntc": {
             "project_name": "pyntc",
             "python_ver": "3.10",
-            "local": is_truthy(os.getenv("INVOKE_PYNTC_LOCAL", "false")),
+            "local": is_truthy(os.getenv("INVOKE_PYNTC_LOCAL", "true")),
             "image_name": "pyntc",
             "image_ver": os.getenv("INVOKE_PYNTC_IMAGE_VER", "latest"),
             "pwd": Path(__file__).parent,
