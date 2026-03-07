@@ -143,6 +143,7 @@ nav:
           - v1.0: "admin/release_notes/version_1.0.md"
           - v2.0: "admin/release_notes/version_2.0.md"
           - v2.1: "admin/release_notes/version_2.1.md"
+          - v2.2: "admin/release_notes/version_2.2.md"
   - Developer Guide:
       - Extending the Library: "dev/extending.md"
       - Contributing to the Library: "dev/contributing.md"

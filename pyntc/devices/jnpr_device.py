@@ -15,9 +15,11 @@ from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
 
+from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.devices.tables.jnpr.loopback import LoopbackTable  # pylint: disable=no-name-in-module
-from pyntc.errors import CommandError, CommandListError, FileTransferError, RebootTimeoutError
+from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, RebootTimeoutError
+from pyntc.utils.models import FileCopyModel
 
 
 @fix_docs
@@ -25,6 +27,7 @@ class JunosDevice(BaseDevice):
     """Juniper JunOS Device Implementation."""
 
     vendor = "juniper"
+    DEFAULT_TIMEOUT = 120
 
     def __init__(self, host, username, password, *args, **kwargs):  # noqa: D403
         """PyNTC device implementation for Juniper JunOS.
@@ -40,6 +43,8 @@ class JunosDevice(BaseDevice):
 
         self.native = JunosNativeDevice(*args, host=host, user=username, passwd=password, **kwargs)
         self.open()
+        self.native.timeout = self.DEFAULT_TIMEOUT
+        log.init(host=host)
         self.cu = JunosNativeConfig(self.native)  # pylint: disable=invalid-name
         self.fs = JunosNativeFS(self.native)  # pylint: disable=invalid-name
         self.sw = JunosNativeSW(self.native)  # pylint: disable=invalid-name
@@ -56,9 +61,6 @@ class JunosDevice(BaseDevice):
                     md5_hash.update(buf)
                     buf = file_name.read(blocksize)
             return md5_hash.hexdigest()
-
-    def _file_copy_remote_md5(self, filename):
-        return self.fs.checksum(filename)
 
     def _get_interfaces(self):
         eth_ifaces = EthPortTable(self.native)
@@ -103,12 +105,17 @@ class JunosDevice(BaseDevice):
 
     def _wait_for_device_reboot(self, timeout=3600):
         start = time.time()
+        disconnected = False
         while time.time() - start < timeout:
-            try:
-                self.open()
-                return
-            except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                pass
+            if disconnected:
+                try:
+                    self.open()
+                    return
+                except:  # noqa E722 # nosec  # pylint: disable=bare-except
+                    pass
+            elif not self.connected:
+                disconnected = True
+            time.sleep(10)
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
@@ -326,49 +333,64 @@ class JunosDevice(BaseDevice):
             dest = os.path.basename(src)
 
         local_hash = self._file_copy_local_md5(src)
-        remote_hash = self._file_copy_remote_md5(dest)
+        remote_hash = self.get_remote_checksum(dest)
         if local_hash is not None and local_hash == remote_hash:
             return True
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
-        """Install OS on device.
+    def install_os(self, image_name, checksum, hashing_algorithm="md5"):
+        """Install OS on device and reboot.
 
         Args:
             image_name (str): Name of image.
-            vendor_specifics (dict): Vendor specific options.
+            checksum (str): The checksum of the file.
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
 
-        Raises:
-            NotImplementedError: Method currently not implemented.
         """
-        raise NotImplementedError
+        install_ok = self.sw.install(
+            package=image_name,
+            checksum=checksum,
+            checksum_algorithm=hashing_algorithm,
+            progress=True,
+            validate=True,
+            no_copy=True,
+            timeout=3600,
+        )
+
+        # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
+        if isinstance(install_ok, tuple):
+            install_ok = install_ok[0]
+
+        if not install_ok:
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+        self.reboot(wait_for_reload=True)
 
     def open(self):
         """Open connection to device."""
         if not self.connected:
             self.native.open()
 
-    def reboot(self, wait_for_reload=False, **kwargs):
+    def reboot(self, wait_for_reload=False, timeout=3600, confirm=None):
         """
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
-            kwargs (dict): Additional keyword arguments to pass to the `reboot` command.
+            wait_for_reload (bool): Whether the reboot method should wait for the device to come back up before returning. Defaults to False.
+            timeout (int, optional): Time in seconds to wait for the device to return after reboot. Defaults to 1 hour.
+            confirm (None): Not used. Deprecated since v0.17.0.
 
         Example:
             >>> device = JunosDevice(**connection_args)
             >>> device.reboot()
             >>>
         """
-        if kwargs.get("confirm"):
+        if confirm is not None:
             warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
-        self.sw = JunosNativeSW(self.native)
         self.sw.reboot(in_min=0)
         if wait_for_reload:
-            time.sleep(10)
-            self._wait_for_device_reboot()
+            self._wait_for_device_reboot(timeout=timeout)
 
     def rollback(self, filename):
         """Rollback to a specific configuration file.
@@ -376,8 +398,6 @@ class JunosDevice(BaseDevice):
         Args:
             filename (str): Filename to rollback device to.
         """
-        self.native.timeout = 60
-
         temp_file = NamedTemporaryFile()  # pylint: disable=consider-using-with
 
         with SCP(self.native) as scp:
@@ -387,8 +407,6 @@ class JunosDevice(BaseDevice):
         self.cu.commit()
 
         temp_file.close()
-
-        self.native.timeout = 30
 
     @property
     def running_config(self):
@@ -412,7 +430,7 @@ class JunosDevice(BaseDevice):
             (bool): True if new file created for save file. Otherwise, just returns if save is to default name.
         """
         if filename is None:
-            self.cu.commit()
+            self.cu.commit(dev_timeout=300)
             return
 
         temp_file = NamedTemporaryFile(mode="w")  # pylint: disable=consider-using-with
@@ -470,3 +488,84 @@ class JunosDevice(BaseDevice):
             (str): Startup configuration.
         """
         return self.show("show config")
+
+    def check_file_exists(self, filename):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+        """
+        return self.fs.ls(filename) is not None
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5"):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
+
+        Returns:
+            (str): The checksum of the remote file or None if the file is not found.
+        """
+        return self.fs.checksum(path=filename, calc=hashing_algorithm)
+
+    def compare_file_checksum(self, checksum, filename, hashing_algorithm="md5"):
+        """Compare the checksum of a local file with a remote file.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
+
+        Returns:
+            (bool): True if the checksums match, False otherwise.
+        """
+        return checksum == self.get_remote_checksum(filename, hashing_algorithm)
+
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None):
+        """Copy a file to a remote device.
+
+        Args:
+            src (FileCopyModel): The source file model.
+            dest (str): The destination file path on the remote device.
+
+        Raises:
+            TypeError: If src is not an instance of FileCopyModel.
+            FileTransferError: If there is an error during file transfer or if the file cannot be verified after transfer.
+        """
+        if not isinstance(src, FileCopyModel):
+            raise TypeError("src must be an instance of FileCopyModel")
+
+        if self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm):
+            return
+
+        if not self.fs.cp(from_path=src.download_url, to_path=dest, dev_timeout=src.timeout):
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}")
+
+        # Some devices take a while to sync the filesystem after a copy but netconf returns before the sync completes
+        for _ in range(5):
+            if self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm):
+                return
+            time.sleep(30)
+
+        log.error(
+            "Host %s: Attempted remote file copy, but could not validate file existed after transfer",
+            self.host,
+        )
+        raise FileTransferError
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5"):
+        """Verify a file on the remote device by confirming the file exists and validate the checksum.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename) and self.compare_file_checksum(checksum, filename, hashing_algorithm)

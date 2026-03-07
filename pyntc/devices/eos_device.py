@@ -154,7 +154,7 @@ class EOSDevice(BaseDevice):
                 log.debug("Host %s: Device rebooted.", self.host)
                 return
             except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                pass
+                time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
