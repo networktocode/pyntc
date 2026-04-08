@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.10", "3.11"]  # TODO: Switch back to latest supported Python when https://github.com/networktocode/pyntc/issues/351 is completed
+        python-version: ["3.10", "3.14"]
     env:
       INVOKE_PYNTC_PYTHON_VER: "${{ matrix.python-version }}"
     steps:
@@ -127,7 +127,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.10", "3.11"]  # TODO: Re-enable Python 3.12 and 3.13 when https://github.com/networktocode/pyntc/issues/351 is completed
+        python-version: ["3.10", "3.14"]
     runs-on: "ubuntu-latest"
     env:
       INVOKE_PYNTC_PYTHON_VER: "${{ matrix.python-version }}"
