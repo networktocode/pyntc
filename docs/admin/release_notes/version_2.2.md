@@ -6,6 +6,17 @@ This document describes all new features and changes in the release. The format 
 
 - Added OS upgrade support for Junos devices.
 
+<!-- towncrier release notes start -->
+## [v2.2.1 (2026-04-08)](https://github.com/networktocode/pyntc/releases/tag/v2.2.1)
+
+### Added
+
+- [#360](https://github.com/networktocode/pyntc/issues/360) - Added support for Python 3.14.
+
+### Fixed
+
+- [#354](https://github.com/networktocode/pyntc/issues/354) - Fixed Github release publishing failing.
+
 ## [v2.2.0 (2026-03-09)](https://github.com/networktocode/pyntc/releases/tag/v2.2.0)
 
 ### Added
