@@ -43,6 +43,7 @@ def init(**kwargs):
 
 
     """
+    host = kwargs.pop("host", None)
     _debug = os.environ.get("PYNTC_DEBUG", None)
     log_format = DEBUG_FORMAT if _debug else FORMAT
 
@@ -54,7 +55,7 @@ def init(**kwargs):
 
     logging.basicConfig(**kwargs)
     # info is defined at the end of the file
-    info("Logging initialized for host %s.", kwargs.get("host"))
+    info("Logging initialized for host %s.", host)
 
 
 def logger(level):
