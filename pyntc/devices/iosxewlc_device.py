@@ -12,8 +12,6 @@ INSTALL_MODE_FILE_NAME = "packages.conf"
 class IOSXEWLCDevice(IOSDevice):
     """Cisco IOSXE WLC Device Implementation."""
 
-    log.init()
-
     def _wait_for_device_start_reboot(self, timeout=600):
         start = time.time()
         while time.time() - start < timeout:
