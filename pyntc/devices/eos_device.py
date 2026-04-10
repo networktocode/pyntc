@@ -25,7 +25,6 @@ from pyntc.errors import (
 from pyntc.utils import convert_list_by_key
 from pyntc.utils.models import FileCopyModel
 
-
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -496,7 +495,6 @@ class EOSDevice(BaseDevice):
                     FileTransferError.default_message,
                 )
                 raise FileTransferError
-
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
