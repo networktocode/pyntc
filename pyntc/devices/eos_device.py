@@ -423,9 +423,6 @@ class EOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    ###
-    # MM Begin
-    ###
     def check_file_exists(self, filename, file_system=None):
         """Check if a remote file exists by filename.
 
@@ -686,10 +683,6 @@ class EOSDevice(BaseDevice):
                 device_checksum,
             )
             return False
-
-    ###
-    # MM End
-    ###
 
     def install_os(self, image_name, **vendor_specifics):
         """Install new OS on device.
