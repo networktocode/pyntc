@@ -5,7 +5,7 @@ import re
 import time
 from collections import Counter
 from ipaddress import IPv4Address, IPv4Interface, IPv6Address, IPv6Interface, ip_address
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 from urllib.parse import urlparse
 
 from netmiko import ConnectHandler
@@ -382,7 +382,7 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: the boot options are %s", self.host, {"sys": boot_image})
         return {"sys": boot_image}
 
-    def check_file_exists(self, filename, **kwargs):
+    def check_file_exists(self, filename, **kwargs: Any):
         """Check whether a file exists on the device.
 
         Args:
@@ -609,7 +609,7 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs):
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs: Any):
         """Get the checksum of a file on the device.
 
         Args:
@@ -996,7 +996,7 @@ class ASADevice(BaseDevice):
 
         log.debug("Host %s: reboot standby with timeout %s.", self.host, timeout)
 
-    def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs):
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs: Any):
         """Copy a file from a remote server to the device.
 
         Pulls the file specified by ``src`` from a remote server using the protocol in
@@ -1261,7 +1261,7 @@ class ASADevice(BaseDevice):
         """
         return self.show("show startup-config")
 
-    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs: Any):
         """Verify a file on the device by comparing checksums.
 
         Args:
