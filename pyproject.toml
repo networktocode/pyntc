@@ -51,6 +51,7 @@ attrs = "^23.2.0"
 towncrier = ">=23.6.0,<=24.8.0"
 ruff = "*"
 Markdown = "*"
+hypothesis = "*"
 
 [tool.poetry.group.docs.dependencies]
 # Rendering docs to HTML

@@ -54,7 +54,7 @@ def init(**kwargs):
 
     logging.basicConfig(**kwargs)
     # info is defined at the end of the file
-    info("Logging initialized for host %s.", kwargs.get("host"))
+    info("Logging initialized for host %s.", kwargs.pop("host", None))
 
 
 def logger(level):
