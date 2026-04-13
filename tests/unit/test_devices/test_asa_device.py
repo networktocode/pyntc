@@ -1061,8 +1061,8 @@ def test_remote_file_copy_type_error(mock_verify, mock_fs, asa_device):
 @mock.patch.object(ASADevice, "verify_file", return_value=True)
 def test_remote_file_copy_already_exists(mock_verify, mock_fs, asa_device):
     asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
-    # verify_file is called twice: once as the pre-check (returns True) and once as the post-check
-    assert mock_verify.call_count == 2
+    # verify_file is called once (pre-check passes); post-check is skipped since no copy was needed
+    assert mock_verify.call_count == 1
     mock_verify.assert_any_call(SHA512_CHECKSUM, "asa.bin", hashing_algorithm="sha512", file_system="disk0:")
     asa_device.native.send_command.assert_not_called()
 
@@ -1137,6 +1137,16 @@ def test_remote_file_copy_verify_fails_after_copy(mock_verify, mock_fs, asa_devi
     with pytest.raises(FileTransferError):
         asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
     assert mock_verify.call_count == 2
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=False)
+def test_remote_file_copy_unmatched_output_raises(mock_verify, mock_fs, asa_device):
+    """Unexpected output that matches no known prompt or success/error pattern raises FileTransferError."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.return_value = "!!!!!!!!!! some unexpected banner line !!!!!!!!!!"
+    with pytest.raises(FileTransferError):
+        asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
 
 
 @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")

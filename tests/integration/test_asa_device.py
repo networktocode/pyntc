@@ -8,12 +8,12 @@ Usage (from project root):
     export ASA_USER=<user>
     export ASA_PASS=<pass>
     export ASA_SECRET=<enable_pass>
-    export FTP_URL=ftp://<ftp_user>:<ftp_password>@<server_ip>/<file_name> \\
-    export TFTP_URL=tftp://<server_ip>/<file_name> \\
-    export SCP_URL=scp://<scp_user>:<scp_password>@<server_ip>:2222/<file_name> \\
-    export HTTP_URL=http://<http_user>:<http_password>@<server_ip>:8081/<file_name> \\
-    export HTTPS_URL=https://<https_user>:<https_password>@<server_ip>:8443/<file_name> \\
-    export FILE_CHECKSUM=<sha512_hash> \\
+    export FTP_URL=ftp://<ftp_user>:<ftp_password>@<server_ip>/<file_name>
+    export TFTP_URL=tftp://<server_ip>/<file_name>
+    export SCP_URL=scp://<scp_user>:<scp_password>@<server_ip>:2222/<file_name>
+    export HTTP_URL=http://<http_user>:<http_password>@<server_ip>:8081/<file_name>
+    export HTTPS_URL=https://<https_user>:<https_password>@<server_ip>:8443/<file_name>
+    export FILE_CHECKSUM=<sha512_hash>
     poetry run pytest tests/integration/test_asa_device.py -v
 
 Set only the protocol URL vars for the servers you have available; each

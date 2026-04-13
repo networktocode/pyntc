@@ -1030,8 +1030,8 @@ class ASADevice(BaseDevice):
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
             current_prompt = self.native.find_prompt()
             prompt_answers = {
-                r"Password": src.token,
-                r"Source username": src.username,
+                r"Password": src.token or "",
+                r"Source username": src.username or "",
                 r"yes/no|Are you sure you want to continue connecting": "yes",
                 r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",
             }
@@ -1068,10 +1068,17 @@ class ASADevice(BaseDevice):
                             cmd_verify="Password" not in prompt,
                         )
                         break
+                else:
+                    log.error(
+                        "Host %s: Unexpected output during file transfer of %s: %s", self.host, src.file_name, output
+                    )
+                    raise FileTransferError
 
-        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
-            log.error("Host %s: File %s could not be verified after transfer.", self.host, src.file_name)
-            raise FileTransferError
+            if not self.verify_file(
+                src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
+            ):
+                log.error("Host %s: File %s could not be verified after transfer.", self.host, src.file_name)
+                raise FileTransferError
 
     @property
     def redundancy_mode(self):
