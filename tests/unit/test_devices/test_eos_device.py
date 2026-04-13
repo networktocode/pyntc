@@ -10,6 +10,7 @@ from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.eos import config, enable, send_command, send_command_expect
 
@@ -459,12 +460,6 @@ except ImportError:
             return args[0]
 
     st = _ST()
-
-
-# Property-based tests for copy command construction
-from pyntc.utils.models import FileCopyModel
-
-# Property tests for Task 6: Input Validation in remote_file_copy()
 
 
 @given(

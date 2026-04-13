@@ -473,10 +473,7 @@ class EOSDevice(BaseDevice):
         Args:
             filename (str): The name of the file to check for on the remote device.
             hashing_algorithm (str): The hashing algorithm to use (default: "md5").
-            **kwargs: Additional keyword arguments.
-
-        Keyword Args:
-            file_system (str): The file system for the remote file (e.g., "flash:").
+            **kwargs (Any): Passible parameters such as file_system.
 
         Returns:
             (str): The checksum of the remote file.
@@ -542,7 +539,7 @@ class EOSDevice(BaseDevice):
             dest (str): Destination filename (defaults to src.file_name).
             file_system (str): Device filesystem (auto-detected if not provided).
             include_username (bool): Whether to include username in the copy command. Defaults to False.
-            **kwargs: Additional keyword arguments for future extensibility.
+            **kwargs (Any): Passible parameters such as file_system.
 
         Raises:
             TypeError: If src is not a FileCopyModel.
@@ -662,7 +659,7 @@ class EOSDevice(BaseDevice):
             checksum (str): The checksum of the file.
             filename (str): The name of the file to check for on the remote device.
             hashing_algorithm (str): The hashing algorithm to use (default: "md5").
-            **kwargs: Additional keyword arguments (e.g., file_system).
+            **kwargs (Any): Passible parameters such as file_system.
 
         Returns:
             (bool): True if the file is verified successfully, False otherwise.
