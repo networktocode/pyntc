@@ -531,6 +531,39 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
 
+    def _build_url_copy_command_simple(self, src, file_system):
+        """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
+        return f"copy {src.download_url} {file_system}", False
+
+    def _build_url_copy_command_with_creds(self, src, file_system):
+        """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
+        parsed = urlparse(src.download_url)
+        hostname = parsed.hostname
+        path = parsed.path
+
+        # Determine port based on scheme
+        if parsed.port:
+            port = parsed.port
+        elif src.scheme == "https":
+            port = "443"
+        elif src.scheme in ["http"]:
+            port = "80"
+        else:
+            port = ""
+
+        port_str = f":{port}" if port else ""
+
+        # For HTTP/HTTPS, include both username and token
+        if src.scheme in ["http", "https"]:
+            command = f"copy {src.scheme}://{src.username}:{src.token}@{hostname}{port_str}{path} {file_system}"
+            detect_prompt = False
+        # For SCP/FTP/SFTP, include only username (password via prompt)
+        else:
+            command = f"copy {src.scheme}://{src.username}@{hostname}{port_str}{path} {file_system}"
+            detect_prompt = True
+
+        return command, detect_prompt
+
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, include_username=False, **kwargs):
         """Copy a file from remote source to device.
 
@@ -569,41 +602,27 @@ class EOSDevice(BaseDevice):
         if src.scheme not in supported_schemes:
             raise ValueError(f"Unsupported scheme: {src.scheme}")
 
-        # Parse URL components
-        parsed = urlparse(src.download_url)
-        hostname = parsed.hostname
-        path = parsed.path
-        port = (
-            parsed.port
-            if parsed.port
-            else ("443" if src.scheme == "https" else "80" if src.scheme in ["http", "https"] else "")
-        )
-
         # Build command based on scheme and credentials
-        detect_prompt = False
+        command_builders = {
+            ("tftp", False): lambda: self._build_url_copy_command_simple(src, file_system),
+            ("http", False): lambda: self._build_url_copy_command_simple(src, file_system),
+            ("https", False): lambda: self._build_url_copy_command_simple(src, file_system),
+            ("http", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("https", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("scp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("scp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("ftp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("ftp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("sftp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
+            ("sftp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
+        }
 
-        # TFTP, HTTP, HTTPS without credentials
-        if src.scheme in ["tftp", "http", "https"] and not include_username:
-            command = f"copy {src.download_url} {file_system}"
-            log.debug("Host %s: Preparing copy command without credentials: %s", self.host, src.scheme)
-
-        # HTTP/HTTPS with credentials embedded in URL
-        elif src.scheme in ["http", "https"] and (include_username and src.username):
-            port_str = f":{port}" if port else ""
-            command = f"copy {src.scheme}://{src.username}:{src.token}@{hostname}{port_str}{path} {file_system}"
-            log.debug("Host %s: Preparing copy command with embedded credentials for %s", self.host, src.scheme)
-
-        # SCP, FTP, SFTP with username (password via prompt)
-        elif src.scheme in ["scp", "ftp", "sftp"]:
-            port_str = f":{port}" if port else ""
-            command = f"copy {src.scheme}://{src.username}@{hostname}{port_str}{path} {file_system}"
-            detect_prompt = True
-            log.debug(
-                "Host %s: Preparing copy command with username for %s (password via prompt)", self.host, src.scheme
-            )
-
-        else:
+        builder_key = (src.scheme, include_username and src.username is not None)
+        if builder_key not in command_builders:
             raise ValueError(f"Unable to construct copy command for scheme {src.scheme} with provided credentials")
+
+        command, detect_prompt = command_builders[builder_key]()
+        log.debug("Host %s: Preparing copy command for %s", self.host, src.scheme)
 
         # Execute copy command
         if detect_prompt and src.token:
@@ -671,15 +690,15 @@ class EOSDevice(BaseDevice):
         if checksum == device_checksum:
             log.debug("Host %s: Checksum verification successful for file %s", self.host, filename)
             return True
-        else:
-            log.debug(
-                "Host %s: Checksum verification failed for file %s - Expected: %s, Actual: %s",
-                self.host,
-                filename,
-                checksum,
-                device_checksum,
-            )
-            return False
+
+        log.debug(
+            "Host %s: Checksum verification failed for file %s - Expected: %s, Actual: %s",
+            self.host,
+            filename,
+            checksum,
+            device_checksum,
+        )
+        return False
 
     def install_os(self, image_name, **vendor_specifics):
         """Install new OS on device.
