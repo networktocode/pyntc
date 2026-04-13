@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from ipaddress import IPv4Address, IPv4Interface, IPv6Address, IPv6Interface, ip_address
 from typing import Dict, Iterable, List, Optional, Union
+from urllib.parse import urlparse
 
 from netmiko import ConnectHandler
 from netmiko.cisco import CiscoAsaFileTransfer, CiscoAsaSSH
@@ -24,7 +25,9 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import get_structured_data
+from pyntc.utils.models import FileCopyModel
 
+ASA_HASHING_ALGORITHM_MAP = {"md5": "md5", "sha512": "sha-512"}
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
 RE_SHOW_IP_ADDRESS = re.compile(r"^\S+\s+(\S+)\s+((?:\d+.){3}\d+)\s+((?:\d+.){3}\d+)", re.M)
@@ -36,7 +39,7 @@ class ASADevice(BaseDevice):
     """Cisco ASA Device Implementation."""
 
     vendor = "cisco"
-    active_redundancy_states = {None, "active"}
+    active_redundancy_states = {None, "active", "disabled"}
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
     def __init__(self, host: str, username: str, password: str, secret="", port=None, **kwargs):  # nosec
@@ -125,7 +128,7 @@ class ASADevice(BaseDevice):
         """
         raw_data = self.show("dir")
         try:
-            file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
+            file_system = re.search(r"(\S+:)", raw_data).group(1)
 
         except AttributeError:
             # TODO: Get proper hostname
@@ -249,7 +252,7 @@ class ASADevice(BaseDevice):
         else:
             response = self.native.send_command(command, expect_string=expect_string)
 
-        if "% " in response or "Error:" in response:
+        if re.search(r"^% ", response, re.MULTILINE) or "Error:" in response:
             log.error("Host %s: Error in %s with response: %s", self.host, command, response)
             raise CommandError(command, response)
 
@@ -378,6 +381,30 @@ class ASADevice(BaseDevice):
 
         log.debug("Host %s: the boot options are %s", self.host, {"sys": boot_image})
         return {"sys": boot_image}
+
+    def check_file_exists(self, filename, **kwargs):
+        """Check whether a file exists on the device.
+
+        Args:
+            filename (str): The name of the file to check for on the device.
+            **kwargs: Optional keyword arguments.
+
+        Keyword Args:
+            file_system (str): The file system to check. Defaults to ``_get_file_system()``.
+
+        Returns:
+            (bool): True if the file exists, False otherwise.
+        """
+        file_system = kwargs.get("file_system") or self._get_file_system()
+        cmd = f"dir {file_system}{filename}"
+        result = self.native.send_command(cmd, read_timeout=30)
+
+        if re.search(r"No such file or directory|ERROR:", result, re.IGNORECASE):
+            log.debug("Host %s: File %s does not exist on %s.", self.host, filename, file_system)
+            return False
+
+        log.debug("Host %s: File %s exists on %s.", self.host, filename, file_system)
+        return bool(re.search(re.escape(filename), result))
 
     def checkpoint(self, checkpoint_file):
         """
@@ -581,6 +608,45 @@ class ASADevice(BaseDevice):
 
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs):
+        """Get the checksum of a file on the device.
+
+        Args:
+            filename (str): The name of the file on the device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid choices are ``"md5"`` and
+                ``"sha512"`` (default: ``"md5"``).
+            **kwargs: Optional keyword arguments.
+
+        Keyword Args:
+            file_system (str): The file system where the file resides. Defaults to ``_get_file_system()``.
+
+        Returns:
+            (str): The checksum of the file.
+
+        Raises:
+            ValueError: If an unsupported hashing algorithm is provided.
+            CommandError: If the checksum cannot be parsed from the device output.
+        """
+        asa_algorithm = ASA_HASHING_ALGORITHM_MAP.get(hashing_algorithm)
+
+        if asa_algorithm is None:
+            raise ValueError(
+                f"hashing_algorithm must be 'md5' or 'sha512' for Cisco ASA devices, got '{hashing_algorithm}'."
+            )
+
+        file_system = kwargs.get("file_system") or self._get_file_system()
+        cmd = f"verify /{asa_algorithm} {file_system}{filename}"
+        result = self.native.send_command_timing(cmd, read_timeout=300)
+
+        if match := re.search(r"=\s+(\S+)", result):
+            log.debug(
+                "Host %s: Remote checksum for %s using %s is %s.", self.host, filename, hashing_algorithm, match[1]
+            )
+            return match[1]
+
+        log.error("Host %s: Unable to parse checksum for %s from output: %s", self.host, filename, result)
+        raise CommandError(cmd, f"Unable to parse checksum for {filename}")
 
     def install_os(self, image_name, **vendor_specifics):
         """
@@ -930,6 +996,83 @@ class ASADevice(BaseDevice):
 
         log.debug("Host %s: reboot standby with timeout %s.", self.host, timeout)
 
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs):
+        """Copy a file from a remote server to the device.
+
+        Pulls the file specified by ``src`` from a remote server using the protocol in
+        ``src.download_url`` (FTP, TFTP, SCP, HTTP, or HTTPS) and saves it to the device
+        filesystem. The file is verified after transfer using the checksum in ``src``.
+
+        SFTP is not supported on Cisco ASA devices.
+
+        Args:
+            src (FileCopyModel): Specification of the source file including URL, checksum, and
+                credentials.
+            dest (str): Filename to use on the device. Defaults to ``src.file_name``.
+            **kwargs: Optional keyword arguments.
+
+        Keyword Args:
+            file_system (str): Destination file system on the device (e.g. ``"disk0:"``).
+                Defaults to ``_get_file_system()``.
+
+        Raises:
+            TypeError: If ``src`` is not a ``FileCopyModel`` instance.
+            FileTransferError: If the transfer fails or the file cannot be verified afterwards.
+        """
+        if not isinstance(src, FileCopyModel):
+            raise TypeError("src must be an instance of FileCopyModel")
+
+        file_system = kwargs.get("file_system") or self._get_file_system()
+
+        if dest is None:
+            dest = src.file_name
+
+        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            current_prompt = self.native.find_prompt()
+            prompt_answers = {
+                r"Password": src.token,
+                r"Source username": src.username,
+                r"yes/no|Are you sure you want to continue connecting": "yes",
+                r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",
+            }
+            keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
+            expect_regex = f"({'|'.join(keys)})"
+            src_url = src.clean_url
+
+            if not urlparse(src.clean_url).path.strip("/"):
+                src_url = f"{src.clean_url.rstrip('/')}/{dest}"
+
+            command = f"copy {src_url} {file_system}{dest}"
+
+            if src.vrf and src.scheme not in {"http", "https"}:
+                command = f"{command} vrf {src.vrf}"
+
+            # Bypass _send_command — copy output may contain "% " patterns that are not failures
+            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
+
+            while current_prompt not in output:
+                if re.search(r"bytes copied in", output, re.IGNORECASE):
+                    log.info("Host %s: File %s transferred successfully.", self.host, src.file_name)
+                    break
+
+                if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
+                    log.error("Host %s: File transfer error for %s: %s", self.host, src.file_name, output)
+                    raise FileTransferError
+
+                for prompt, answer in prompt_answers.items():
+                    if re.search(prompt, output, re.IGNORECASE):
+                        output = self.native.send_command(
+                            answer,
+                            expect_string=expect_regex,
+                            read_timeout=src.timeout,
+                            cmd_verify="Password" not in prompt,
+                        )
+                        break
+
+        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            log.error("Host %s: File %s could not be verified after transfer.", self.host, src.file_name)
+            raise FileTransferError
+
     @property
     def redundancy_mode(self):
         """
@@ -1117,6 +1260,26 @@ class ASADevice(BaseDevice):
         :return: Output of command 'show startup-config'.
         """
         return self.show("show startup-config")
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Verify a file on the device by comparing checksums.
+
+        Args:
+            checksum (str): The expected checksum of the file.
+            filename (str): The name of the file on the device.
+            hashing_algorithm (str): The hashing algorithm to use (default: ``"md5"``).
+            **kwargs: Optional keyword arguments passed through to ``check_file_exists`` and
+                ``compare_file_checksum``.
+
+        Keyword Args:
+            file_system (str): The file system where the file resides. Defaults to ``_get_file_system()``.
+
+        Returns:
+            (bool): True if the file exists and the checksum matches, False otherwise.
+        """
+        return self.check_file_exists(filename, **kwargs) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, **kwargs
+        )
 
     @property
     def uptime(self):

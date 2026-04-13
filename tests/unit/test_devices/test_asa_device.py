@@ -6,6 +6,8 @@ import pytest
 
 from pyntc.devices import ASADevice
 from pyntc.devices import asa_device as asa_module
+from pyntc.errors import FileTransferError
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.asa import send_command
 
@@ -165,6 +167,7 @@ def test_enable_from_config(asa_device):
 
 def test_config(asa_device):
     command = "hostname DATA-CENTER-FW"
+    asa_device.native.send_command_timing.return_value = ""
 
     result = asa_device.config(command)
     assert result is None
@@ -183,6 +186,7 @@ def test_bad_config(asa_device):
 
 def test_config_list(asa_device):
     commands = ["crypto key generate rsa modulus 2048", "aaa authentication ssh console LOCAL"]
+    asa_device.native.send_command_timing.return_value = ""
     asa_device.config(commands)
 
     for cmd in commands:
@@ -279,11 +283,13 @@ def test_checkpoint(asa_device):
 
 
 def test_running_config(asa_device):
+    asa_device.native.send_command_timing.return_value = "interface eth1"
     expected = asa_device.show("show running config")
     assert asa_device.running_config == expected
 
 
 def test_starting_config(asa_device):
+    asa_device.native.send_command_timing.return_value = "interface eth1"
     expected = asa_device.show("show startup-config")
     assert asa_device.startup_config == expected
 
@@ -631,8 +637,9 @@ def test_ip_protocol(mock_ip_address, ip, ip_version, asa_device):
         (FAILED, False),
         (COLD_STANDBY, False),
         (None, True),
+        ("disabled", True),
     ),
-    ids=(ACTIVE, "standby_ready", NEGOTIATION, FAILED, "cold_standby", "unsupported"),
+    ids=(ACTIVE, "standby_ready", NEGOTIATION, FAILED, "cold_standby", "unsupported", "disabled"),
 )
 def test_is_active(mock_redundancy_state, asa_device, redundancy_state, expected):
     mock_redundancy_state.return_value = redundancy_state
@@ -899,3 +906,502 @@ def test_vlan(mock_get_vlans, asa_device):
 def test_port_none(patch):
     device = ASADevice("host", "user", "pass", port=None)
     assert device.port == 22
+
+
+# ---------------------------------------------------------------------------
+# check_file_exists tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_check_file_exists_returns_true(mock_fs, asa_device):
+    asa_device.native.send_command.return_value = "     -rwx  94038  Apr 13 2026 14:25  asa.bin\n"
+    result = asa_device.check_file_exists("asa.bin")
+    assert result is True
+    asa_device.native.send_command.assert_called_with("dir disk0:asa.bin", read_timeout=30)
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_check_file_exists_returns_false(mock_fs, asa_device):
+    asa_device.native.send_command.return_value = "ERROR: disk0:/asa.bin: No such file or directory"
+    result = asa_device.check_file_exists("asa.bin")
+    assert result is False
+
+
+@mock.patch.object(ASADevice, "_get_file_system")
+def test_check_file_exists_uses_provided_file_system(mock_fs, asa_device):
+    asa_device.native.send_command.return_value = "     -rwx  94038  Apr 13 2026 14:25  asa.bin\n"
+    result = asa_device.check_file_exists("asa.bin", file_system="flash:")
+    assert result is True
+    asa_device.native.send_command.assert_called_with("dir flash:asa.bin", read_timeout=30)
+    mock_fs.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_remote_checksum tests
+# ---------------------------------------------------------------------------
+
+MD5_CHECKSUM = "aabbccdd11223344aabbccdd11223344"
+SHA512_CHECKSUM = "90368777ae062ae6989272db08fa6c624601f841da5825b8ff1faaccd2c98b19ea4ca5"
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_get_remote_checksum_md5(mock_fs, asa_device):
+    asa_device.native.send_command_timing.return_value = (
+        f"!!!!!!!!!!!!!!!!!!!!!!!!Done!\nverify /MD5 (disk0:/asa.bin) = {MD5_CHECKSUM}"
+    )
+    result = asa_device.get_remote_checksum("asa.bin")
+    assert result == MD5_CHECKSUM
+    asa_device.native.send_command_timing.assert_called_with("verify /md5 disk0:asa.bin", read_timeout=300)
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_get_remote_checksum_sha512(mock_fs, asa_device):
+    asa_device.native.send_command_timing.return_value = (
+        f"!!!!!!!!!!!!!!!!!!!!!!!!Done!\nverify /SHA-512 (disk0:/asa.bin) = {SHA512_CHECKSUM}"
+    )
+    result = asa_device.get_remote_checksum("asa.bin", hashing_algorithm="sha512")
+    assert result == SHA512_CHECKSUM
+    asa_device.native.send_command_timing.assert_called_with("verify /sha-512 disk0:asa.bin", read_timeout=300)
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_get_remote_checksum_uses_provided_file_system(mock_fs, asa_device):
+    asa_device.native.send_command_timing.return_value = (
+        f"!!!!!!!!!!!!!!!!!!!!!!!!Done!\nverify /MD5 (flash:/asa.bin) = {MD5_CHECKSUM}"
+    )
+    result = asa_device.get_remote_checksum("asa.bin", file_system="flash:")
+    assert result == MD5_CHECKSUM
+    asa_device.native.send_command_timing.assert_called_with("verify /md5 flash:asa.bin", read_timeout=300)
+    mock_fs.assert_not_called()
+
+
+def test_get_remote_checksum_invalid_algorithm(asa_device):
+    with pytest.raises(ValueError, match="hashing_algorithm must be"):
+        asa_device.get_remote_checksum("asa.bin", hashing_algorithm="sha256")
+
+
+# ---------------------------------------------------------------------------
+# verify_file tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "compare_file_checksum", return_value=True)
+@mock.patch.object(ASADevice, "check_file_exists", return_value=True)
+def test_verify_file_returns_true(mock_exists, mock_checksum, asa_device):
+    result = asa_device.verify_file(MD5_CHECKSUM, "asa.bin")
+    assert result is True
+    mock_exists.assert_called_once_with("asa.bin")
+    mock_checksum.assert_called_once_with(MD5_CHECKSUM, "asa.bin", "md5")
+
+
+@mock.patch.object(ASADevice, "check_file_exists", return_value=False)
+def test_verify_file_returns_false_not_exists(mock_exists, asa_device):
+    result = asa_device.verify_file(MD5_CHECKSUM, "asa.bin")
+    assert result is False
+    mock_exists.assert_called_once_with("asa.bin")
+
+
+@mock.patch.object(ASADevice, "compare_file_checksum", return_value=False)
+@mock.patch.object(ASADevice, "check_file_exists", return_value=True)
+def test_verify_file_returns_false_checksum_mismatch(mock_exists, mock_checksum, asa_device):
+    result = asa_device.verify_file("wrongchecksum", "asa.bin")
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# remote_file_copy tests
+# ---------------------------------------------------------------------------
+
+FILE_COPY_MODEL_FTP = FileCopyModel(
+    download_url="ftp://example-user:example-password@192.0.2.1/asa.bin",
+    checksum=SHA512_CHECKSUM,
+    file_name="asa.bin",
+    hashing_algorithm="sha512",
+    timeout=900,
+)
+FILE_COPY_MODEL_TFTP = FileCopyModel(
+    download_url="tftp://192.0.2.1/asa.bin",
+    checksum=SHA512_CHECKSUM,
+    file_name="asa.bin",
+    hashing_algorithm="sha512",
+    timeout=900,
+)
+FILE_COPY_MODEL_SCP = FileCopyModel(
+    download_url="scp://example-user:example-password@192.0.2.1/asa.bin",
+    checksum=SHA512_CHECKSUM,
+    file_name="asa.bin",
+    hashing_algorithm="sha512",
+    timeout=900,
+)
+FILE_COPY_MODEL_HTTP = FileCopyModel(
+    download_url="http://example-user:example-password@192.0.2.1/asa.bin",
+    checksum=SHA512_CHECKSUM,
+    file_name="asa.bin",
+    hashing_algorithm="sha512",
+    timeout=900,
+)
+FILE_COPY_MODEL_HTTPS = FileCopyModel(
+    download_url="https://example-user:example-password@192.0.2.1/asa.bin",
+    checksum=SHA512_CHECKSUM,
+    file_name="asa.bin",
+    hashing_algorithm="sha512",
+    timeout=900,
+)
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file")
+def test_remote_file_copy_type_error(mock_verify, mock_fs, asa_device):
+    with pytest.raises(TypeError):
+        asa_device.remote_file_copy("not_a_file_copy_model")
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=True)
+def test_remote_file_copy_already_exists(mock_verify, mock_fs, asa_device):
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    # verify_file is called twice: once as the pre-check (returns True) and once as the post-check
+    assert mock_verify.call_count == 2
+    mock_verify.assert_any_call(SHA512_CHECKSUM, "asa.bin", hashing_algorithm="sha512", file_system="disk0:")
+    asa_device.native.send_command.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_success(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Address or name of remote host [192.0.2.1]?",
+        "Source username [example-user]?",
+        "Source filename [asa.bin]?",
+        "Destination filename [asa.bin]?",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    assert mock_verify.call_count == 2
+    asa_device.native.send_command.assert_any_call(
+        "copy ftp://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_no_dest_defaults_to_file_name(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    asa_device.native.send_command.assert_any_call(
+        "copy ftp://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_uses_provided_file_system(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP, file_system="flash:")
+    mock_fs.assert_not_called()
+    asa_device.native.send_command.assert_any_call(
+        "copy ftp://192.0.2.1/asa.bin flash:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=False)
+def test_remote_file_copy_error_in_output(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.return_value = "%Error opening ftp://192.0.2.1/asa.bin (Timed out)"
+    with pytest.raises(FileTransferError):
+        asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, False])
+def test_remote_file_copy_verify_fails_after_copy(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    with pytest.raises(FileTransferError):
+        asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    assert mock_verify.call_count == 2
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_password_prompt_uses_cmd_verify_false(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Password:",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    # The password response must be sent with cmd_verify=False
+    asa_device.native.send_command.assert_any_call(
+        FILE_COPY_MODEL_FTP.token,
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=False,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_confirm_prompt_uses_cmd_verify_true(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Address or name of remote host [192.0.2.1]?",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    asa_device.native.send_command.assert_any_call(
+        "",
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=True,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_clean_url_used_in_command(mock_verify, mock_fs, asa_device):
+    """Credentials must be stripped from the copy command (clean_url used, not download_url)."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+    # clean_url strips credentials; raw download_url should NOT appear in the command
+    call_args = asa_device.native.send_command.call_args_list[0][0][0]
+    assert "example-user:example-password" not in call_args
+    assert "ftp://192.0.2.1/asa.bin" in call_args
+
+
+# ---------------------------------------------------------------------------
+# remote_file_copy TFTP tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_tftp_success(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_TFTP)
+    assert mock_verify.call_count == 2
+    asa_device.native.send_command.assert_any_call(
+        "copy tftp://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_tftp_interactive_prompts(mock_verify, mock_fs, asa_device):
+    """TFTP has no credentials; confirmation prompts are answered with empty string."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Address or name of remote host [192.0.2.1]?",
+        "Source filename [asa.bin]?",
+        "Destination filename [asa.bin]?",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_TFTP)
+    asa_device.native.send_command.assert_any_call(
+        "",
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# remote_file_copy SCP tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_scp_success(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_SCP)
+    assert mock_verify.call_count == 2
+    asa_device.native.send_command.assert_any_call(
+        "copy scp://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_scp_ssh_host_key_prompt(mock_verify, mock_fs, asa_device):
+    """SCP SSH host-key verification prompt is answered with 'yes' and cmd_verify=True."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Are you sure you want to continue connecting (yes/no)?",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_SCP)
+    asa_device.native.send_command.assert_any_call(
+        "yes",
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=True,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_scp_password_prompt(mock_verify, mock_fs, asa_device):
+    """SCP password prompt sends token with cmd_verify=False."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Password:",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_SCP)
+    asa_device.native.send_command.assert_any_call(
+        FILE_COPY_MODEL_SCP.token,
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=False,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_scp_clean_url_used_in_command(mock_verify, mock_fs, asa_device):
+    """Credentials must be stripped from the SCP copy command."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_SCP)
+    call_args = asa_device.native.send_command.call_args_list[0][0][0]
+    assert "example-user:example-password" not in call_args
+    assert "scp://192.0.2.1/asa.bin" in call_args
+
+
+# ---------------------------------------------------------------------------
+# remote_file_copy HTTP tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_http_success(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTP)
+    assert mock_verify.call_count == 2
+    asa_device.native.send_command.assert_any_call(
+        "copy http://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_http_password_prompt(mock_verify, mock_fs, asa_device):
+    """HTTP password prompt sends token with cmd_verify=False."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Password:",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTP)
+    asa_device.native.send_command.assert_any_call(
+        FILE_COPY_MODEL_HTTP.token,
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=False,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_http_clean_url_used_in_command(mock_verify, mock_fs, asa_device):
+    """Credentials must be stripped from the HTTP copy command."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTP)
+    call_args = asa_device.native.send_command.call_args_list[0][0][0]
+    assert "example-user:example-password" not in call_args
+    assert "http://192.0.2.1/asa.bin" in call_args
+
+
+# ---------------------------------------------------------------------------
+# remote_file_copy HTTPS tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_https_success(mock_verify, mock_fs, asa_device):
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTPS)
+    assert mock_verify.call_count == 2
+    asa_device.native.send_command.assert_any_call(
+        "copy https://192.0.2.1/asa.bin disk0:asa.bin",
+        expect_string=mock.ANY,
+        read_timeout=900,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_https_password_prompt(mock_verify, mock_fs, asa_device):
+    """HTTPS password prompt sends token with cmd_verify=False."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "Password:",
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTPS)
+    asa_device.native.send_command.assert_any_call(
+        FILE_COPY_MODEL_HTTPS.token,
+        expect_string=mock.ANY,
+        read_timeout=900,
+        cmd_verify=False,
+    )
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_https_clean_url_used_in_command(mock_verify, mock_fs, asa_device):
+    """Credentials must be stripped from the HTTPS copy command."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+    asa_device.remote_file_copy(FILE_COPY_MODEL_HTTPS)
+    call_args = asa_device.native.send_command.call_args_list[0][0][0]
+    assert "example-user:example-password" not in call_args
+    assert "https://192.0.2.1/asa.bin" in call_args
