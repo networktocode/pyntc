@@ -486,14 +486,7 @@ class EOSDevice(BaseDevice):
             file_system = self._get_file_system()
 
         # Normalize file_system to Arista format (e.g., "flash:" or "/mnt/flash")
-        if file_system.endswith(":"):
-            # Already in shorthand format like "flash:"
-            pass
-        elif file_system.startswith("/"):
-            # Full path format like "/mnt/flash" - keep as is
-            pass
-        else:
-            # Assume shorthand without colon (e.g., "flash" -> "flash:")
+        if not file_system.startswith("/") and not file_system.endswith(":"):
             file_system = f"{file_system}:"
 
         # Build the path
@@ -630,12 +623,12 @@ class EOSDevice(BaseDevice):
             output = self.native_ssh.send_command_timing(command, read_timeout=src.timeout, cmd_verify=False)
             log.debug("Host %s: Copy command (with timing) output: %s", self.host, output)
 
-            if "Password:" in output or "password:" in output:
+            if "password:" in output.lower():
                 self.native_ssh.write_channel(src.token + "\n")
                 # Read the response after sending password
                 output += self.native_ssh.read_channel()
                 log.debug("Host %s: Output after password entry: %s", self.host, output)
-            elif any(error in output for error in ["Error", "Invalid", "Failed"]):
+            elif any(error in output.lower() for error in ["error", "invalid", "failed"]):
                 log.error("Host %s: Error detected in copy command output: %s", self.host, output)
                 raise FileTransferError(f"Error detected in copy command output: {output}")
         else:
@@ -643,7 +636,7 @@ class EOSDevice(BaseDevice):
             output = self.native_ssh.send_command(command, read_timeout=src.timeout)
             log.debug("Host %s: Copy command output: %s", self.host, output)
 
-            if any(error in output for error in ["Error", "Invalid", "Failed"]):
+            if any(error in output.lower() for error in ["error", "invalid", "failed"]):
                 log.error("Host %s: Error detected in copy command output: %s", self.host, output)
                 raise FileTransferError(f"Error detected in copy command output: {output}")
 
