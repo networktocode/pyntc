@@ -1,0 +1,1 @@
+Added ``remote_file_copy``, ``check_file_exists``, ``get_remote_checksum``, and ``verify_file`` support for ``ASADevice`` (FTP, TFTP, SCP, HTTP, HTTPS).
