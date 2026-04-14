@@ -27,7 +27,7 @@ from pyntc.errors import (
 from pyntc.utils import get_structured_data
 from pyntc.utils.models import FileCopyModel
 
-ASA_HASHING_ALGORITHM_MAP = {"md5": "md5", "sha512": "sha-512"}
+ASA_HASHING_ALGORITHM_MAP = {"md5": "md5", "sha512": "sha-512", "sha-512": "sha-512"}
 RE_SHOW_FAILOVER_GROUPS = re.compile(r"Group\s+\d+\s+State:\s+(.+?)\s*$", re.M)
 RE_SHOW_FAILOVER_STATE = re.compile(r"(?:Primary|Secondary)\s+-\s+(.+?)\s*$", re.M)
 RE_SHOW_IP_ADDRESS = re.compile(r"^\S+\s+(\S+)\s+((?:\d+.){3}\d+)\s+((?:\d+.){3}\d+)", re.M)
@@ -630,9 +630,9 @@ class ASADevice(BaseDevice):
         """
         asa_algorithm = ASA_HASHING_ALGORITHM_MAP.get(hashing_algorithm)
 
-        if asa_algorithm is None:
+        if not asa_algorithm:
             raise ValueError(
-                f"hashing_algorithm must be 'md5' or 'sha512' for Cisco ASA devices, got '{hashing_algorithm}'."
+                f"hashing_algorithm must be 'md5', 'sha512' or 'sha-512' for Cisco ASA devices, got '{hashing_algorithm}'."
             )
 
         file_system = kwargs.get("file_system") or self._get_file_system()
@@ -1024,7 +1024,7 @@ class ASADevice(BaseDevice):
 
         file_system = kwargs.get("file_system") or self._get_file_system()
 
-        if dest is None:
+        if not dest:
             dest = src.file_name
 
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
