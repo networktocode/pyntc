@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from pyntc.devices import AIREOSDevice, ASADevice, IOSDevice, IOSXEWLCDevice, supported_devices
+from pyntc.devices import AIREOSDevice, ASADevice, EOSDevice, IOSDevice, IOSXEWLCDevice, supported_devices
 
 
 def get_side_effects(mock_path, side_effects):
@@ -15,6 +15,48 @@ def get_side_effects(mock_path, side_effects):
         else:
             effects.append(effect)
     return effects
+
+
+# EOS fixtures
+
+
+@pytest.fixture
+def eos_device():
+    with mock.patch("pyeapi.client.Node", autospec=True) as mock_node:
+        device = EOSDevice("host", "user", "password")
+        device.native = mock_node
+        yield device
+
+
+@pytest.fixture
+def eos_mock_path(mock_path):
+    return f"{mock_path}/eos"
+
+
+@pytest.fixture
+def eos_send_command(eos_device, eos_mock_path):
+    def _mock(side_effects, existing_device=None, device=eos_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native_ssh = mock.MagicMock()
+        device.native_ssh.send_command.side_effect = get_side_effects(f"{eos_mock_path}/send_command", side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def eos_send_command_timing(eos_device, eos_mock_path):
+    def _mock(side_effects, existing_device=None, device=eos_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native_ssh = mock.MagicMock()
+        device.native_ssh.send_command_timing.side_effect = get_side_effects(
+            f"{eos_mock_path}/send_command", side_effects
+        )
+        return device
+
+    return _mock
 
 
 def pytest_generate_tests(metafunc):

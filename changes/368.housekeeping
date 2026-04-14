@@ -1,2 +1,3 @@
 Converted EOS remote file copy tests from hypothesis/pytest standalone functions to unittest TestCase with `self.assertRaises` and `subTest` for consistency with the rest of the codebase.
 Removed duplicate test class `TestRemoteFileCopyCommandExecution` and consolidated into `TestRemoteFileCopy`.
+Added integration tests for EOS device connectivity and remote file copy across FTP, TFTP, SCP, HTTP, HTTPS, and SFTP protocols.

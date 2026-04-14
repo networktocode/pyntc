@@ -137,13 +137,13 @@ class EOSDevice(BaseDevice):
         return list(x["result"] for x in response)
 
     def _uptime_to_string(self, uptime):
-        days = uptime / (24 * 60 * 60)
+        days = uptime // (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
 
-        hours = uptime / (60 * 60)
+        hours = uptime // (60 * 60)
         uptime = uptime % (60 * 60)
 
-        mins = uptime / 60
+        mins = uptime // 60
         uptime = uptime % 60
 
         seconds = uptime
@@ -442,6 +442,7 @@ class EOSDevice(BaseDevice):
         """
         exists = False
 
+        self.open()
         file_system = file_system or self._get_file_system()
         command = f"dir {file_system}/{filename}"
         result = self.native_ssh.send_command(command, read_timeout=30)
@@ -489,6 +490,7 @@ class EOSDevice(BaseDevice):
                 f"Supported algorithms: {sorted(EOS_SUPPORTED_HASHING_ALGORITHMS)}"
             )
 
+        self.open()
         file_system = kwargs.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
@@ -532,22 +534,32 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
 
+    @staticmethod
+    def _parse_copy_url_parts(clean_url, dest):
+        """Parse a clean URL into (scheme, netloc, path) for EOS copy commands.
+
+        If the URL has no file path, falls back to using dest as the filename.
+        """
+        parsed = urlparse(clean_url)
+        netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
+        path = parsed.path if parsed.path and parsed.path != "/" else f"/{dest}"
+        return parsed.scheme, netloc, path
+
     def _build_url_copy_command_simple(self, src, file_system, dest):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
-        return f"copy {src.clean_url} {file_system}/{dest}", False
+        scheme, netloc, path = self._parse_copy_url_parts(src.clean_url, dest)
+        return f"copy {scheme}://{netloc}{path} {file_system}", False
 
     def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
-        parsed = urlparse(src.clean_url)
-        netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
-        path = parsed.path
+        _, netloc, path = self._parse_copy_url_parts(src.clean_url, dest)
 
         if src.scheme in ("http", "https"):
-            command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}/{dest}"
+            command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}"
             detect_prompt = False
         else:
             # SCP/FTP/SFTP — password provided at the interactive prompt
-            command = f"copy {src.scheme}://{src.username}@{netloc}{path} {file_system}/{dest}"
+            command = f"copy {src.scheme}://{src.username}@{netloc}{path} {file_system}"
             detect_prompt = True
 
         return command, detect_prompt
@@ -606,14 +618,13 @@ class EOSDevice(BaseDevice):
 
             if "password:" in output.lower():
                 self.native_ssh.write_channel(src.token + "\n")
-                output += self.native_ssh.read_channel()
+                output = self.native_ssh.send_command_timing("", read_timeout=src.timeout, cmd_verify=False)
                 log.debug("Host %s: Output after password entry: %s", self.host, output)
-            else:
-                self._check_copy_output_for_errors(output)
         else:
             output = self.native_ssh.send_command(command, read_timeout=src.timeout)
             log.debug("Host %s: Copy command output: %s", self.host, output)
-            self._check_copy_output_for_errors(output)
+
+        self._check_copy_output_for_errors(output)
 
         verification_result = self.verify_file(
             src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
