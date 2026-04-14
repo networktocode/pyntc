@@ -570,7 +570,7 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error detected in copy command output: %s", self.host, output)
             raise FileTransferError(f"Error detected in copy command output: {output}")
 
-    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
+    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):
         """Copy a file from remote source to device.
 
         Args:
