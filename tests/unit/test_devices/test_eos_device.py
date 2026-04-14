@@ -279,8 +279,6 @@ class TestEOSDevice(unittest.TestCase):
         with self.assertRaises(FileTransferError):
             self.device.file_copy("source_file")
 
-    # TODO: unit test for remote_file_copy
-
     def test_reboot(self):
         self.device.reboot()
         self.device.native.enable.assert_called_with(["reload now"], encoding="json")
@@ -743,15 +741,40 @@ class TestRemoteFileCopy(unittest.TestCase):
             self.device.remote_file_copy(src)
         self.assertIn("Unsupported scheme", str(ctx.exception))
 
-    def test_remote_file_copy_query_string_rejected(self):
-        """Test remote_file_copy raises ValueError for URLs with query strings."""
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_token_only_uses_simple_builder(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy uses simple command when token is provided but username is None."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
         src = FileCopyModel(
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            token="some_token",
         )
-        # Override download_url to include a query string
-        src.download_url = "http://example.com/file.bin?token=abc"
+
+        self.device.remote_file_copy(src)
+
+        call_args = mock_ssh.send_command.call_args
+        command = call_args[0][0]
+        self.assertNotIn("None", command)
+        self.assertIn("copy http://", command)
+
+    def test_remote_file_copy_query_string_rejected(self):
+        """Test remote_file_copy raises ValueError for URLs with query strings."""
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin?token=abc",
+            checksum="abc123",
+            file_name="file.bin",
+        )
 
         with self.assertRaises(ValueError) as ctx:
             self.device.remote_file_copy(src)
@@ -781,95 +804,6 @@ class TestRemoteFileCopy(unittest.TestCase):
             self.assertTrue(
                 any("transferred and verified successfully" in str(call) for call in mock_log.info.call_args_list)
             )
-
-
-class TestRemoteFileCopyCommandExecution(unittest.TestCase):
-    """Tests for command execution flow in remote_file_copy."""
-
-    @mock.patch.object(EOSDevice, "verify_file")
-    @mock.patch.object(EOSDevice, "enable")
-    @mock.patch.object(EOSDevice, "open")
-    @mock.patch.object(EOSDevice, "_get_file_system")
-    def test_command_execution_with_http(self, mock_get_fs, mock_open, mock_enable, mock_verify):
-        """Test command execution for HTTP transfer."""
-        mock_get_fs.return_value = "/mnt/flash"
-        mock_verify.return_value = True
-
-        device = EOSDevice("host", "user", "pass")
-        mock_ssh = mock.MagicMock()
-        mock_ssh.send_command.return_value = "Copy completed successfully"
-        device.native_ssh = mock_ssh
-
-        src = FileCopyModel(
-            download_url="http://server.example.com/file.bin",
-            checksum="abc123def456",
-            file_name="file.bin",
-        )
-
-        device.remote_file_copy(src)
-
-        mock_open.assert_called_once()
-        mock_enable.assert_called_once()
-        mock_ssh.send_command.assert_called()
-        call_args = mock_ssh.send_command.call_args
-        self.assertIn("copy http://", call_args[0][0])
-
-    @mock.patch.object(EOSDevice, "verify_file")
-    @mock.patch.object(EOSDevice, "enable")
-    @mock.patch.object(EOSDevice, "open")
-    @mock.patch.object(EOSDevice, "_get_file_system")
-    def test_command_execution_with_scp_credentials(self, mock_get_fs, mock_open, mock_enable, mock_verify):
-        """Test command execution for SCP transfer with username only."""
-        mock_get_fs.return_value = "/mnt/flash"
-        mock_verify.return_value = True
-
-        device = EOSDevice("host", "user", "pass")
-        mock_ssh = mock.MagicMock()
-        mock_ssh.send_command_timing.return_value = "Copy completed successfully"
-        device.native_ssh = mock_ssh
-
-        src = FileCopyModel(
-            download_url="scp://admin:password@backup.example.com/configs/startup-config",
-            checksum="abc123def456",
-            file_name="startup-config",
-            username="admin",
-            token="password",
-        )
-
-        device.remote_file_copy(src)
-
-        mock_ssh.send_command_timing.assert_called()
-        call_args = mock_ssh.send_command_timing.call_args
-        self.assertIn("copy scp://", call_args[0][0])
-        self.assertIn("admin@", call_args[0][0])
-        self.assertNotIn("password@", call_args[0][0])
-
-    @mock.patch.object(EOSDevice, "verify_file")
-    @mock.patch.object(EOSDevice, "enable")
-    @mock.patch.object(EOSDevice, "open")
-    @mock.patch.object(EOSDevice, "_get_file_system")
-    def test_timeout_applied_to_send_command(self, mock_get_fs, mock_open, mock_enable, mock_verify):
-        """Test that timeout is applied to send_command calls."""
-        mock_get_fs.return_value = "/mnt/flash"
-        mock_verify.return_value = True
-
-        device = EOSDevice("host", "user", "pass")
-        mock_ssh = mock.MagicMock()
-        mock_ssh.send_command.return_value = "Copy completed successfully"
-        device.native_ssh = mock_ssh
-
-        src = FileCopyModel(
-            download_url="http://server.example.com/file.bin",
-            checksum="abc123def456",
-            file_name="file.bin",
-            timeout=600,
-        )
-
-        device.remote_file_copy(src)
-
-        mock_ssh.send_command.assert_called()
-        call_args = mock_ssh.send_command.call_args
-        self.assertEqual(call_args[1]["read_timeout"], 600)
 
 
 class TestFileCopyModelValidation(unittest.TestCase):

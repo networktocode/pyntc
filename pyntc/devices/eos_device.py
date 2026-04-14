@@ -26,7 +26,8 @@ from pyntc.errors import (
 from pyntc.utils import convert_list_by_key
 from pyntc.utils.models import FileCopyModel
 
-EOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256", "sha512"}
+EOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256", "sha512"}  # Subset of HASHING_ALGORITHMS for EOS verify
+EOS_SUPPORTED_SCHEMES = {"http", "https", "scp", "ftp", "sftp", "tftp"}
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -482,7 +483,6 @@ class EOSDevice(BaseDevice):
         Raises:
             CommandError: If the verify command fails (but not if file doesn't exist).
         """
-        # Validate hashing algorithm against EOS-supported values
         if hashing_algorithm.lower() not in EOS_SUPPORTED_HASHING_ALGORITHMS:
             raise ValueError(
                 f"Unsupported hashing algorithm '{hashing_algorithm}' for EOS. "
@@ -534,24 +534,29 @@ class EOSDevice(BaseDevice):
 
     def _build_url_copy_command_simple(self, src, file_system, dest):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
-        return f"copy {src.download_url} {file_system}/{dest}", False
+        return f"copy {src.clean_url} {file_system}/{dest}", False
 
     def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
-        parsed = urlparse(src.download_url)
+        parsed = urlparse(src.clean_url)
         netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
         path = parsed.path
 
-        # For HTTP/HTTPS, include both username and token
-        if src.scheme in ["http", "https"]:
+        if src.scheme in ("http", "https"):
             command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}/{dest}"
             detect_prompt = False
-        # For SCP/FTP/SFTP, include only username (password via prompt)
         else:
+            # SCP/FTP/SFTP — password provided at the interactive prompt
             command = f"copy {src.scheme}://{src.username}@{netloc}{path} {file_system}/{dest}"
             detect_prompt = True
 
         return command, detect_prompt
+
+    def _check_copy_output_for_errors(self, output):
+        """Raise FileTransferError if copy command output contains error indicators."""
+        if any(error in output.lower() for error in ["error", "invalid", "failed"]):
+            log.error("Host %s: Error detected in copy command output: %s", self.host, output)
+            raise FileTransferError(f"Error detected in copy command output: {output}")
 
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
         """Copy a file from remote source to device.
@@ -568,65 +573,48 @@ class EOSDevice(BaseDevice):
             FileTransferError: If transfer or verification fails.
             FileSystemNotFoundError: If filesystem cannot be determined.
         """
-        # Validate input
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
 
-        # Validate scheme before connecting to the device (fail fast)
-        supported_schemes = ["http", "https", "scp", "ftp", "sftp", "tftp"]
-        if src.scheme not in supported_schemes:
+        if src.scheme not in EOS_SUPPORTED_SCHEMES:
             raise ValueError(f"Unsupported scheme: {src.scheme}")
 
-        # Reject URLs with query strings since EOS CLI cannot handle '?'
-        parsed = urlparse(src.download_url)
-        if parsed.query:
+        # EOS CLI cannot handle '?' in URLs
+        if "?" in src.clean_url:
             raise ValueError(f"URLs with query strings are not supported on EOS: {src.download_url}")
 
-        # Determine file system
         if file_system is None:
             file_system = self._get_file_system()
 
-        # Determine destination
         if dest is None:
             dest = src.file_name
 
         log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
 
-        # Open SSH connection and enable
         self.open()
         self.enable()
 
-        # Build command based on scheme and credentials
-        if src.scheme == "tftp" or (src.username is None and src.token is None):
+        if src.scheme == "tftp" or src.username is None:
             command, detect_prompt = self._build_url_copy_command_simple(src, file_system, dest)
         else:
             command, detect_prompt = self._build_url_copy_command_with_creds(src, file_system, dest)
         log.debug("Host %s: Preparing copy command for %s", self.host, src.scheme)
 
-        # Execute copy command
         if detect_prompt and src.token:
-            # Use send_command_timing for interactive password prompt
             output = self.native_ssh.send_command_timing(command, read_timeout=src.timeout, cmd_verify=False)
             log.debug("Host %s: Copy command (with timing) output: %s", self.host, output)
 
             if "password:" in output.lower():
                 self.native_ssh.write_channel(src.token + "\n")
-                # Read the response after sending password
                 output += self.native_ssh.read_channel()
                 log.debug("Host %s: Output after password entry: %s", self.host, output)
-            elif any(error in output.lower() for error in ["error", "invalid", "failed"]):
-                log.error("Host %s: Error detected in copy command output: %s", self.host, output)
-                raise FileTransferError(f"Error detected in copy command output: {output}")
+            else:
+                self._check_copy_output_for_errors(output)
         else:
-            # Use regular send_command for non-interactive transfers
             output = self.native_ssh.send_command(command, read_timeout=src.timeout)
             log.debug("Host %s: Copy command output: %s", self.host, output)
+            self._check_copy_output_for_errors(output)
 
-            if any(error in output.lower() for error in ["error", "invalid", "failed"]):
-                log.error("Host %s: Error detected in copy command output: %s", self.host, output)
-                raise FileTransferError(f"Error detected in copy command output: {output}")
-
-        # Verify transfer success
         verification_result = self.verify_file(
             src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
         )
