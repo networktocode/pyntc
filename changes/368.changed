@@ -1,0 +1,5 @@
+Improved EOS remote file copy to validate scheme and query strings before connecting, use `clean_url` to prevent credential leakage, simplify credential routing, and include destination filename in copy commands.
+Added EOS-specific hashing algorithm validation in `get_remote_checksum` for unsupported algorithms.
+Changed `verify_file` to return early when file does not exist and use case-insensitive checksum comparison.
+Simplified checksum parsing in `get_remote_checksum` to use string splitting instead of regex.
+Removed `include_username` parameter from `remote_file_copy` in favor of automatic credential routing based on scheme and username presence.
