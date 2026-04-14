@@ -126,9 +126,8 @@ def any_file_copy_model():
 
 def test_device_connects(device):
     """Verify the device is reachable and responds to show commands."""
-    facts = device.facts()
-    assert "hostname" in facts
-    assert "os_version" in facts
+    assert device.hostname
+    assert device.os_version
 
 
 def test_check_file_exists_false(device, any_file_copy_model):
