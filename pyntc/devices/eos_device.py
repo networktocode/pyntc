@@ -3,7 +3,6 @@
 import os
 import re
 import time
-from urllib.parse import urlparse
 
 from netmiko import ConnectHandler, FileTransfer
 from pyeapi import connect as eos_connect
@@ -535,24 +534,25 @@ class EOSDevice(BaseDevice):
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
 
     @staticmethod
-    def _parse_copy_url_parts(clean_url, dest):
-        """Parse a clean URL into (scheme, netloc, path) for EOS copy commands.
+    def _netloc(src: FileCopyModel) -> str:
+        """Return host:port or just host from a FileCopyModel."""
+        return f"{src.hostname}:{src.port}" if src.port else src.hostname
 
-        If the URL has no file path, falls back to using dest as the filename.
-        """
-        parsed = urlparse(clean_url)
-        netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
-        path = parsed.path if parsed.path and parsed.path != "/" else f"/{dest}"
-        return parsed.scheme, netloc, path
+    @staticmethod
+    def _source_path(src: FileCopyModel, dest: str) -> str:
+        """Return the file path from the URL, falling back to dest if empty."""
+        return src.path if src.path and src.path != "/" else f"/{dest}"
 
     def _build_url_copy_command_simple(self, src, file_system, dest):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
-        scheme, netloc, path = self._parse_copy_url_parts(src.clean_url, dest)
-        return f"copy {scheme}://{netloc}{path} {file_system}", False
+        netloc = self._netloc(src)
+        path = self._source_path(src, dest)
+        return f"copy {src.scheme}://{netloc}{path} {file_system}", False
 
     def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
-        _, netloc, path = self._parse_copy_url_parts(src.clean_url, dest)
+        netloc = self._netloc(src)
+        path = self._source_path(src, dest)
 
         if src.scheme in ("http", "https"):
             command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}"
