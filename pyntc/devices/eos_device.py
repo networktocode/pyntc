@@ -26,6 +26,7 @@ from pyntc.errors import (
 from pyntc.utils import convert_list_by_key
 from pyntc.utils.models import FileCopyModel
 
+EOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256", "sha512"}
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -481,6 +482,13 @@ class EOSDevice(BaseDevice):
         Raises:
             CommandError: If the verify command fails (but not if file doesn't exist).
         """
+        # Validate hashing algorithm against EOS-supported values
+        if hashing_algorithm.lower() not in EOS_SUPPORTED_HASHING_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported hashing algorithm '{hashing_algorithm}' for EOS. "
+                f"Supported algorithms: {sorted(EOS_SUPPORTED_HASHING_ALGORITHMS)}"
+            )
+
         file_system = kwargs.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
@@ -511,11 +519,11 @@ class EOSDevice(BaseDevice):
 
             # Parse the checksum from the output
             # Expected format: verify /sha512 (flash:nautobot.png) = <checksum>
-            match = re.search(r"=\s*([a-fA-F0-9]+)", result)
-            if match:
-                remote_checksum = match.group(1).lower()
-                log.debug("Host %s: Remote checksum for %s: %s", self.host, filename, remote_checksum)
-                return remote_checksum
+            if "=" in result:
+                remote_checksum = result.split("=")[-1].strip().lower()
+                if remote_checksum:
+                    log.debug("Host %s: Remote checksum for %s: %s", self.host, filename, remote_checksum)
+                    return remote_checksum
 
             log.error("Host %s: Could not parse checksum from verify output: %s", self.host, result)
             raise CommandError(command, f"Could not parse checksum from verify output: {result}")
@@ -524,57 +532,55 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
 
-    def _build_url_copy_command_simple(self, src, file_system):
+    def _build_url_copy_command_simple(self, src, file_system, dest):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
-        return f"copy {src.download_url} {file_system}", False
+        return f"copy {src.download_url} {file_system}/{dest}", False
 
-    def _build_url_copy_command_with_creds(self, src, file_system):
+    def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
         parsed = urlparse(src.download_url)
-        hostname = parsed.hostname
+        netloc = f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
         path = parsed.path
-
-        # Determine port based on scheme
-        if parsed.port:
-            port = parsed.port
-        elif src.scheme == "https":
-            port = "443"
-        elif src.scheme in ["http"]:
-            port = "80"
-        else:
-            port = ""
-
-        port_str = f":{port}" if port else ""
 
         # For HTTP/HTTPS, include both username and token
         if src.scheme in ["http", "https"]:
-            command = f"copy {src.scheme}://{src.username}:{src.token}@{hostname}{port_str}{path} {file_system}"
+            command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}/{dest}"
             detect_prompt = False
         # For SCP/FTP/SFTP, include only username (password via prompt)
         else:
-            command = f"copy {src.scheme}://{src.username}@{hostname}{port_str}{path} {file_system}"
+            command = f"copy {src.scheme}://{src.username}@{netloc}{path} {file_system}/{dest}"
             detect_prompt = True
 
         return command, detect_prompt
 
-    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, include_username=False, **kwargs):
+    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
         """Copy a file from remote source to device.
 
         Args:
             src (FileCopyModel): The source file model with transfer parameters.
             dest (str): Destination filename (defaults to src.file_name).
             file_system (str): Device filesystem (auto-detected if not provided).
-            include_username (bool): Whether to include username in the copy command. Defaults to False.
             **kwargs (Any): Passible parameters such as file_system.
 
         Raises:
             TypeError: If src is not a FileCopyModel.
+            ValueError: If the URL scheme is unsupported or URL contains query strings.
             FileTransferError: If transfer or verification fails.
             FileSystemNotFoundError: If filesystem cannot be determined.
         """
         # Validate input
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
+
+        # Validate scheme before connecting to the device (fail fast)
+        supported_schemes = ["http", "https", "scp", "ftp", "sftp", "tftp"]
+        if src.scheme not in supported_schemes:
+            raise ValueError(f"Unsupported scheme: {src.scheme}")
+
+        # Reject URLs with query strings since EOS CLI cannot handle '?'
+        parsed = urlparse(src.download_url)
+        if parsed.query:
+            raise ValueError(f"URLs with query strings are not supported on EOS: {src.download_url}")
 
         # Determine file system
         if file_system is None:
@@ -590,31 +596,11 @@ class EOSDevice(BaseDevice):
         self.open()
         self.enable()
 
-        # Validate scheme
-        supported_schemes = ["http", "https", "scp", "ftp", "sftp", "tftp"]
-        if src.scheme not in supported_schemes:
-            raise ValueError(f"Unsupported scheme: {src.scheme}")
-
         # Build command based on scheme and credentials
-        command_builders = {
-            ("tftp", False): lambda: self._build_url_copy_command_simple(src, file_system),
-            ("http", False): lambda: self._build_url_copy_command_simple(src, file_system),
-            ("https", False): lambda: self._build_url_copy_command_simple(src, file_system),
-            ("http", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("https", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("scp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("scp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("ftp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("ftp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("sftp", False): lambda: self._build_url_copy_command_with_creds(src, file_system),
-            ("sftp", True): lambda: self._build_url_copy_command_with_creds(src, file_system),
-        }
-
-        builder_key = (src.scheme, include_username and src.username is not None)
-        if builder_key not in command_builders:
-            raise ValueError(f"Unable to construct copy command for scheme {src.scheme} with provided credentials")
-
-        command, detect_prompt = command_builders[builder_key]()
+        if src.scheme == "tftp" or (src.username is None and src.token is None):
+            command, detect_prompt = self._build_url_copy_command_simple(src, file_system, dest)
+        else:
+            command, detect_prompt = self._build_url_copy_command_with_creds(src, file_system, dest)
         log.debug("Host %s: Preparing copy command for %s", self.host, src.scheme)
 
         # Execute copy command
@@ -676,11 +662,12 @@ class EOSDevice(BaseDevice):
         Returns:
             (bool): True if the file is verified successfully, False otherwise.
         """
-        exists = self.check_file_exists(filename, **kwargs)
-        device_checksum = (
-            self.get_remote_checksum(filename, hashing_algorithm=hashing_algorithm, **kwargs) if exists else None
-        )
-        if checksum == device_checksum:
+        if not self.check_file_exists(filename, **kwargs):
+            log.debug("Host %s: File %s not found on device", self.host, filename)
+            return False
+
+        device_checksum = self.get_remote_checksum(filename, hashing_algorithm=hashing_algorithm, **kwargs)
+        if checksum.lower() == device_checksum.lower():
             log.debug("Host %s: Checksum verification successful for file %s", self.host, filename)
             return True
 
