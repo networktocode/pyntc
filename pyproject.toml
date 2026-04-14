@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyntc"
-version = "2.2.2a0"
+version = "2.3.0"
 description = "Python library focused on tasks related to device level and OS management."
 authors = ["Network to Code, LLC <opensource@networktocode.com>"]
 readme = "README.md"
@@ -172,7 +172,7 @@ addopts = "-vv --doctest-modules -p no:warnings --ignore-glob='*mock*'"
 [tool.towncrier]
 package = "pyntc"
 directory = "changes"
-filename = "docs/admin/release_notes/version_2.2.md"
+filename = "docs/admin/release_notes/version_2.3.md"
 template = "towncrier_template.j2"
 start_string = "<!-- towncrier release notes start -->"
 issue_format = "[#{issue}](https://github.com/networktocode/pyntc/issues/{issue})"
