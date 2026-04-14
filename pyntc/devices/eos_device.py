@@ -617,8 +617,7 @@ class EOSDevice(BaseDevice):
             log.debug("Host %s: Copy command (with timing) output: %s", self.host, output)
 
             if "password:" in output.lower():
-                self.native_ssh.write_channel(src.token + "\n")
-                output = self.native_ssh.send_command_timing("", read_timeout=src.timeout, cmd_verify=False)
+                output = self.native_ssh.send_command_timing(src.token, read_timeout=src.timeout, cmd_verify=False)
                 log.debug("Host %s: Output after password entry: %s", self.host, output)
         else:
             output = self.native_ssh.send_command(command, read_timeout=src.timeout)
