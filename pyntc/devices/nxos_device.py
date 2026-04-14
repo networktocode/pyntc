@@ -324,7 +324,7 @@ class NXOSDevice(BaseDevice):
         Raises:
             FileSystemNotFoundError: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir")
+        raw_data = self.show("dir", raw_text=True)
         try:
             file_system = re.match(r"\s*.*?(\S+:)", raw_data).group(1)
         except AttributeError:
@@ -388,7 +388,8 @@ class NXOSDevice(BaseDevice):
             raise ValueError(f"hashing_algorithm must be either 'md5' or 'sha512', got '{hashing_algorithm}'")
 
         # Determine file system
-        file_system = kwargs.get("file_system")
+        print(f"Debug filesystem in kwargs: {kwargs}")
+        file_system = kwargs.pop("file_system", None)
         if file_system is None:
             file_system = self._get_file_system()
 
