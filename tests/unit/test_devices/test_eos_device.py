@@ -10,6 +10,7 @@ from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
 from pyntc.errors import CommandError, CommandListError
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.eos import config, enable, send_command, send_command_expect
 
@@ -433,3 +434,463 @@ def test_init_pass_port_and_timeout(mock_eos_connect):
     mock_eos_connect.assert_called_with(
         host="host", username="username", password="password", transport="http", port=8080, timeout=30
     )
+
+
+class TestRemoteFileCopy(unittest.TestCase):
+    """Tests for remote_file_copy method."""
+
+    @mock.patch("pyeapi.client.Node", autospec=True)
+    def setUp(self, mock_node):
+        self.device = EOSDevice("host", "user", "pass")
+        self.maxDiff = None
+        mock_node.enable.side_effect = enable
+        mock_node.config.side_effect = config
+        self.device.native = mock_node
+
+    def tearDown(self):
+        self.device.native.reset_mock()
+
+    def test_remote_file_copy_invalid_src_type(self):
+        """Test remote_file_copy raises TypeError for invalid src type."""
+        with self.assertRaises(TypeError) as ctx:
+            self.device.remote_file_copy("not_a_model")
+        self.assertIn("src must be an instance of FileCopyModel", str(ctx.exception))
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_file_system_auto_detection(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy calls _get_file_system when file_system is not provided."""
+        mock_get_fs.return_value = "/mnt/flash"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://server.example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src)
+        mock_get_fs.assert_called()
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_skip_transfer_on_checksum_match(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy completes when file exists with matching checksum."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src)
+        mock_verify.assert_called()
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_http_transfer(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy executes HTTP transfer correctly."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src)
+
+        mock_open.assert_called_once()
+        mock_enable.assert_called_once()
+        mock_ssh.send_command.assert_called()
+        call_args = mock_ssh.send_command.call_args
+        self.assertIn("copy http://", call_args[0][0])
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_verification_failure(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy raises FileTransferError when verification fails."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = False
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        with self.assertRaises(FileTransferError):
+            self.device.remote_file_copy(src)
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_with_default_dest(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy defaults dest to src.file_name."""
+        mock_get_fs.return_value = "/mnt/flash"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://server.example.com/myfile.bin",
+            checksum="abc123",
+            file_name="myfile.bin",
+        )
+
+        self.device.remote_file_copy(src)
+
+        mock_verify.assert_called()
+        call_args = mock_verify.call_args
+        self.assertEqual(call_args[0][1], "myfile.bin")
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_with_explicit_dest(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy uses explicit dest parameter."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src, dest="custom_name.bin")
+
+        call_args = mock_verify.call_args
+        self.assertEqual(call_args[0][1], "custom_name.bin")
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_with_explicit_file_system(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy uses explicit file_system parameter."""
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        mock_get_fs.assert_not_called()
+        call_args = mock_ssh.send_command.call_args
+        self.assertIn("flash:", call_args[0][0])
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_scp_with_credentials(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy constructs SCP command with username only."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command_timing.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="scp://user:pass@server.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        self.device.remote_file_copy(src)
+
+        call_args = mock_ssh.send_command_timing.call_args
+        command = call_args[0][0]
+        self.assertIn("scp://", command)
+        self.assertIn("user@", command)
+        self.assertNotIn("pass@", command)
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_timeout_applied(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy applies timeout to send_command."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        for timeout in [300, 600, 900, 1800]:
+            with self.subTest(timeout=timeout):
+                src = FileCopyModel(
+                    download_url="http://example.com/file.bin",
+                    checksum="abc123",
+                    file_name="file.bin",
+                    timeout=timeout,
+                )
+
+                self.device.remote_file_copy(src)
+
+                call_args = mock_ssh.send_command.call_args
+                self.assertEqual(call_args[1]["read_timeout"], timeout)
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_checksum_mismatch_raises_error(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy raises FileTransferError on checksum mismatch after transfer."""
+        mock_get_fs.return_value = "/mnt/flash"
+        mock_verify.return_value = False
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://server.example.com/file.bin",
+            checksum="abc123def456",
+            file_name="file.bin",
+        )
+
+        with self.assertRaises(FileTransferError):
+            self.device.remote_file_copy(src)
+
+        mock_ssh.send_command.assert_called()
+        call_args = mock_ssh.send_command.call_args
+        self.assertIn("copy", call_args[0][0].lower())
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_post_transfer_verification(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy calls verify_file with correct algorithm after transfer."""
+        mock_get_fs.return_value = "/mnt/flash"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        for checksum, algorithm in [("abc123def456", "md5"), ("abc123def456789", "sha256")]:
+            with self.subTest(algorithm=algorithm):
+                src = FileCopyModel(
+                    download_url="http://server.example.com/file.bin",
+                    checksum=checksum,
+                    file_name="file.bin",
+                    hashing_algorithm=algorithm,
+                )
+
+                self.device.remote_file_copy(src)
+                mock_verify.assert_called()
+
+    def test_remote_file_copy_unsupported_scheme(self):
+        """Test remote_file_copy raises ValueError for unsupported scheme."""
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+        # Override scheme to something unsupported
+        src.scheme = "gopher"
+
+        with self.assertRaises(ValueError) as ctx:
+            self.device.remote_file_copy(src)
+        self.assertIn("Unsupported scheme", str(ctx.exception))
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_token_only_uses_simple_builder(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test remote_file_copy uses simple command when token is provided but username is None."""
+        mock_get_fs.return_value = "flash:"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin",
+            checksum="abc123",
+            file_name="file.bin",
+            token="some_token",
+        )
+
+        self.device.remote_file_copy(src)
+
+        call_args = mock_ssh.send_command.call_args
+        command = call_args[0][0]
+        self.assertNotIn("None", command)
+        self.assertIn("copy http://", command)
+
+    def test_remote_file_copy_query_string_rejected(self):
+        """Test remote_file_copy raises ValueError for URLs with query strings."""
+        src = FileCopyModel(
+            download_url="http://example.com/file.bin?token=abc",
+            checksum="abc123",
+            file_name="file.bin",
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            self.device.remote_file_copy(src)
+        self.assertIn("query strings are not supported", str(ctx.exception))
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system")
+    def test_remote_file_copy_logging_on_success(self, mock_get_fs, mock_open, mock_enable, mock_verify):
+        """Test that transfer success is logged."""
+        mock_get_fs.return_value = "/mnt/flash"
+        mock_verify.return_value = True
+
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(
+            download_url="http://server.example.com/file.bin",
+            checksum="abc123def456",
+            file_name="file.bin",
+        )
+
+        with mock.patch("pyntc.devices.eos_device.log") as mock_log:
+            self.device.remote_file_copy(src)
+            self.assertTrue(
+                any("transferred and verified successfully" in str(call) for call in mock_log.info.call_args_list)
+            )
+
+
+class TestFileCopyModelValidation(unittest.TestCase):
+    """Tests for FileCopyModel defaults and validation."""
+
+    def test_default_timeout_value(self):
+        """Test FileCopyModel default timeout is 900 seconds."""
+        src = FileCopyModel(
+            download_url="http://server.example.com/file.bin",
+            checksum="abc123def456",
+            file_name="file.bin",
+        )
+        self.assertEqual(src.timeout, 900)
+
+    def test_ftp_passive_mode_configuration(self):
+        """Test FileCopyModel ftp_passive flag is set correctly."""
+        for ftp_passive in [True, False]:
+            with self.subTest(ftp_passive=ftp_passive):
+                src = FileCopyModel(
+                    download_url="ftp://admin:password@ftp.example.com/images/eos.swi",
+                    checksum="abc123def456",
+                    file_name="eos.swi",
+                    ftp_passive=ftp_passive,
+                )
+                self.assertEqual(src.ftp_passive, ftp_passive)
+
+    def test_default_ftp_passive_mode(self):
+        """Test FileCopyModel default ftp_passive is True."""
+        src = FileCopyModel(
+            download_url="ftp://admin:password@ftp.example.com/images/eos.swi",
+            checksum="abc123def456",
+            file_name="eos.swi",
+        )
+        self.assertTrue(src.ftp_passive)
+
+    def test_hashing_algorithm_validation(self):
+        """Test FileCopyModel accepts supported hashing algorithms."""
+        for algorithm in ["md5", "sha256", "sha512"]:
+            with self.subTest(algorithm=algorithm):
+                src = FileCopyModel(
+                    download_url="http://server.example.com/file.bin",
+                    checksum="abc123def456",
+                    file_name="file.bin",
+                    hashing_algorithm=algorithm,
+                )
+                self.assertEqual(src.hashing_algorithm, algorithm)
+
+    def test_case_insensitive_algorithm_validation(self):
+        """Test FileCopyModel accepts algorithms in different cases."""
+        for algorithm in ["MD5", "md5", "Md5", "SHA256", "sha256", "Sha256"]:
+            with self.subTest(algorithm=algorithm):
+                src = FileCopyModel(
+                    download_url="http://server.example.com/file.bin",
+                    checksum="abc123def456",
+                    file_name="file.bin",
+                    hashing_algorithm=algorithm,
+                )
+                self.assertIn(src.hashing_algorithm.lower(), ["md5", "sha256"])
+
+
+class TestFileCopyModelCredentials(unittest.TestCase):
+    """Tests for FileCopyModel credential extraction."""
+
+    def test_url_credential_extraction(self):
+        """Test FileCopyModel extracts credentials from URL."""
+        test_cases = [
+            ("scp://admin:password@server.com/path", "admin", "password"),
+            ("ftp://user:pass123@ftp.example.com/file", "user", "pass123"),
+        ]
+        for url, expected_username, expected_token in test_cases:
+            with self.subTest(url=url):
+                src = FileCopyModel(
+                    download_url=url,
+                    checksum="abc123def456",
+                    file_name="file.bin",
+                )
+                self.assertEqual(src.username, expected_username)
+                self.assertEqual(src.token, expected_token)
+
+    def test_explicit_credentials_override(self):
+        """Test explicit credentials take precedence over URL-embedded credentials."""
+        src = FileCopyModel(
+            download_url="scp://url_user:url_pass@server.com/path",
+            checksum="abc123def456",
+            file_name="file.bin",
+            username="explicit_user",
+            token="explicit_pass",
+        )
+        self.assertEqual(src.username, "explicit_user")
+        self.assertEqual(src.token, "explicit_pass")

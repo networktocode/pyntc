@@ -36,17 +36,18 @@ class FileCopyModel:
     vrf: Optional[str] = None
     ftp_passive: bool = True
 
-    # This field is calculated, so we don't pass it in the constructor
+    # Computed fields derived from download_url — not passed to the constructor
     clean_url: str = field(init=False)
     scheme: str = field(init=False)
+    hostname: str = field(init=False)
+    port: Optional[int] = field(init=False)
+    path: str = field(init=False)
 
     def __post_init__(self):
         """Validate the input and prepare the clean URL after initialization."""
-        # 1. Validate the hashing algorithm choice
         if self.hashing_algorithm.lower() not in HASHING_ALGORITHMS:
             raise ValueError(f"Unsupported algorithm. Choose from: {HASHING_ALGORITHMS}")
 
-        # Parse the url to extract components
         parsed = urlparse(self.download_url)
 
         # Extract username/password from URL if not already provided as arguments
@@ -55,13 +56,16 @@ class FileCopyModel:
         if parsed.password and not self.token:
             self.token = parsed.password
 
-        # 3. Create the 'clean_url' (URL without the credentials)
-        # This is what you actually send to the device if using ip http client
-        port = f":{parsed.port}" if parsed.port else ""
-        self.clean_url = f"{parsed.scheme}://{parsed.hostname}{port}{parsed.path}"
+        # Store parsed URL components
         self.scheme = parsed.scheme
+        self.hostname = parsed.hostname
+        self.port = parsed.port
+        self.path = parsed.path
 
-        # Handle query params if they exist (though we're avoiding '?' for Cisco)
+        # Create the 'clean_url' (URL without credentials)
+        port_str = f":{parsed.port}" if parsed.port else ""
+        self.clean_url = f"{parsed.scheme}://{parsed.hostname}{port_str}{parsed.path}"
+
         if parsed.query:
             self.clean_url += f"?{parsed.query}"
 

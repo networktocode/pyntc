@@ -23,7 +23,10 @@ from pyntc.errors import (
     RebootTimeoutError,
 )
 from pyntc.utils import convert_list_by_key
+from pyntc.utils.models import FileCopyModel
 
+EOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256", "sha512"}  # Subset of HASHING_ALGORITHMS for EOS verify
+EOS_SUPPORTED_SCHEMES = {"http", "https", "scp", "ftp", "sftp", "tftp"}
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -133,13 +136,13 @@ class EOSDevice(BaseDevice):
         return list(x["result"] for x in response)
 
     def _uptime_to_string(self, uptime):
-        days = uptime / (24 * 60 * 60)
+        days = uptime // (24 * 60 * 60)
         uptime = uptime % (24 * 60 * 60)
 
-        hours = uptime / (60 * 60)
+        hours = uptime // (60 * 60)
         uptime = uptime % (60 * 60)
 
-        mins = uptime / 60
+        mins = uptime // 60
         uptime = uptime % 60
 
         seconds = uptime
@@ -419,6 +422,260 @@ class EOSDevice(BaseDevice):
             return True
 
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
+        return False
+
+    def check_file_exists(self, filename, file_system=None):
+        """Check if a remote file exists by filename.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            file_system (str): Supported only for Arista. The file system for the
+                remote file. If no file_system is provided, then the `get_file_system`
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (bool): True if the remote file exists, False if it doesn't.
+
+        Raises:
+            CommandError: If there is an error in executing the command to check if the file exists.
+        """
+        exists = False
+
+        self.open()
+        file_system = file_system or self._get_file_system()
+        command = f"dir {file_system}/{filename}"
+        result = self.native_ssh.send_command(command, read_timeout=30)
+
+        log.debug(
+            "Host %s: Checking if file %s exists on remote with command '%s' and result: %s",
+            self.host,
+            filename,
+            command,
+            result,
+        )
+
+        # Check for error patterns
+        if re.search(r"% Error listing directory|No such file|No files found|Path does not exist", result):
+            log.debug("Host %s: File %s does not exist on remote.", self.host, filename)
+            exists = False
+        elif re.search(rf"Directory of .*{filename}", result):
+            log.debug("Host %s: File %s exists on remote.", self.host, filename)
+            exists = True
+        else:
+            raise CommandError(command, f"Unable to determine if file {filename} exists on remote: {result}")
+
+        return exists
+
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", **kwargs):
+        """Get the checksum of a remote file on Arista EOS device using netmiko SSH.
+
+        Uses Arista's 'verify' command via SSH to compute file checksums.
+        Note, Netmiko FileTransfer only supports `verify /md5`
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            **kwargs (Any): Passible parameters such as file_system.
+
+        Returns:
+            (str): The checksum of the remote file.
+
+        Raises:
+            CommandError: If the verify command fails (but not if file doesn't exist).
+        """
+        if hashing_algorithm.lower() not in EOS_SUPPORTED_HASHING_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported hashing algorithm '{hashing_algorithm}' for EOS. "
+                f"Supported algorithms: {sorted(EOS_SUPPORTED_HASHING_ALGORITHMS)}"
+            )
+
+        self.open()
+        file_system = kwargs.get("file_system")
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        # Normalize file_system to Arista format (e.g., "flash:" or "/mnt/flash")
+        if not file_system.startswith("/") and not file_system.endswith(":"):
+            file_system = f"{file_system}:"
+
+        # Build the path
+        if file_system.endswith(":"):
+            path = f"{file_system}{filename}"
+        else:
+            path = f"{file_system}/{filename}"
+
+        # Use Arista's verify command to get the checksum
+        # Example: verify /sha512 flash:nautobot.png
+        command = f"verify /{hashing_algorithm} {path}"
+
+        try:
+            result = self.native_ssh.send_command(command, read_timeout=30)
+
+            log.debug(
+                "Host %s: Verify command '%s' returned: %s",
+                self.host,
+                command,
+                result,
+            )
+
+            # Parse the checksum from the output
+            # Expected format: verify /sha512 (flash:nautobot.png) = <checksum>
+            if "=" in result:
+                remote_checksum = result.split("=")[-1].strip().lower()
+                if remote_checksum:
+                    log.debug("Host %s: Remote checksum for %s: %s", self.host, filename, remote_checksum)
+                    return remote_checksum
+
+            log.error("Host %s: Could not parse checksum from verify output: %s", self.host, result)
+            raise CommandError(command, f"Could not parse checksum from verify output: {result}")
+
+        except Exception as e:
+            log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
+            raise CommandError(command, f"Error getting remote checksum: {str(e)}")
+
+    @staticmethod
+    def _netloc(src: FileCopyModel) -> str:
+        """Return host:port or just host from a FileCopyModel."""
+        return f"{src.hostname}:{src.port}" if src.port else src.hostname
+
+    @staticmethod
+    def _source_path(src: FileCopyModel, dest: str) -> str:
+        """Return the file path from the URL, falling back to dest if empty."""
+        return src.path if src.path and src.path != "/" else f"/{dest}"
+
+    def _build_url_copy_command_simple(self, src, file_system, dest):
+        """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
+        netloc = self._netloc(src)
+        path = self._source_path(src, dest)
+        return f"copy {src.scheme}://{netloc}{path} {file_system}", False
+
+    def _build_url_copy_command_with_creds(self, src, file_system, dest):
+        """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
+        netloc = self._netloc(src)
+        path = self._source_path(src, dest)
+
+        if src.scheme in ("http", "https"):
+            command = f"copy {src.scheme}://{src.username}:{src.token}@{netloc}{path} {file_system}"
+            detect_prompt = False
+        else:
+            # SCP/FTP/SFTP — password provided at the interactive prompt
+            command = f"copy {src.scheme}://{src.username}@{netloc}{path} {file_system}"
+            detect_prompt = True
+
+        return command, detect_prompt
+
+    def _check_copy_output_for_errors(self, output):
+        """Raise FileTransferError if copy command output contains error indicators."""
+        if any(error in output.lower() for error in ["error", "invalid", "failed"]):
+            log.error("Host %s: Error detected in copy command output: %s", self.host, output)
+            raise FileTransferError(f"Error detected in copy command output: {output}")
+
+    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):
+        """Copy a file from remote source to device.
+
+        Args:
+            src (FileCopyModel): The source file model with transfer parameters.
+            dest (str): Destination filename (defaults to src.file_name).
+            file_system (str): Device filesystem (auto-detected if not provided).
+            **kwargs (Any): Passible parameters such as file_system.
+
+        Raises:
+            TypeError: If src is not a FileCopyModel.
+            ValueError: If the URL scheme is unsupported or URL contains query strings.
+            FileTransferError: If transfer or verification fails.
+            FileSystemNotFoundError: If filesystem cannot be determined.
+        """
+        if not isinstance(src, FileCopyModel):
+            raise TypeError("src must be an instance of FileCopyModel")
+
+        if src.scheme not in EOS_SUPPORTED_SCHEMES:
+            raise ValueError(f"Unsupported scheme: {src.scheme}")
+
+        # EOS CLI cannot handle '?' in URLs
+        if "?" in src.clean_url:
+            raise ValueError(f"URLs with query strings are not supported on EOS: {src.download_url}")
+
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        if dest is None:
+            dest = src.file_name
+
+        log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
+
+        self.open()
+        self.enable()
+
+        if src.scheme == "tftp" or src.username is None:
+            command, detect_prompt = self._build_url_copy_command_simple(src, file_system, dest)
+        else:
+            command, detect_prompt = self._build_url_copy_command_with_creds(src, file_system, dest)
+        log.debug("Host %s: Preparing copy command for %s", self.host, src.scheme)
+
+        if detect_prompt and src.token:
+            output = self.native_ssh.send_command_timing(command, read_timeout=src.timeout, cmd_verify=False)
+            log.debug("Host %s: Copy command (with timing) output: %s", self.host, output)
+
+            if "password:" in output.lower():
+                output = self.native_ssh.send_command_timing(src.token, read_timeout=src.timeout, cmd_verify=False)
+                log.debug("Host %s: Output after password entry: %s", self.host, output)
+        else:
+            output = self.native_ssh.send_command(command, read_timeout=src.timeout)
+            log.debug("Host %s: Copy command output: %s", self.host, output)
+
+        self._check_copy_output_for_errors(output)
+
+        verification_result = self.verify_file(
+            src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
+        )
+        log.debug(
+            "Host %s: File verification result for %s - Checksum: %s, Algorithm: %s, Result: %s",
+            self.host,
+            dest,
+            src.checksum,
+            src.hashing_algorithm,
+            verification_result,
+        )
+
+        if not verification_result:
+            log.error(
+                "Host %s: File verification failed for %s - Expected checksum: %s",
+                self.host,
+                dest,
+                src.checksum,
+            )
+            raise FileTransferError
+
+        log.info("Host %s: File %s transferred and verified successfully", self.host, dest)
+
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", **kwargs):
+        """Verify a file on the remote device by confirming the file exists and validate the checksum.
+
+        Args:
+            checksum (str): The checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            **kwargs (Any): Passible parameters such as file_system.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        if not self.check_file_exists(filename, **kwargs):
+            log.debug("Host %s: File %s not found on device", self.host, filename)
+            return False
+
+        device_checksum = self.get_remote_checksum(filename, hashing_algorithm=hashing_algorithm, **kwargs)
+        if checksum.lower() == device_checksum.lower():
+            log.debug("Host %s: Checksum verification successful for file %s", self.host, filename)
+            return True
+
+        log.debug(
+            "Host %s: Checksum verification failed for file %s - Expected: %s, Actual: %s",
+            self.host,
+            filename,
+            checksum,
+            device_checksum,
+        )
         return False
 
     def install_os(self, image_name, **vendor_specifics):

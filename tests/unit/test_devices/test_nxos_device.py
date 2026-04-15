@@ -5,7 +5,14 @@ from pynxos.errors import CLIError
 
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
-from pyntc.errors import CommandError, CommandListError, FileTransferError, NTCFileNotFoundError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    NTCFileNotFoundError,
+)
+from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.nxos import show, show_list
 
@@ -26,15 +33,19 @@ DEVICE_FACTS = {
 
 
 class TestNXOSDevice(unittest.TestCase):
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
     @mock.patch("pynxos.device.Device.facts", new_callable=mock.PropertyMock)
-    def setUp(self, mock_device, mock_facts):
+    def setUp(self, mock_facts, mock_device, mock_connect_handler):
+        self.mock_native_ssh = mock_connect_handler.return_value
         self.device = NXOSDevice("host", "user", "pass")
         mock_device.show.side_effect = show
         mock_device.show_list.side_effect = show_list
         mock_facts.return_value = DEVICE_FACTS
 
         self.device.native = mock_device
+        self.device.native_ssh = self.mock_native_ssh
+        self.device.native._facts = {}
         type(self.device.native).facts = mock_facts.return_value
 
     def test_config(self):
@@ -255,6 +266,123 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.refresh()
         self.assertIsNone(self.device._uptime)
         self.assertFalse(hasattr(self.device.native, "_facts"))
+
+    @mock.patch.object(NXOSDevice, "show", return_value="bootflash:")
+    def test_get_file_system(self, mock_show):
+        self.assertEqual(self.device._get_file_system(), "bootflash:")
+        mock_show.assert_called_with("dir", raw_text=True)
+
+    @mock.patch.object(NXOSDevice, "show", return_value="no filesystems here")
+    def test_get_file_system_not_found(self, mock_show):
+        with self.assertRaises(FileSystemNotFoundError):
+            self.device._get_file_system()
+        mock_show.assert_called_with("dir", raw_text=True)
+
+    def test_check_file_exists_true(self):
+        self.device.native_ssh.send_command.return_value = "12345 bootflash:/nxos.bin"
+        result = self.device.check_file_exists("nxos.bin", file_system="bootflash:")
+        self.assertTrue(result)
+        self.device.native_ssh.send_command.assert_called_with("dir bootflash:/nxos.bin", read_timeout=30)
+
+    def test_check_file_exists_false(self):
+        self.device.native_ssh.send_command.return_value = "No such file or directory"
+        result = self.device.check_file_exists("nxos.bin", file_system="bootflash:")
+        self.assertFalse(result)
+        self.device.native_ssh.send_command.assert_called_with("dir bootflash:/nxos.bin", read_timeout=30)
+
+    def test_check_file_exists_command_error(self):
+        self.device.native_ssh.send_command.return_value = "some ambiguous output"
+        with self.assertRaises(CommandError):
+            self.device.check_file_exists("nxos.bin", file_system="bootflash:")
+
+    def test_get_remote_checksum(self):
+        self.device.native_ssh.send_command.return_value = "abc123"
+        result = self.device.get_remote_checksum("nxos.bin", hashing_algorithm="md5", file_system="bootflash:")
+        self.assertEqual(result, "abc123")
+        self.device.native_ssh.send_command.assert_called_with("show file bootflash:/nxos.bin md5sum", read_timeout=30)
+
+    def test_get_remote_checksum_invalid_algorithm(self):
+        with self.assertRaises(ValueError):
+            self.device.get_remote_checksum("nxos.bin", hashing_algorithm="sha1", file_system="bootflash:")
+
+    def test_verify_file_true(self):
+        with (
+            mock.patch.object(NXOSDevice, "check_file_exists", return_value=True),
+            mock.patch.object(NXOSDevice, "get_remote_checksum", return_value="abc123"),
+        ):
+            result = self.device.verify_file("abc123", "nxos.bin", file_system="bootflash:")
+            self.assertTrue(result)
+
+    def test_verify_file_false(self):
+        with (
+            mock.patch.object(NXOSDevice, "check_file_exists", return_value=True),
+            mock.patch.object(NXOSDevice, "get_remote_checksum", return_value="different"),
+        ):
+            result = self.device.verify_file("abc123", "nxos.bin", file_system="bootflash:")
+            self.assertFalse(result)
+
+    def test_remote_file_copy_existing_verified_file(self):
+        src = FileCopyModel(
+            download_url="http://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        with mock.patch.object(NXOSDevice, "verify_file", return_value=True) as verify_mock:
+            self.device.remote_file_copy(src, file_system="bootflash:")
+            verify_mock.assert_called_once_with("abc123", "nxos.bin", hashing_algorithm="md5", file_system="bootflash:")
+            self.device.native_ssh.send_command.assert_not_called()
+
+    def test_remote_file_copy_transfer_success(self):
+        src = FileCopyModel(
+            download_url="http://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        self.device.native_ssh.send_command.return_value = "Copy complete"
+        with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
+            self.device.remote_file_copy(src, file_system="bootflash:")
+        self.device.native_ssh.send_command.assert_called_once()
+
+    def test_remote_file_copy_transfer_fails_verification(self):
+        src = FileCopyModel(
+            download_url="http://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        self.device.native_ssh.send_command.return_value = "Copy complete"
+        with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, False]):
+            with self.assertRaises(FileTransferError):
+                self.device.remote_file_copy(src, file_system="bootflash:")
+
+    def test_remote_file_copy_invalid_scheme(self):
+        src = FileCopyModel(
+            download_url="smtp://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        with self.assertRaises(ValueError):
+            self.device.remote_file_copy(src, file_system="bootflash:")
+
+    def test_remote_file_copy_query_string_not_supported(self):
+        src = FileCopyModel(
+            download_url="https://example.com/nxos.bin?token=foo",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        with self.assertRaises(ValueError):
+            self.device.remote_file_copy(src, file_system="bootflash:")
 
 
 if __name__ == "__main__":
