@@ -1,0 +1,2 @@
+Added a pre-transfer free-space check to EOS ``file_copy`` and ``remote_file_copy`` that raises ``NotEnoughFreeSpaceError`` when the target filesystem lacks room for the image.
+Added ``file_size_unit`` (``bytes``, ``megabytes``, or ``gigabytes``; default ``bytes``) and a computed ``file_size_bytes`` to ``FileCopyModel`` so ``remote_file_copy`` can verify free space against a caller-supplied size; when ``file_size`` is omitted the pre-transfer check is skipped.
