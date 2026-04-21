@@ -142,9 +142,12 @@ class ASADevice(BaseDevice):
         """Return free bytes on ``file_system`` as reported by ASA's ``dir`` output.
 
         ASA exposes a single flash filesystem in practice and ``dir`` always prints
-        ``<total> bytes total (<free> bytes free)`` as the last line, so the
-        ``file_system`` argument is accepted for API parity with other drivers but is
-        otherwise unused.
+        a ``<total> bytes total (<free> bytes free...)`` trailer as the last line.
+        Real platforms append an ``/<pct>% free`` suffix inside the parentheses
+        (e.g., ``(3580170240 bytes free/86% free)``); older releases and some
+        emulators omit it. The regex matches both shapes. The ``file_system``
+        argument is accepted for API parity with other drivers but is otherwise
+        unused.
 
         Args:
             file_system (str, optional): Ignored; retained for BaseDevice API parity.
@@ -154,11 +157,13 @@ class ASADevice(BaseDevice):
 
         Raises:
             CommandError: When the ``dir`` output does not contain a parseable
-                ``(N bytes free)`` trailer.
+                ``N bytes free`` trailer.
         """
         raw_data = self.show("dir")
-        # Example: 16777216 bytes total (1592488 bytes free)
-        match = re.search(r"\((\d+)\s+bytes\s+free\)", raw_data)
+        # Examples seen in the wild:
+        #   16777216 bytes total (1592488 bytes free)
+        #   4118732800 bytes total (3580170240 bytes free/86% free)
+        match = re.search(r"\((\d+)\s+bytes\s+free", raw_data)
         if match is None:
             log.error("Host %s: could not parse free space from 'dir' output.", self.host)
             raise CommandError(command="dir", message="Unable to parse free space from dir output.")

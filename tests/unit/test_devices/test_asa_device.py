@@ -1441,13 +1441,24 @@ def test_remote_file_copy_https_clean_url_used_in_command(mock_verify, mock_fs, 
 DIR_OUTPUT_WITH_TRAILER = (
     "Directory of disk0:/\n\n"
     "1  -rw-    15183868                asa9-12-3-11-smp-k8.bin\n\n"
+    "4118732800 bytes total (3580170240 bytes free/86% free)"
+)
+DIR_OUTPUT_LEGACY_TRAILER = (
+    "Directory of disk0:/\n\n"
+    "1  -rw-    15183868                asa9-12-3-11-smp-k8.bin\n\n"
     "16777216 bytes total (1592488 bytes free)"
 )
 
 
 @mock.patch.object(ASADevice, "show", return_value=DIR_OUTPUT_WITH_TRAILER)
 def test_get_free_space_parses_dir_trailer(_mock_show, asa_device):
-    """_get_free_space returns the bytes-free value from the dir trailer."""
+    """_get_free_space returns the bytes-free value from the real-device dir trailer."""
+    assert asa_device._get_free_space() == 3580170240
+
+
+@mock.patch.object(ASADevice, "show", return_value=DIR_OUTPUT_LEGACY_TRAILER)
+def test_get_free_space_parses_legacy_dir_trailer(_mock_show, asa_device):
+    """_get_free_space parses the older ``(N bytes free)`` trailer shape."""
     assert asa_device._get_free_space() == 1592488
 
 
@@ -1481,7 +1492,7 @@ def test_remote_file_copy_raises_not_enough_free_space(_show, _verify, _fs, asa_
         download_url="ftp://192.0.2.1/asa.bin",
         checksum=SHA512_CHECKSUM,
         file_name="asa.bin",
-        file_size=2,
+        file_size=10,
         file_size_unit="gigabytes",
         hashing_algorithm="sha512",
     )
