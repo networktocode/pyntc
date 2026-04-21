@@ -34,46 +34,12 @@ Environment variables:
 """
 
 import os
-import posixpath
 
 import pytest
 
 from pyntc.devices import ASADevice
-from pyntc.utils.models import FileCopyModel
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_PROTOCOL_URL_VARS = {
-    "ftp": "FTP_URL",
-    "tftp": "TFTP_URL",
-    "scp": "SCP_URL",
-    "http": "HTTP_URL",
-    "https": "HTTPS_URL",
-}
-
-
-def _make_model(url_env_var):
-    """Build a FileCopyModel from a per-protocol URL env var.
-
-    Calls pytest.skip if the URL or FILE_CHECKSUM is not set.
-    """
-    url = os.environ.get(url_env_var)
-    checksum = os.environ.get("FILE_CHECKSUM")
-    file_name = os.environ.get("FILE_NAME") or (posixpath.basename(url.split("?")[0]) if url else None)
-
-    if not all([url, checksum, file_name]):
-        pytest.skip(f"{url_env_var} / FILE_CHECKSUM environment variables not set")
-
-    return FileCopyModel(
-        download_url=url,
-        checksum=checksum,
-        file_name=file_name,
-        hashing_algorithm="sha512",
-        timeout=900,
-    )
-
+from ._helpers import build_file_copy_model
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -94,29 +60,6 @@ def device():
     dev = ASADevice(host, user, password, secret=secret)
     yield dev
     dev.close()
-
-
-@pytest.fixture(scope="module")
-def any_file_copy_model():
-    """Return a FileCopyModel using the first available protocol URL.
-
-    Used by tests that only need a file reference (existence checks, checksum
-    verification) without caring about the transfer protocol.  Skips if no
-    protocol URL and FILE_CHECKSUM are set.
-    """
-    checksum = os.environ.get("FILE_CHECKSUM")
-    for env_var in _PROTOCOL_URL_VARS.values():
-        url = os.environ.get(env_var)
-        if url and checksum:
-            file_name = os.environ.get("FILE_NAME") or posixpath.basename(url.split("?")[0])
-            return FileCopyModel(
-                download_url=url,
-                checksum=checksum,
-                file_name=file_name,
-                hashing_algorithm="sha512",
-                timeout=900,
-            )
-    pytest.skip("No protocol URL / FILE_CHECKSUM environment variables not set")
 
 
 # ---------------------------------------------------------------------------
@@ -146,35 +89,35 @@ def test_get_remote_checksum_after_exists(device, any_file_copy_model):
 
 def test_remote_file_copy_ftp(device):
     """Transfer the file using FTP and verify it exists on the device."""
-    model = _make_model("FTP_URL")
+    model = build_file_copy_model("FTP_URL")
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 
 
 def test_remote_file_copy_tftp(device):
     """Transfer the file using TFTP and verify it exists on the device."""
-    model = _make_model("TFTP_URL")
+    model = build_file_copy_model("TFTP_URL")
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 
 
 def test_remote_file_copy_scp(device):
     """Transfer the file using SCP and verify it exists on the device."""
-    model = _make_model("SCP_URL")
+    model = build_file_copy_model("SCP_URL")
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 
 
 def test_remote_file_copy_http(device):
     """Transfer the file using HTTP and verify it exists on the device."""
-    model = _make_model("HTTP_URL")
+    model = build_file_copy_model("HTTP_URL")
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 
 
 def test_remote_file_copy_https(device):
     """Transfer the file using HTTPS and verify it exists on the device."""
-    model = _make_model("HTTPS_URL")
+    model = build_file_copy_model("HTTPS_URL")
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 

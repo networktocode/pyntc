@@ -9,7 +9,7 @@ from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
-from pyntc.errors import CommandError, CommandListError
+from pyntc.errors import CommandError, CommandListError, NotEnoughFreeSpaceError  # noqa: F401
 from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.eos import config, enable, send_command, send_command_expect
@@ -225,11 +225,12 @@ class TestEOSDevice(unittest.TestCase):
 
         self.assertFalse(result)
 
+    @mock.patch("pyntc.devices.eos_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
     @mock.patch.object(EOSDevice, "open")
     @mock.patch.object(EOSDevice, "close")
     @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
-    def test_file_copy(self, mock_open, mock_close, mock_ssh, mock_ft):
+    def test_file_copy(self, mock_open, mock_close, mock_ssh, mock_ft, mock_getsize):
         self.device.native_ssh = mock_open
         self.device.native_ssh.send_command_timing.side_effect = None
         self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
@@ -245,11 +246,12 @@ class TestEOSDevice(unittest.TestCase):
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
 
+    @mock.patch("pyntc.devices.eos_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
     @mock.patch.object(EOSDevice, "open")
     @mock.patch.object(EOSDevice, "close")
     @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
-    def test_file_copy_different_dest(self, mock_open, mock_close, mock_ssh, mock_ft):
+    def test_file_copy_different_dest(self, mock_open, mock_close, mock_ssh, mock_ft, mock_getsize):
         self.device.native_ssh = mock_open
         self.device.native_ssh.send_command_timing.side_effect = None
         self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
@@ -263,11 +265,12 @@ class TestEOSDevice(unittest.TestCase):
         mock_ft_instance.establish_scp_conn.assert_any_call()
         mock_ft_instance.transfer_file.assert_any_call()
 
+    @mock.patch("pyntc.devices.eos_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
     @mock.patch.object(EOSDevice, "open")
     @mock.patch.object(EOSDevice, "close")
     @mock.patch("netmiko.arista.arista.AristaSSH", autospec=True)
-    def test_file_copy_fail(self, mock_open, mock_close, mock_ssh, mock_ft):
+    def test_file_copy_fail(self, mock_open, mock_close, mock_ssh, mock_ft, mock_getsize):
         self.device.native_ssh = mock_open
         self.device.native_ssh.send_command_timing.side_effect = None
         self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
@@ -436,8 +439,8 @@ def test_init_pass_port_and_timeout(mock_eos_connect):
     )
 
 
-class TestRemoteFileCopy(unittest.TestCase):
-    """Tests for remote_file_copy method."""
+class EOSDeviceMockedTestCase(unittest.TestCase):
+    """Base test case wiring a mocked ``pyeapi`` node onto an ``EOSDevice``."""
 
     @mock.patch("pyeapi.client.Node", autospec=True)
     def setUp(self, mock_node):
@@ -449,6 +452,10 @@ class TestRemoteFileCopy(unittest.TestCase):
 
     def tearDown(self):
         self.device.native.reset_mock()
+
+
+class TestRemoteFileCopy(EOSDeviceMockedTestCase):
+    """Tests for remote_file_copy method."""
 
     def test_remote_file_copy_invalid_src_type(self):
         """Test remote_file_copy raises TypeError for invalid src type."""
@@ -473,6 +480,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://server.example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src)
@@ -495,6 +503,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src)
@@ -517,6 +526,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src)
@@ -544,6 +554,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         with self.assertRaises(FileTransferError):
@@ -566,6 +577,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://server.example.com/myfile.bin",
             checksum="abc123",
             file_name="myfile.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src)
@@ -591,6 +603,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src, dest="custom_name.bin")
@@ -614,6 +627,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src, file_system="flash:")
@@ -639,6 +653,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="scp://user:pass@server.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         self.device.remote_file_copy(src)
@@ -668,6 +683,7 @@ class TestRemoteFileCopy(unittest.TestCase):
                     download_url="http://example.com/file.bin",
                     checksum="abc123",
                     file_name="file.bin",
+                    file_size=1024,
                     timeout=timeout,
                 )
 
@@ -693,6 +709,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://server.example.com/file.bin",
             checksum="abc123def456",
             file_name="file.bin",
+            file_size=1024,
         )
 
         with self.assertRaises(FileTransferError):
@@ -721,6 +738,7 @@ class TestRemoteFileCopy(unittest.TestCase):
                     download_url="http://server.example.com/file.bin",
                     checksum=checksum,
                     file_name="file.bin",
+                    file_size=1024,
                     hashing_algorithm=algorithm,
                 )
 
@@ -733,6 +751,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
         # Override scheme to something unsupported
         src.scheme = "gopher"
@@ -758,6 +777,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
             token="some_token",
         )
 
@@ -774,6 +794,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://example.com/file.bin?token=abc",
             checksum="abc123",
             file_name="file.bin",
+            file_size=1024,
         )
 
         with self.assertRaises(ValueError) as ctx:
@@ -797,6 +818,7 @@ class TestRemoteFileCopy(unittest.TestCase):
             download_url="http://server.example.com/file.bin",
             checksum="abc123def456",
             file_name="file.bin",
+            file_size=1024,
         )
 
         with mock.patch("pyntc.devices.eos_device.log") as mock_log:
@@ -815,6 +837,7 @@ class TestFileCopyModelValidation(unittest.TestCase):
             download_url="http://server.example.com/file.bin",
             checksum="abc123def456",
             file_name="file.bin",
+            file_size=1024,
         )
         self.assertEqual(src.timeout, 900)
 
@@ -826,6 +849,7 @@ class TestFileCopyModelValidation(unittest.TestCase):
                     download_url="ftp://admin:password@ftp.example.com/images/eos.swi",
                     checksum="abc123def456",
                     file_name="eos.swi",
+                    file_size=1024,
                     ftp_passive=ftp_passive,
                 )
                 self.assertEqual(src.ftp_passive, ftp_passive)
@@ -836,6 +860,7 @@ class TestFileCopyModelValidation(unittest.TestCase):
             download_url="ftp://admin:password@ftp.example.com/images/eos.swi",
             checksum="abc123def456",
             file_name="eos.swi",
+            file_size=1024,
         )
         self.assertTrue(src.ftp_passive)
 
@@ -847,6 +872,7 @@ class TestFileCopyModelValidation(unittest.TestCase):
                     download_url="http://server.example.com/file.bin",
                     checksum="abc123def456",
                     file_name="file.bin",
+                    file_size=1024,
                     hashing_algorithm=algorithm,
                 )
                 self.assertEqual(src.hashing_algorithm, algorithm)
@@ -859,6 +885,7 @@ class TestFileCopyModelValidation(unittest.TestCase):
                     download_url="http://server.example.com/file.bin",
                     checksum="abc123def456",
                     file_name="file.bin",
+                    file_size=1024,
                     hashing_algorithm=algorithm,
                 )
                 self.assertIn(src.hashing_algorithm.lower(), ["md5", "sha256"])
@@ -879,6 +906,7 @@ class TestFileCopyModelCredentials(unittest.TestCase):
                     download_url=url,
                     checksum="abc123def456",
                     file_name="file.bin",
+                    file_size=1024,
                 )
                 self.assertEqual(src.username, expected_username)
                 self.assertEqual(src.token, expected_token)
@@ -889,8 +917,88 @@ class TestFileCopyModelCredentials(unittest.TestCase):
             download_url="scp://url_user:url_pass@server.com/path",
             checksum="abc123def456",
             file_name="file.bin",
+            file_size=1024,
             username="explicit_user",
             token="explicit_pass",
         )
         self.assertEqual(src.username, "explicit_user")
         self.assertEqual(src.token, "explicit_pass")
+
+
+class TestFreeSpaceCheck(EOSDeviceMockedTestCase):
+    """Tests for EOS pre-flight free-space verification on file transfers."""
+
+    def test_get_free_space_parses_dir_trailer(self):
+        """_get_free_space returns the bytes-free value from the dir trailer."""
+        self.assertEqual(self.device._get_free_space(), 536870912)
+
+    @mock.patch.object(EOSDevice, "show", return_value="Directory of flash:/\nno trailer here")
+    def test_get_free_space_raises_when_trailer_missing(self, _mock_show):
+        """_get_free_space raises CommandError when the trailer can't be parsed."""
+        with self.assertRaises(CommandError):
+            self.device._get_free_space()
+
+    @mock.patch("pyntc.devices.eos_device.os.path.getsize", return_value=10**12)
+    @mock.patch("pyntc.devices.eos_device.FileTransfer", autospec=True)
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "close")
+    def test_file_copy_raises_not_enough_free_space(self, _close, _open, mock_ft, _getsize):
+        """file_copy raises NotEnoughFreeSpaceError and never touches FileTransfer."""
+        self.device.native_ssh = mock.MagicMock()
+        self.device.native_ssh.send_command_timing.return_value = "flash: /dev/null"
+        mock_ft.return_value.check_file_exists.return_value = False
+
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.file_copy("source_file")
+
+        mock_ft.return_value.establish_scp_conn.assert_not_called()
+        mock_ft.return_value.transfer_file.assert_not_called()
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
+    def test_remote_file_copy_raises_not_enough_free_space(self, _fs, _open, _enable, _verify):
+        """remote_file_copy raises NotEnoughFreeSpaceError and never issues a copy command."""
+        mock_ssh = mock.MagicMock()
+        self.device.native_ssh = mock_ssh
+
+        oversized = FileCopyModel(
+            download_url="http://example.com/image.bin",
+            checksum="abc123",
+            file_name="image.bin",
+            file_size=2,
+            file_size_unit="gigabytes",
+        )
+
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.remote_file_copy(oversized)
+
+        mock_ssh.send_command.assert_not_called()
+        mock_ssh.send_command_timing.assert_not_called()
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
+    @mock.patch.object(EOSDevice, "_check_free_space")
+    def test_remote_file_copy_skips_space_check_when_file_size_omitted(
+        self, mock_check, _fs, _open, _enable, mock_verify
+    ):
+        """When FileCopyModel has no file_size, _check_free_space is NOT called."""
+        mock_verify.return_value = True
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Copy completed successfully"
+        self.device.native_ssh = mock_ssh
+
+        model = FileCopyModel(
+            download_url="http://example.com/image.bin",
+            checksum="abc123",
+            file_name="image.bin",
+        )  # file_size intentionally omitted
+        assert model.file_size_bytes is None
+
+        self.device.remote_file_copy(model)
+
+        mock_check.assert_not_called()
+        mock_ssh.send_command.assert_called()  # transfer still happens

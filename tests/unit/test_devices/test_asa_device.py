@@ -1017,6 +1017,7 @@ FILE_COPY_MODEL_FTP = FileCopyModel(
     download_url="ftp://example-user:example-password@192.0.2.1/asa.bin",
     checksum=SHA512_CHECKSUM,
     file_name="asa.bin",
+    file_size=1024,
     hashing_algorithm="sha512",
     timeout=900,
 )
@@ -1024,6 +1025,7 @@ FILE_COPY_MODEL_TFTP = FileCopyModel(
     download_url="tftp://192.0.2.1/asa.bin",
     checksum=SHA512_CHECKSUM,
     file_name="asa.bin",
+    file_size=1024,
     hashing_algorithm="sha512",
     timeout=900,
 )
@@ -1031,6 +1033,7 @@ FILE_COPY_MODEL_SCP = FileCopyModel(
     download_url="scp://example-user:example-password@192.0.2.1/asa.bin",
     checksum=SHA512_CHECKSUM,
     file_name="asa.bin",
+    file_size=1024,
     hashing_algorithm="sha512",
     timeout=900,
 )
@@ -1038,6 +1041,7 @@ FILE_COPY_MODEL_HTTP = FileCopyModel(
     download_url="http://example-user:example-password@192.0.2.1/asa.bin",
     checksum=SHA512_CHECKSUM,
     file_name="asa.bin",
+    file_size=1024,
     hashing_algorithm="sha512",
     timeout=900,
 )
@@ -1045,6 +1049,7 @@ FILE_COPY_MODEL_HTTPS = FileCopyModel(
     download_url="https://example-user:example-password@192.0.2.1/asa.bin",
     checksum=SHA512_CHECKSUM,
     file_name="asa.bin",
+    file_size=1024,
     hashing_algorithm="sha512",
     timeout=900,
 )

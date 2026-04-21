@@ -264,7 +264,12 @@ from pyntc.utils.models import FileCopyModel
 ...     checksum='abc123def456',
 ...     hashing_algorithm='md5',
 ...     file_name='newconfig.cfg',
-        vrf='Mgmt-vrf'
+...     # file_size is optional. When supplied, remote_file_copy verifies
+...     # the target device has room before starting the transfer. When
+...     # omitted, the pre-flight space check is skipped.
+...     file_size=512,
+...     file_size_unit='megabytes',
+...     vrf='Mgmt-vrf',
 ... )
 >>> for device in devices:
 ...    device.remote_file_copy(source_file)

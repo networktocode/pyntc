@@ -326,6 +326,7 @@ class TestNXOSDevice(unittest.TestCase):
             download_url="http://example.com/nxos.bin",
             checksum="abc123",
             file_name="nxos.bin",
+            file_size=1024,
             hashing_algorithm="md5",
             timeout=30,
         )
@@ -339,6 +340,7 @@ class TestNXOSDevice(unittest.TestCase):
             download_url="http://example.com/nxos.bin",
             checksum="abc123",
             file_name="nxos.bin",
+            file_size=1024,
             hashing_algorithm="md5",
             timeout=30,
         )
@@ -353,6 +355,7 @@ class TestNXOSDevice(unittest.TestCase):
             download_url="http://example.com/nxos.bin",
             checksum="abc123",
             file_name="nxos.bin",
+            file_size=1024,
             hashing_algorithm="md5",
             timeout=30,
         )
@@ -367,6 +370,7 @@ class TestNXOSDevice(unittest.TestCase):
             download_url="smtp://example.com/nxos.bin",
             checksum="abc123",
             file_name="nxos.bin",
+            file_size=1024,
             hashing_algorithm="md5",
             timeout=30,
         )
@@ -378,6 +382,7 @@ class TestNXOSDevice(unittest.TestCase):
             download_url="https://example.com/nxos.bin?token=foo",
             checksum="abc123",
             file_name="nxos.bin",
+            file_size=1024,
             hashing_algorithm="md5",
             timeout=30,
         )
