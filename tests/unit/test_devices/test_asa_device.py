@@ -6,7 +6,7 @@ import pytest
 
 from pyntc.devices import ASADevice
 from pyntc.devices import asa_device as asa_module
-from pyntc.errors import FileTransferError
+from pyntc.errors import CommandError, FileTransferError, NotEnoughFreeSpaceError
 from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.asa import send_command
@@ -536,11 +536,15 @@ def test_enable_scp_enable_fail(mock_log, mock_save, mock_config, mock_peer_devi
     mock_save.assert_not_called()
 
 
+@mock.patch("pyntc.devices.asa_device.os.path.getsize", return_value=1024)
+@mock.patch.object(ASADevice, "_check_free_space")
 @mock.patch.object(os.path, "basename", return_value="a.txt")
 @mock.patch.object(ASADevice, "_get_file_system", return_value="flash:")
 @mock.patch.object(ASADevice, "enable_scp")
 @mock.patch.object(ASADevice, "_file_copy")
-def test_file_copy_no_peer_no_args(mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device):
+def test_file_copy_no_peer_no_args(
+    mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, _check_space, _getsize, asa_device
+):
     asa_device.file_copy("path/to/a.txt")
     mock_basename.assert_called()
     mock_get_file_system.assert_called()
@@ -549,11 +553,15 @@ def test_file_copy_no_peer_no_args(mock_file_copy, mock_enable_scp, mock_get_fil
     mock_file_copy.assert_called_with("path/to/a.txt", "a.txt", "flash:")
 
 
+@mock.patch("pyntc.devices.asa_device.os.path.getsize", return_value=1024)
+@mock.patch.object(ASADevice, "_check_free_space")
 @mock.patch.object(os.path, "basename")
 @mock.patch.object(ASADevice, "_get_file_system")
 @mock.patch.object(ASADevice, "enable_scp")
 @mock.patch.object(ASADevice, "_file_copy")
-def test_file_copy_no_peer_pass_args(mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device):
+def test_file_copy_no_peer_pass_args(
+    mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, _check_space, _getsize, asa_device
+):
     args = ("path/to/a.txt", "b.txt", "bootflash:")
     asa_device.file_copy(*args)
     mock_basename.assert_not_called()
@@ -563,13 +571,22 @@ def test_file_copy_no_peer_pass_args(mock_file_copy, mock_enable_scp, mock_get_f
     mock_file_copy.assert_called_with(*args)
 
 
+@mock.patch("pyntc.devices.asa_device.os.path.getsize", return_value=1024)
+@mock.patch.object(ASADevice, "_check_free_space")
 @mock.patch.object(os.path, "basename")
 @mock.patch.object(ASADevice, "_get_file_system")
 @mock.patch.object(ASADevice, "enable_scp")
 @mock.patch.object(ASADevice, "_file_copy")
 @mock.patch.object(ASADevice, "peer_device")
 def test_file_copy_include_peer(
-    mock_peer_device, mock_file_copy, mock_enable_scp, mock_get_file_system, mock_basename, asa_device
+    mock_peer_device,
+    mock_file_copy,
+    mock_enable_scp,
+    mock_get_file_system,
+    mock_basename,
+    _check_space,
+    _getsize,
+    asa_device,
 ):
     mock_peer_device.return_value = asa_device
     args = ("path/to/a.txt", "a.txt", "flash:")
@@ -1415,3 +1432,85 @@ def test_remote_file_copy_https_clean_url_used_in_command(mock_verify, mock_fs, 
     call_args = asa_device.native.send_command.call_args_list[0][0][0]
     assert "example-user:example-password" not in call_args
     assert "https://192.0.2.1/asa.bin" in call_args
+
+
+# ---------------------------------------------------------------------------
+# Pre-transfer free-space tests (NAPPS-1087)
+# ---------------------------------------------------------------------------
+
+DIR_OUTPUT_WITH_TRAILER = (
+    "Directory of disk0:/\n\n"
+    "1  -rw-    15183868                asa9-12-3-11-smp-k8.bin\n\n"
+    "16777216 bytes total (1592488 bytes free)"
+)
+
+
+@mock.patch.object(ASADevice, "show", return_value=DIR_OUTPUT_WITH_TRAILER)
+def test_get_free_space_parses_dir_trailer(_mock_show, asa_device):
+    """_get_free_space returns the bytes-free value from the dir trailer."""
+    assert asa_device._get_free_space() == 1592488
+
+
+@mock.patch.object(ASADevice, "show", return_value="Directory of disk0:/\nno trailer here")
+def test_get_free_space_raises_when_trailer_missing(_mock_show, asa_device):
+    """_get_free_space raises CommandError when the trailer can't be parsed."""
+    with pytest.raises(CommandError):
+        asa_device._get_free_space()
+
+
+@mock.patch("pyntc.devices.asa_device.os.path.getsize", return_value=10**12)
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "show", return_value=DIR_OUTPUT_WITH_TRAILER)
+@mock.patch.object(ASADevice, "enable_scp")
+@mock.patch.object(ASADevice, "_file_copy")
+def test_file_copy_raises_not_enough_free_space(mock_file_copy, mock_enable_scp, _show, _fs, _getsize, asa_device):
+    """file_copy raises NotEnoughFreeSpaceError and never runs SCP transfer."""
+    with pytest.raises(NotEnoughFreeSpaceError):
+        asa_device.file_copy("path/to/image.bin")
+
+    mock_enable_scp.assert_not_called()
+    mock_file_copy.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=False)
+@mock.patch.object(ASADevice, "show", return_value=DIR_OUTPUT_WITH_TRAILER)
+def test_remote_file_copy_raises_not_enough_free_space(_show, _verify, _fs, asa_device):
+    """remote_file_copy raises NotEnoughFreeSpaceError and never issues a copy command."""
+    oversized = FileCopyModel(
+        download_url="ftp://192.0.2.1/asa.bin",
+        checksum=SHA512_CHECKSUM,
+        file_name="asa.bin",
+        file_size=2,
+        file_size_unit="gigabytes",
+        hashing_algorithm="sha512",
+    )
+
+    with pytest.raises(NotEnoughFreeSpaceError):
+        asa_device.remote_file_copy(oversized)
+
+    asa_device.native.send_command.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "_check_free_space")
+@mock.patch.object(ASADevice, "verify_file", side_effect=[False, True])
+def test_remote_file_copy_skips_space_check_when_file_size_omitted(mock_verify, mock_check, _fs, asa_device):
+    """When FileCopyModel has no file_size, _check_free_space is NOT called."""
+    model = FileCopyModel(
+        download_url="ftp://192.0.2.1/asa.bin",
+        checksum=SHA512_CHECKSUM,
+        file_name="asa.bin",
+        hashing_algorithm="sha512",
+    )  # file_size intentionally omitted
+    assert model.file_size_bytes is None
+
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.side_effect = [
+        "94038 bytes copied in 0.90 secs",
+    ]
+
+    asa_device.remote_file_copy(model)
+
+    mock_check.assert_not_called()
+    asa_device.native.send_command.assert_called()  # transfer still happens
