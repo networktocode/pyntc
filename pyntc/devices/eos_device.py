@@ -92,7 +92,7 @@ class EOSDevice(BaseDevice):
         """Return free bytes on ``file_system`` as reported by Arista's ``dir`` output.
 
         EOS only exposes a single flash filesystem in practice, and ``dir`` always
-        prints ``NNNNN bytes total (MMMMM bytes free)`` as the last line, so the
+        prints ``<total> bytes total (<free> bytes free)`` as the last line, so the
         ``file_system`` argument is accepted for API parity with other drivers but is
         otherwise unused.
 
@@ -107,6 +107,7 @@ class EOSDevice(BaseDevice):
                 ``(N bytes free)`` trailer.
         """
         raw_data = self.show("dir", raw_text=True)
+        # Example: 3634421760 bytes total (1951289344 bytes free)
         match = re.search(r"\((\d+)\s+bytes\s+free\)", raw_data)
         if match is None:
             log.error("Host %s: could not parse free space from 'dir' output.", self.host)
@@ -640,7 +641,7 @@ class EOSDevice(BaseDevice):
         self.open()
         self.enable()
 
-        self._pre_flight_space_check(src, file_system)
+        self._pre_transfer_space_check(src, file_system)
 
         if src.scheme == "tftp" or src.username is None:
             command, detect_prompt = self._build_url_copy_command_simple(src, file_system, dest)

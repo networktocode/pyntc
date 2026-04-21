@@ -8,8 +8,7 @@ from urllib.parse import urlparse
 HASHING_ALGORITHMS = {"md5", "sha1", "sha224", "sha384", "sha256", "sha512", "sha3", "blake2", "blake3"}
 
 # Supported units for FileCopyModel.file_size, mapped to their multiplier in bytes.
-# Conversions use binary units (1 MB = 1024**2 bytes) to match network-device
-# filesystem reporting (e.g., Arista's ``dir`` output).
+# Conversions use binary units (1 MB = 1024**2 bytes) to match network-device reporting.
 FILE_SIZE_UNITS = {
     "bytes": 1,
     "megabytes": 1024**2,

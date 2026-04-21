@@ -117,8 +117,8 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not implement _get_free_space")
 
-    def _pre_flight_space_check(self, src, file_system=None):
-        """Run the free-space check iff ``src.file_size_bytes`` is populated.
+    def _pre_transfer_space_check(self, src, file_system=None):
+        """Run the free-space check if ``src.file_size_bytes`` is populated.
 
         Drivers call this from ``remote_file_copy`` so the check is skipped
         (fail-open) when the caller omits ``FileCopyModel.file_size``; when set,
