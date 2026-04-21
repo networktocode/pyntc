@@ -212,9 +212,9 @@ def test_remote_file_copy_accepts_declared_size_within_free_space(device):
     model = build_file_copy_model(PROTOCOL_URL_VARS[scheme])
     # pylint: disable=protected-access
     free_bytes = device._get_free_space()
-    assert (
-        model.file_size_bytes <= free_bytes
-    ), "Configured FILE_SIZE/FILE_SIZE_UNIT exceeds device free space; update env vars"
+    assert model.file_size_bytes <= free_bytes, (
+        "Configured FILE_SIZE/FILE_SIZE_UNIT exceeds device free space; update env vars"
+    )
     device.remote_file_copy(model)
     assert device.check_file_exists(model.file_name)
 
