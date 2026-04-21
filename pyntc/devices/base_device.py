@@ -135,7 +135,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             self._check_free_space(src.file_size_bytes, file_system=file_system)
         else:
             log.debug(
-                "Host %s: no file_size on FileCopyModel; skipping pre-flight space check.",
+                "Host %s: no file_size on FileCopyModel; skipping pre-transfer space check.",
                 self.host,
             )
 

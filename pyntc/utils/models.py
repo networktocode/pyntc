@@ -24,7 +24,7 @@ class FileCopyModel:
         download_url (str): The URL to download the file from. Can include credentials, but it's recommended to use the username and token fields instead for security reasons.
         checksum (str): The expected checksum of the file.
         file_name (str): The name of the file to be saved on the device.
-        file_size (int, optional): The expected size of the file. When supplied, ``remote_file_copy`` verifies the target device has room before starting the transfer. When omitted, the pre-flight space check is skipped (callers can probe the source URL themselves and populate this field). Defaults to ``None``.
+        file_size (int, optional): The expected size of the file. When supplied, ``remote_file_copy`` verifies the target device has room before starting the transfer. When omitted, the pre-transfer space check is skipped (callers can probe the source URL themselves and populate this field). Defaults to ``None``.
         file_size_unit (str, optional): Unit that ``file_size`` is expressed in. One of ``"bytes"``, ``"megabytes"``, ``"gigabytes"``. Only consulted when ``file_size`` is supplied. Defaults to ``"bytes"``.
         hashing_algorithm (str, optional): The hashing algorithm to use for checksum verification. Defaults to "md5".
         timeout (int, optional): The timeout for the download operation in seconds. Defaults to 900.

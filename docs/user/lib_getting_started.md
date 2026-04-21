@@ -266,7 +266,7 @@ from pyntc.utils.models import FileCopyModel
 ...     file_name='newconfig.cfg',
 ...     # file_size is optional. When supplied, remote_file_copy verifies
 ...     # the target device has room before starting the transfer. When
-...     # omitted, the pre-flight space check is skipped.
+...     # omitted, the pre-transfer space check is skipped.
 ...     file_size=512,
 ...     file_size_unit='megabytes',
 ...     vrf='Mgmt-vrf',

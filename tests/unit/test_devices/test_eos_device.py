@@ -926,7 +926,7 @@ class TestFileCopyModelCredentials(unittest.TestCase):
 
 
 class TestFreeSpaceCheck(EOSDeviceMockedTestCase):
-    """Tests for EOS pre-flight free-space verification on file transfers."""
+    """Tests for EOS pre-transfer free-space verification on file transfers."""
 
     def test_get_free_space_parses_dir_trailer(self):
         """_get_free_space returns the bytes-free value from the dir trailer."""

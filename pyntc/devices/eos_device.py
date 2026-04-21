@@ -617,7 +617,7 @@ class EOSDevice(BaseDevice):
             FileSystemNotFoundError: If filesystem cannot be determined.
             NotEnoughFreeSpaceError: If ``src.file_size_bytes`` is set and
                 ``file_system`` has fewer free bytes than ``src.file_size_bytes``.
-                When ``file_size`` is omitted from ``src``, the pre-flight space
+                When ``file_size`` is omitted from ``src``, the pre-transfer space
                 check is skipped entirely.
         """
         if not isinstance(src, FileCopyModel):

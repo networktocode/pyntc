@@ -486,7 +486,6 @@ class TestIOSDevice(unittest.TestCase):
             download_url="sftp://user:test@1.1.1.1/test.bin",
             checksum="12345",
             file_name="test.bin",
-            file_size=1024,
             hashing_algorithm="md5",
             timeout=900,
         )
@@ -537,7 +536,6 @@ class TestIOSDevice(unittest.TestCase):
             download_url="sftp://1.1.1.1/test.bin",
             checksum="12345",
             file_name="test.bin",
-            file_size=1024,
             hashing_algorithm="md5",
             timeout=300,
         )
@@ -582,7 +580,6 @@ class TestIOSDevice(unittest.TestCase):
             download_url="tftp://1.1.1.1/test.bin",
             checksum="12345",
             file_name="test.bin",
-            file_size=1024,
             hashing_algorithm="md5",
         )
         mock_verify.return_value = False

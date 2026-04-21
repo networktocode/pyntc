@@ -34,7 +34,7 @@ Environment variables:
     FILE_NAME        - Destination filename on the device (default: basename of URL path)
     FILE_CHECKSUM    - Expected sha512 checksum of the file (shared across all protocols)
     FILE_SIZE        - Expected size of the file expressed in FILE_SIZE_UNIT units; used for
-                       the pre-flight free-space check
+                       the pre-transfer free-space check
     FILE_SIZE_UNIT   - One of "bytes", "megabytes", or "gigabytes" (default: "bytes")
 """
 
@@ -144,7 +144,7 @@ def test_verify_file_after_copy(device, any_file_copy_model):
 
 
 # ---------------------------------------------------------------------------
-# Free-space / pre-flight tests (NAPPS-1091)
+# Free-space / pre-transfer tests (NAPPS-1091)
 # ---------------------------------------------------------------------------
 
 
