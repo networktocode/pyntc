@@ -7,7 +7,7 @@ import pytest
 
 from pyntc.utils.models import FileCopyModel
 
-from ._helpers import PROTOCOL_URL_VARS, integration_hash_algo
+from ._helpers import PROTOCOL_URL_VARS
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +31,7 @@ def any_file_copy_model():
                 file_name=file_name,
                 file_size=file_size,
                 file_size_unit=file_size_unit,
-                hashing_algorithm=integration_hash_algo(),
+                hashing_algorithm="sha512",
                 timeout=900,
             )
     pytest.skip("No protocol URL / FILE_CHECKSUM / FILE_SIZE environment variables not set")
