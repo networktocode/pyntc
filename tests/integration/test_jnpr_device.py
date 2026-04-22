@@ -51,7 +51,7 @@ from ._helpers import PROTOCOL_URL_VARS, build_file_copy_model, first_available_
 
 # Junos ``fs.cp`` does not accept TFTP URLs, so narrow the protocol set before
 # any protocol-aware fixture/test reads from it.
-JUNOS_PROTOCOL_URL_VARS = {k: v for k, v in PROTOCOL_URL_VARS.items() if k != "tftp"}
+JUNOS_PROTOCOL_URL_VARS = {scheme: env_var for scheme, env_var in PROTOCOL_URL_VARS.items() if scheme != "tftp"}
 
 # ---------------------------------------------------------------------------
 # Fixtures

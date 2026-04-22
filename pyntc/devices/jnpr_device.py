@@ -47,6 +47,12 @@ _JUNOS_AVAIL_FORMAT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([BKMGTP]?)\s*$", re
 # mount point, not a local temp directory).
 _JUNOS_DEFAULT_FILE_SYSTEM = "/var/tmp"  # noqa: S108
 
+# Hashing algorithms that Junos implements for the ``file checksum`` RPC.
+# Junos does NOT implement sha512; callers passing it will be rejected at the
+# driver boundary rather than surfacing PyEZ's raw ValueError deeper in the
+# stack. Mirrors the pattern used by EOS and NXOS drivers.
+JUNOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256"}
+
 
 def _mount_encloses_path(mount, path):
     """Return True if ``mount`` is the filesystem that contains ``path``.
@@ -119,8 +125,10 @@ class JunosDevice(BaseDevice):
         when nothing more specific matches.
 
         Args:
-            file_system (str, optional): Target path. Defaults to ``/var/tmp``
-                — the standard destination for ``fs.cp`` copies on Junos.
+            file_system (str, optional): Target path. When ``None`` (the
+                default), the probe uses ``_JUNOS_DEFAULT_FILE_SYSTEM``
+                (``/var/tmp`` — the standard destination for ``fs.cp`` copies
+                on Junos).
 
         Returns:
             int: Free bytes available on the resolved filesystem.
@@ -626,11 +634,21 @@ class JunosDevice(BaseDevice):
 
         Args:
             filename (str): The name of the file to check for on the remote device.
-            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are
+                those in ``JUNOS_SUPPORTED_HASHING_ALGORITHMS`` (``md5``, ``sha1``,
+                ``sha256``). Defaults to ``md5``.
 
         Returns:
             (str): The checksum of the remote file or None if the file is not found.
+
+        Raises:
+            ValueError: When ``hashing_algorithm`` is not one Junos implements.
         """
+        if hashing_algorithm.lower() not in JUNOS_SUPPORTED_HASHING_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported hashing algorithm '{hashing_algorithm}' for Junos. "
+                f"Supported algorithms: {sorted(JUNOS_SUPPORTED_HASHING_ALGORITHMS)}"
+            )
         return self.fs.checksum(path=filename, calc=hashing_algorithm)
 
     def compare_file_checksum(self, checksum, filename, hashing_algorithm="md5"):
@@ -653,7 +671,8 @@ class JunosDevice(BaseDevice):
             src (FileCopyModel): The source file model.
             dest (str): The destination file path on the remote device.
             file_system (str, optional): Mount point used for the pre-transfer
-                free-space check. Defaults to ``/var/tmp``.
+                free-space check. When ``None`` (the default), the probe uses
+                ``_JUNOS_DEFAULT_FILE_SYSTEM`` (``/var/tmp``).
             **kwargs (Any): Accepted for parity with ``BaseDevice.remote_file_copy``;
                 other drivers may forward extra options.
 

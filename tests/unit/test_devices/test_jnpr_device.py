@@ -496,6 +496,13 @@ class TestJnprDevice(unittest.TestCase):
                 result = self.device.verify_file(checksum, filename, hashing_algorithm=hashing_algorithm)
                 self.assertTrue(result)
 
+    def test_get_remote_checksum_rejects_unsupported_algorithm(self):
+        """Junos does not implement sha512; the driver rejects it at the boundary."""
+        with self.assertRaises(ValueError) as ctx:
+            self.device.get_remote_checksum("file.bin", hashing_algorithm="sha512")
+        assert "sha512" in str(ctx.exception)
+        self.device.fs.checksum.assert_not_called()
+
 
 class TestJnprFreeSpace(unittest.TestCase):
     """Tests for JunOS pre-transfer free-space verification (NAPPS-1085)."""
