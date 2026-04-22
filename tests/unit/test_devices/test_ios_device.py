@@ -8,6 +8,7 @@ import pytest
 from pyntc.devices import IOSDevice
 from pyntc.devices import ios_device as ios_module
 from pyntc.devices.base_device import RollbackError
+from pyntc.errors import NotEnoughFreeSpaceError
 from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.ios import send_command, send_command_expect
@@ -140,9 +141,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "get_local_checksum")
     @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    @mock.patch("pyntc.devices.ios_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
+    def test_file_copy(
+        self, mock_open, mock_ft, _mock_getsize, _mock_check_space, mock_verify_file, mock_get_local_checksum
+    ):
         self.device.native.send_command.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
 
@@ -159,9 +164,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "get_local_checksum")
     @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    @mock.patch("pyntc.devices.ios_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_different_dest(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
+    def test_file_copy_different_dest(
+        self, mock_open, mock_ft, _mock_getsize, _mock_check_space, mock_verify_file, mock_get_local_checksum
+    ):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
@@ -177,9 +186,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "get_local_checksum")
     @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    @mock.patch("pyntc.devices.ios_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
+    def test_file_copy_fail(
+        self, mock_open, mock_ft, _mock_getsize, _mock_check_space, mock_verify_file, mock_get_local_checksum
+    ):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
@@ -193,9 +206,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "get_local_checksum")
     @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    @mock.patch("pyntc.devices.ios_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_socket_closed_good_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
+    def test_file_copy_socket_closed_good_md5(
+        self, mock_open, mock_ft, _mock_getsize, _mock_check_space, mock_verify_file, mock_get_local_checksum
+    ):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
@@ -214,9 +231,13 @@ class TestIOSDevice(unittest.TestCase):
 
     @mock.patch.object(IOSDevice, "get_local_checksum")
     @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    @mock.patch("pyntc.devices.ios_device.os.path.getsize", return_value=1024)
     @mock.patch("pyntc.devices.ios_device.FileTransfer", autospec=True)
     @mock.patch.object(IOSDevice, "open")
-    def test_file_copy_fail_socket_closed_bad_md5(self, mock_open, mock_ft, mock_verify_file, mock_get_local_checksum):
+    def test_file_copy_fail_socket_closed_bad_md5(
+        self, mock_open, mock_ft, _mock_getsize, _mock_check_space, mock_verify_file, mock_get_local_checksum
+    ):
         self.device.native.send_command_timing.side_effect = None
         self.device.native.send_command.return_value = "flash: /dev/null"
         mock_ft_instance = mock_ft.return_value
@@ -479,6 +500,15 @@ class TestIOSDevice(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.device.get_remote_checksum("file.txt", hashing_algorithm="invalid_algo", file_system="flash:")
 
+    def test_get_free_space(self):
+        self.device.native.send_command.return_value = "16777216 bytes total (1592488 bytes free)"
+        self.assertEqual(self.device._get_free_space(file_system="flash:"), 1592488)
+
+    def test_get_free_space_raises_when_unparsable(self):
+        self.device.native.send_command.return_value = "Directory of flash:/\nUnable to read totals"
+        with self.assertRaises(ios_module.CommandError):
+            self.device._get_free_space(file_system="flash:")
+
     @mock.patch.object(IOSDevice, "verify_file")
     def test_remote_file_copy_success(self, mock_verify):
         # Setup file model
@@ -593,6 +623,49 @@ class TestIOSDevice(unittest.TestCase):
 
             with self.assertRaises(FileTransferError):
                 self.device.remote_file_copy(src)
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_raises_not_enough_free_space(self, mock_verify):
+        src = FileCopyModel(
+            download_url="http://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            file_size=2,
+            file_size_unit="gigabytes",
+        )
+        mock_verify.return_value = False
+        self.device.native.send_command.return_value = "16777216 bytes total (1592488 bytes free)"
+
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.remote_file_copy(src, file_system="flash:")
+
+        assert not any(
+            "copy " in str(call.kwargs.get("command_string", call.args[0] if call.args else ""))
+            for call in self.device.native.send_command.call_args_list
+        )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    @mock.patch.object(IOSDevice, "_check_free_space")
+    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self, mock_check_free_space, mock_verify):
+        src = FileCopyModel(
+            download_url="sftp://1.1.1.1/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=300,
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.side_effect = [
+            "Address or name of remote host [1.1.1.1]?",
+            "123456 bytes copied in 10.2 secs. Copy complete.",
+        ]
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        mock_check_free_space.assert_not_called()
+        self.device.native.send_command.assert_called()
 
 
 if __name__ == "__main__":
