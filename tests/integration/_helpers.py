@@ -19,11 +19,23 @@ PROTOCOL_URL_VARS = {
 }
 
 
+def integration_hash_algo():
+    """Return the hashing algorithm configured for the current integration run.
+
+    Reads ``FILE_HASH_ALGO`` so a lab can pick whatever its device supports
+    (Junos SRX, for example, does not implement sha512; sha256 works).
+    Defaults to ``"sha512"`` for backward compatibility with existing EOS
+    and ASA integration runs.
+    """
+    return os.environ.get("FILE_HASH_ALGO", "sha512")
+
+
 def build_file_copy_model(url_env_var):
     """Build a ``FileCopyModel`` from a per-protocol URL env var.
 
     Calls ``pytest.skip`` if the URL, ``FILE_CHECKSUM``, or ``FILE_SIZE`` env
-    vars are not set.
+    vars are not set. The hashing algorithm defaults to ``FILE_HASH_ALGO``
+    (``sha512`` when unset).
     """
     url = os.environ.get(url_env_var)
     checksum = os.environ.get("FILE_CHECKSUM")
@@ -40,7 +52,7 @@ def build_file_copy_model(url_env_var):
         file_name=file_name,
         file_size=file_size,
         file_size_unit=file_size_unit,
-        hashing_algorithm="sha512",
+        hashing_algorithm=integration_hash_algo(),
         timeout=900,
     )
 
