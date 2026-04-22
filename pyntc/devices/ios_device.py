@@ -1015,6 +1015,8 @@ class IOSDevice(BaseDevice):
             log.error("Host %s: Command error for command 'show redundancy'.", self.host)
             return None
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
+        if not re_show_redundancy:
+            return None
         processor_redundancy_info = re_show_redundancy.group("other")
         if processor_redundancy_info is not None:
             re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
@@ -1079,6 +1081,8 @@ class IOSDevice(BaseDevice):
             log.error("Host %s: Command error for command 'show redundancy'.", self.host)
             return "n/a"
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
+        if not re_show_redundancy:
+            return None
         redundancy_info = re_show_redundancy.group("info")
         re_redundancy_mode = RE_REDUNDANCY_OPERATION_MODE.search(redundancy_info)
         redundancy_mode = re_redundancy_mode.group(1).lower()
@@ -1106,6 +1110,8 @@ class IOSDevice(BaseDevice):
             log.error("Host %s: Command error for command 'show redundancy'.", self.host)
             return None
         re_show_redundancy = RE_SHOW_REDUNDANCY.match(show_redundancy.lstrip())
+        if not re_show_redundancy:
+            return None
         processor_redundancy_info = re_show_redundancy.group("self")
         re_redundancy_state = RE_REDUNDANCY_STATE.search(processor_redundancy_info)
         processor_redundancy_state = re_redundancy_state.group(1).lower()
