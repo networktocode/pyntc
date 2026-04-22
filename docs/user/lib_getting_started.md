@@ -252,7 +252,7 @@ interface GigabitEthernet1
 
 #### Remote File Copy (Download to Device)
 
-Some devices support copying files directly from a URL to the device. This is useful for larger files like OS images.  To do this, you need to use the `FileCopyModel` data model to specify the source file information and then pass that to the `remote_file_copy` method. Currently only supported on Cisco IOS and Juniper Junos devices. Tested with ftp, http, https, sftp, and tftp urls.
+Some devices support copying files directly from a URL to the device. This is useful for large files like OS images.  To do this, you need to use the `FileCopyModel` data model to specify the source file information and then pass that to the `remote_file_copy` method.  The model is currently supported on Cisco IOS, Juniper Junos, and Arista EOS devices. It has been tested with ftp, http, https, sftp, and tftp urls.
 
 - `remote_file_copy` method
 
@@ -264,7 +264,12 @@ from pyntc.utils.models import FileCopyModel
 ...     checksum='abc123def456',
 ...     hashing_algorithm='md5',
 ...     file_name='newconfig.cfg',
-        vrf='Mgmt-vrf'
+...     # file_size is optional. When supplied, remote_file_copy verifies
+...     # the target device has room before starting the transfer. When
+...     # omitted, the pre-transfer space check is skipped.
+...     file_size=512,
+...     file_size_unit='megabytes',
+...     vrf='Mgmt-vrf',
 ... )
 >>> for device in devices:
 ...    device.remote_file_copy(source_file)

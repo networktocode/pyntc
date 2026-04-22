@@ -1,7 +1,6 @@
 """Kickoff functions for getting instance of device objects."""
 
 import os
-import warnings
 from importlib import metadata
 
 from .devices import supported_devices
@@ -21,9 +20,6 @@ __version__ = metadata.version(__name__)
 
 LIB_PATH_ENV_VAR = "PYNTC_CONF"
 LIB_PATH_DEFAULT = "~/.ntc.conf"
-
-
-warnings.simplefilter("default")
 
 
 def ntc_device(device_type, *args, **kwargs):
