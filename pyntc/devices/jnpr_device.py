@@ -6,6 +6,7 @@ import re
 import time
 import warnings
 from tempfile import NamedTemporaryFile
+from urllib.parse import urlparse
 
 from jnpr.junos import Device as JunosNativeDevice
 from jnpr.junos.exception import ConfigLoadError
@@ -18,8 +19,53 @@ from jnpr.junos.utils.sw import SW as JunosNativeSW
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.devices.tables.jnpr.loopback import LoopbackTable  # pylint: disable=no-name-in-module
-from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, RebootTimeoutError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    OSInstallError,
+    RebootTimeoutError,
+)
 from pyntc.utils.models import FileCopyModel
+
+# Multipliers for Junos ``df``-style size suffixes. Junos formats available
+# space with binary (1024-based) units in its ``<available-blocks format="...">``
+# XML attribute (e.g., "126M", "1.0G").
+_JUNOS_SIZE_UNIT_MULTIPLIERS = {
+    "": 1,
+    "B": 1,
+    "K": 1024,
+    "M": 1024**2,
+    "G": 1024**3,
+    "T": 1024**4,
+    "P": 1024**5,
+}
+_JUNOS_AVAIL_FORMAT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([BKMGTP]?)\s*$", re.IGNORECASE)
+# Default mount point to probe when callers do not specify one. ``/var/tmp`` is
+# the standard destination for ``fs.cp`` transfers on Junos (remote device
+# mount point, not a local temp directory).
+_JUNOS_DEFAULT_FILE_SYSTEM = "/var/tmp"  # noqa: S108
+
+# Hashing algorithms that Junos implements for the ``file checksum`` RPC.
+# Junos does NOT implement sha512; callers passing it will be rejected at the
+# driver boundary rather than surfacing PyEZ's raw ValueError deeper in the
+# stack. Mirrors the pattern used by EOS and NXOS drivers.
+JUNOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256"}
+
+
+def _mount_encloses_path(mount, path):
+    """Return True if ``mount`` is the filesystem that contains ``path``.
+
+    Matches with directory-boundary semantics (the same rule ``df`` uses) so
+    ``/vari`` is not mistaken for a prefix of ``/var/tmp``. ``/`` encloses
+    every path.
+    """
+    if mount == "/":
+        return True
+    if path == mount:
+        return True
+    return path.startswith(mount.rstrip("/") + "/")
 
 
 @fix_docs
@@ -61,6 +107,85 @@ class JunosDevice(BaseDevice):
                     md5_hash.update(buf)
                     buf = file_name.read(blocksize)
             return md5_hash.hexdigest()
+
+    def _get_free_space(self, file_system=None):
+        """Return free bytes on the filesystem containing ``file_system``.
+
+        Probes the device via ``get-system-storage-information`` (invoked by
+        PyEZ ``FS.storage_usage``) and parses the human-readable
+        ``available-blocks`` ``format`` attribute (e.g., ``"126M"``, ``"1.0G"``)
+        into bytes. The human-readable string is used rather than the raw
+        block count because PyEZ does not expose a native block size and
+        Junos block semantics can vary by release.
+
+        ``file_system`` is resolved by **longest-prefix mount match** — the
+        same logic ``df`` uses — so a caller asking about ``/var/tmp`` on a
+        platform that only mounts ``/var`` (e.g., SRX hardware) still gets
+        back the correct filesystem's free space. ``/`` is always a fallback
+        when nothing more specific matches.
+
+        Args:
+            file_system (str, optional): Target path. When ``None`` (the
+                default), the probe uses ``_JUNOS_DEFAULT_FILE_SYSTEM``
+                (``/var/tmp`` — the standard destination for ``fs.cp`` copies
+                on Junos).
+
+        Returns:
+            int: Free bytes available on the resolved filesystem.
+
+        Raises:
+            FileSystemNotFoundError: When no mount point encloses ``file_system``
+                (i.e., not even ``/`` is present in ``storage_usage``).
+            CommandError: When the ``avail`` format string cannot be parsed.
+        """
+        if file_system is None:
+            file_system = _JUNOS_DEFAULT_FILE_SYSTEM
+
+        usage = self.fs.storage_usage()
+        best_info = None
+        best_mount = None
+        best_len = -1
+        for _dev, info in usage.items():
+            mount = info.get("mount")
+            if not mount or not _mount_encloses_path(mount, file_system):
+                continue
+            if len(mount) > best_len:
+                best_info = info
+                best_mount = mount
+                best_len = len(mount)
+
+        if best_info is None:
+            log.error(
+                "Host %s: no mount encloses %s in storage_usage output.",
+                self.host,
+                file_system,
+            )
+            raise FileSystemNotFoundError(hostname=self.host, command="show system storage")
+
+        avail = best_info.get("avail", "")
+        match = _JUNOS_AVAIL_FORMAT_RE.match(str(avail))
+        if match is None:
+            log.error(
+                "Host %s: could not parse avail %r for mount %s.",
+                self.host,
+                avail,
+                best_mount,
+            )
+            raise CommandError(
+                command="show system storage",
+                message=f"Unable to parse available space {avail!r} for {best_mount}.",
+            )
+        size = float(match.group(1))
+        multiplier = _JUNOS_SIZE_UNIT_MULTIPLIERS[match.group(2).upper()]
+        free_bytes = int(size * multiplier)
+        log.debug(
+            "Host %s: %s bytes free on %s (resolved from %s).",
+            self.host,
+            free_bytes,
+            best_mount,
+            file_system,
+        )
+        return free_bytes
 
     def _get_interfaces(self):
         eth_ifaces = EthPortTable(self.native)
@@ -304,10 +429,14 @@ class JunosDevice(BaseDevice):
 
         Raises:
             FileTransferError: Raised when unable to verify file was transferred succesfully.
+            NotEnoughFreeSpaceError: When the target filesystem has fewer free bytes
+                than ``src`` requires.
         """
         if not self.file_copy_remote_exists(src, dest, **kwargs):
             if dest is None:
                 dest = os.path.basename(src)
+
+            self._check_free_space(os.path.getsize(src))
 
             with SCP(self.native) as scp:
                 scp.put(src, remote_path=dest)
@@ -505,11 +634,21 @@ class JunosDevice(BaseDevice):
 
         Args:
             filename (str): The name of the file to check for on the remote device.
-            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are
+                those in ``JUNOS_SUPPORTED_HASHING_ALGORITHMS`` (``md5``, ``sha1``,
+                ``sha256``). Defaults to ``md5``.
 
         Returns:
             (str): The checksum of the remote file or None if the file is not found.
+
+        Raises:
+            ValueError: When ``hashing_algorithm`` is not one Junos implements.
         """
+        if hashing_algorithm.lower() not in JUNOS_SUPPORTED_HASHING_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported hashing algorithm '{hashing_algorithm}' for Junos. "
+                f"Supported algorithms: {sorted(JUNOS_SUPPORTED_HASHING_ALGORITHMS)}"
+            )
         return self.fs.checksum(path=filename, calc=hashing_algorithm)
 
     def compare_file_checksum(self, checksum, filename, hashing_algorithm="md5"):
@@ -525,16 +664,25 @@ class JunosDevice(BaseDevice):
         """
         return checksum == self.get_remote_checksum(filename, hashing_algorithm)
 
-    def remote_file_copy(self, src: FileCopyModel = None, dest=None):
+    def remote_file_copy(self, src: FileCopyModel = None, dest=None, file_system: str | None = None, **kwargs):
         """Copy a file to a remote device.
 
         Args:
             src (FileCopyModel): The source file model.
             dest (str): The destination file path on the remote device.
+            file_system (str, optional): Mount point used for the pre-transfer
+                free-space check. When ``None`` (the default), the probe uses
+                ``_JUNOS_DEFAULT_FILE_SYSTEM`` (``/var/tmp``).
+            **kwargs (Any): Accepted for parity with ``BaseDevice.remote_file_copy``;
+                other drivers may forward extra options.
 
         Raises:
             TypeError: If src is not an instance of FileCopyModel.
             FileTransferError: If there is an error during file transfer or if the file cannot be verified after transfer.
+            NotEnoughFreeSpaceError: If ``src.file_size_bytes`` is set and the
+                target mount point has fewer free bytes than ``src.file_size_bytes``.
+                When ``file_size`` is omitted from ``src`` the pre-transfer space
+                check is skipped entirely.
         """
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
@@ -542,7 +690,15 @@ class JunosDevice(BaseDevice):
         if self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm):
             return
 
-        if not self.fs.cp(from_path=src.download_url, to_path=dest, dev_timeout=src.timeout):
+        self._pre_transfer_space_check(src, file_system=file_system)
+
+        # Junos ``fs.cp`` requires the filename in the URL; append ``src.file_name``
+        # when the URL carries no path so callers can point at a bare host.
+        source_url = src.download_url
+        if not urlparse(source_url).path.strip("/"):
+            source_url = f"{source_url.rstrip('/')}/{src.file_name}"
+
+        if not self.fs.cp(from_path=source_url, to_path=dest, dev_timeout=src.timeout):
             raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}")
 
         # Some devices take a while to sync the filesystem after a copy but netconf returns before the sync completes
