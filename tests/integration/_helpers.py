@@ -19,16 +19,18 @@ PROTOCOL_URL_VARS = {
 }
 
 
-def build_file_copy_model(url_env_var, hashing_algorithm="sha512"):
+def build_file_copy_model(url_env_var):
     """Build a ``FileCopyModel`` from a per-protocol URL env var.
 
-    Calls ``pytest.skip`` if the URL, ``FILE_CHECKSUM``, or ``FILE_SIZE`` env
-    vars are not set. ``hashing_algorithm`` defaults to ``"sha512"`` for EOS
-    / ASA parity; drivers whose devices do not support sha512 (Junos, older
-    IOS) pass their own supported algorithm explicitly.
+    Reads ``FILE_HASH_ALGO`` and ``FILE_CHECKSUM`` from the environment.
+    An autouse fixture in ``conftest.py`` sets both to the running test
+    module's platform default before each module runs, so individual
+    tests never have to hardcode an algorithm. Calls ``pytest.skip`` when
+    any required env var is missing.
     """
     url = os.environ.get(url_env_var)
     checksum = os.environ.get("FILE_CHECKSUM")
+    hashing_algorithm = os.environ.get("FILE_HASH_ALGO", "sha512")
     file_name = os.environ.get("FILE_NAME") or (posixpath.basename(url.split("?")[0]) if url else None)
     file_size = int(os.environ.get("FILE_SIZE", "0"))
     file_size_unit = os.environ.get("FILE_SIZE_UNIT", "bytes")
