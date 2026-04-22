@@ -2074,14 +2074,14 @@ files = [
 
 [[package]]
 name = "scp"
-version = "0.14.5"
+version = "0.15.0"
 description = "scp module for paramiko"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "scp-0.14.5-py2.py3-none-any.whl", hash = "sha256:d224535dd8ed00294f52b0e0e18fde7a6fb7a3d06b97ede9e3f750fa7bf75c09"},
-    {file = "scp-0.14.5.tar.gz", hash = "sha256:64f0015899b3d212cb8088e7d40ebaf0686889ff0e243d5c1242efe8b50f053e"},
+    {file = "scp-0.15.0-py2.py3-none-any.whl", hash = "sha256:9e7f721e5ac563c33eb0831d0f949c6342f1c28c3bdc3b02f39d77b5ea20df7e"},
+    {file = "scp-0.15.0.tar.gz", hash = "sha256:f1b22e9932123ccf17eebf19e0953c6e9148f589f93d91b872941a696305c83f"},
 ]
 
 [package.dependencies]
@@ -2408,4 +2408,4 @@ test = ["coverage", "hypothesis", "pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "2f28ec257d147660458dc4b655c06cfc92fc9cb6f7437f66ae061e7b8cac69d0"
+content-hash = "baf747bb8cbeb41afea46254e1f7d63c4d25fce7ea220b79396fabcd2f9e6977"

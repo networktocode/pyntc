@@ -26,12 +26,12 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.10,<3.15"
 f5-sdk = "^3.0.21"
-junos-eznc = "^2.6"
-netmiko = "^4.0"
-pyeapi = "^1.0.2"
+junos-eznc = ">=2.0,<3.0"
+netmiko = ">=4.0,<5.0"
+pyeapi = ">=1.0,<2.0"
 pynxos = "^0.0.5"
-requests = "^2.28"
-scp = "^0.14"
+requests = ">=2.0,<3.0"
+scp = ">=0.15,<1.0"
 
 [tool.poetry.scripts]
 pyntc = 'pyntc.cli:main'
