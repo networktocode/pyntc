@@ -654,11 +654,12 @@ class F5Device(BaseDevice):
         log.debug("Host %s: Image %s not installed on volume %s.", self.host, image_name, volume)
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=False, **vendor_specifics):
         """Install OS on device.
 
         Args:
             image_name (str): Image name.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to false.
             vendor_specifics (dict): Vendor specific arguments.
 
         Raises:
@@ -667,6 +668,10 @@ class F5Device(BaseDevice):
         Returns:
             (bool): True if image is installed successfully. Otherwise, false.
         """
+        if reboot:
+            # TODO: Implement reboot after OS installation
+            raise NotImplementedError("F5 reboot after OS installation is not supported.")
+
         volume = vendor_specifics.get("volume")
         if not self.image_installed(image_name, volume):
             self._check_free_space(min_space=6)

@@ -5,13 +5,13 @@ import re
 import time
 
 from netmiko import ConnectHandler
-from pynxos.device import Device as NXOSNative
-from pynxos.errors import CLIError
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from requests.exceptions import ConnectTimeout, ReadTimeout
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
+from pyntc.devices.pynxos.device import Device as NXOSNative
+from pyntc.devices.pynxos.errors import CLIError
+from pyntc.devices.pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -600,11 +600,12 @@ class NXOSDevice(BaseDevice):
         )
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Upgrade device with provided image.
 
         Args:
             image_name (str): Name of the image file to upgrade the device to.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options.
 
         Raises:
@@ -617,7 +618,7 @@ class NXOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
-            self.set_boot_options(image_name, **vendor_specifics)
+            self.set_boot_options(image_name, reboot=reboot, **vendor_specifics)
             log.info("Host %s: Waiting for device reload.", self.host)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
@@ -776,12 +777,13 @@ class NXOSDevice(BaseDevice):
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
         return self.native.save(filename=filename)
 
-    def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+    def set_boot_options(self, image_name, kickstart=None, reboot=True, **vendor_specifics):
         """Set boot variables.
 
         Args:
             image_name (str): Main system image file.
             kickstart (str, optional): Kickstart filename. Defaults to None.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options.
 
         Raises:
@@ -805,7 +807,7 @@ class NXOSDevice(BaseDevice):
 
         image_name = file_system + image_name
         try:
-            self.native.set_boot_options(image_name, kickstart=kickstart)
+            self.native.set_boot_options(image_name, kickstart=kickstart, reboot=reboot)
         except (ReadTimeout, ConnectTimeout):
             pass
         log.info("Host %s: boot options have been set to %s", self.host, image_name)

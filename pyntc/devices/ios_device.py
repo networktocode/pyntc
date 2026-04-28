@@ -859,11 +859,12 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, install_mode=False, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
             image_name (str): Name of the IOS image to boot into
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
             vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
@@ -908,6 +909,9 @@ class IOSDevice(BaseDevice):
                         self.reboot()
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
+                if not reboot:
+                    log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                    return True
                 self.reboot()
 
             # Wait for the reboot to finish

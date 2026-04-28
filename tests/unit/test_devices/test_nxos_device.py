@@ -1,10 +1,10 @@
 import unittest
 
 import mock
-from pynxos.errors import CLIError
 
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
+from pyntc.devices.pynxos.errors import CLIError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -35,7 +35,7 @@ DEVICE_FACTS = {
 class TestNXOSDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    @mock.patch("pynxos.device.Device.facts", new_callable=mock.PropertyMock)
+    @mock.patch("pyntc.devices.pynxos.device.Device.facts", new_callable=mock.PropertyMock)
     def setUp(self, mock_facts, mock_device, mock_connect_handler):
         self.mock_native_ssh = mock_connect_handler.return_value
         self.device = NXOSDevice("host", "user", "pass")
@@ -175,16 +175,20 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_set_boot_options(self):
         self.device.set_boot_options(BOOT_IMAGE)
-        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+        self.device.native.set_boot_options.assert_called_with(
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        )
 
     def test_set_boot_options_dir(self):
         self.device.set_boot_options(BOOT_IMAGE, file_system=FILE_SYSTEM)
-        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+        self.device.native.set_boot_options.assert_called_with(
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        )
 
     def test_set_boot_options_kickstart(self):
         self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
         self.device.native.set_boot_options.assert_called_with(
-            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}"
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}", reboot=True
         )
 
     @mock.patch.object(NXOSDevice, "show", return_value=FILE_SYSTEM)
@@ -251,7 +255,7 @@ class TestNXOSDevice(unittest.TestCase):
         model = self.device.model
         assert model == "Nexus9000 C9396PX Chassis"
 
-    @mock.patch("pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
+    @mock.patch("pyntc.devices.pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
     def test_running_config(self, mock_rc):
         type(self.device.native).running_config = mock_rc
         self.device.running_config()
