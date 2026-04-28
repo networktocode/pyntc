@@ -6,8 +6,6 @@ from requests.auth import HTTPBasicAuth
 
 from pyntc.devices.pynxos.errors import NXOSError
 
-# requests.packages.urllib3.disable_warnings()
-
 
 class RPCClient(object):
     def __init__(self, host, username, password, transport="http", port=None, verify=True):

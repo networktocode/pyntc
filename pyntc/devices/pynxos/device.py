@@ -392,12 +392,3 @@ class Device(object):
 
         self._facts = facts
         return facts
-
-
-#    def feature(self, feature_name):
-#        try:
-#            feature_module = importlib.import_module(
-#                'pynxos.features.%s' % (feature_name))
-#            return feature_module.instance(self)
-#        except ImportError:
-#            raise FeatureNotFoundError(feature_name, self.device_type)

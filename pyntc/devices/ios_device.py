@@ -895,6 +895,11 @@ class IOSDevice(BaseDevice):
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
+            if install_mode and not reboot:
+                raise ValueError(
+                    "IOS devices automatically reboot after installation when using install mode but the reboot argument was set to false."
+                )
+
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
