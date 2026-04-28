@@ -5,7 +5,7 @@ from pathlib import Path
 import mkdocs_gen_files
 
 EXCLUDE_PATHS = {
-    "pyntc/devices/pynxos",
+    "pyntc/devices/pynxos",  # Exclude vendored package pynxos
 }
 
 for file_path in Path("pyntc").rglob("*.py"):
