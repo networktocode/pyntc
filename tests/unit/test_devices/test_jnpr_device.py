@@ -7,8 +7,33 @@ import pytest
 from jnpr.junos.exception import ConfigLoadError
 
 from pyntc.devices import JunosDevice
-from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, RebootTimeoutError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    NotEnoughFreeSpaceError,
+    OSInstallError,
+    RebootTimeoutError,
+)
 from pyntc.utils.models import FileCopyModel
+
+# Shared fake storage_usage() return value so tests exercising file_copy and
+# remote_file_copy do not trip the new pre-transfer free-space probe. "10G"
+# on /var/tmp is plenty of room for the tiny temp files and fake file sizes
+# these tests use.
+STORAGE_USAGE_PLENTY = {
+    "/dev/ad0s1f": {
+        "mount": "/var/tmp",
+        "total": "10G",
+        "total_blocks": 20971520,
+        "used": "0B",
+        "used_blocks": 0,
+        "used_pct": "0%",
+        "avail": "10G",
+        "avail_block": 20971520,
+    },
+}
 
 DEVICE_FACTS = {
     "domain": "ntc.com",
@@ -209,6 +234,7 @@ class TestJnprDevice(unittest.TestCase):
 
         local_checksum = "4a8ec4fa5f01b4ab1a0ab8cbccb709f0"
         self.device.fs.checksum.side_effect = ["", local_checksum]
+        self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
         self.device.file_copy(temp_file.name, "dest")
         mock_scp.assert_called_with(self.device.native)
 
@@ -388,6 +414,7 @@ class TestJnprDevice(unittest.TestCase):
         )
 
         self.device.fs.cp.return_value = True
+        self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
 
         with mock.patch.object(self.device, "verify_file") as mock_verify_file:
             with self.subTest("invalid src argument"):
@@ -468,6 +495,176 @@ class TestJnprDevice(unittest.TestCase):
                 mock_compare_file_checksum.return_value = True
                 result = self.device.verify_file(checksum, filename, hashing_algorithm=hashing_algorithm)
                 self.assertTrue(result)
+
+    def test_get_remote_checksum_rejects_unsupported_algorithm(self):
+        """Junos does not implement sha512; the driver rejects it at the boundary."""
+        with self.assertRaises(ValueError) as ctx:
+            self.device.get_remote_checksum("file.bin", hashing_algorithm="sha512")
+        assert "sha512" in str(ctx.exception)
+        self.device.fs.checksum.assert_not_called()
+
+
+class TestJnprFreeSpace(unittest.TestCase):
+    """Tests for JunOS pre-transfer free-space verification (NAPPS-1085)."""
+
+    def setUp(self):
+        self.mock_sw = mock.patch("pyntc.devices.jnpr_device.JunosNativeSW", autospec=True)
+        self.mock_fs = mock.patch("pyntc.devices.jnpr_device.JunosNativeFS", autospec=True)
+        self.mock_config = mock.patch("pyntc.devices.jnpr_device.JunosNativeConfig", autospec=True)
+        self.mock_device = mock.patch("pyntc.devices.jnpr_device.JunosNativeDevice", autospec=True)
+
+        self.mock_sw.start()
+        self.mock_fs.start()
+        self.mock_config.start()
+        self.mock_device.start()
+
+        self.device = JunosDevice("host", "user", "pass")
+        self.device.native.facts = DEVICE_FACTS
+
+    def tearDown(self):
+        self.mock_sw.stop()
+        self.mock_fs.stop()
+        self.mock_config.stop()
+        self.mock_device.stop()
+
+    def test_get_free_space_parses_avail_format(self):
+        """_get_free_space returns the bytes value parsed from the avail format string."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "1.0G"},
+        }
+        self.assertEqual(self.device._get_free_space(), 1024**3)
+
+    def test_get_free_space_honours_file_system_argument(self):
+        """_get_free_space uses the mount argument instead of the /var/tmp default."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1a": {"mount": "/", "avail": "500M"},
+            "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "1.0G"},
+        }
+        self.assertEqual(self.device._get_free_space(file_system="/"), 500 * 1024**2)
+
+    def test_get_free_space_falls_back_to_root_mount(self):
+        """When the requested mount is absent, fall back to the enclosing ``/`` mount."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1a": {"mount": "/", "avail": "500M"},
+        }
+        # /var/tmp is not a mount here; / is the longest prefix and wins.
+        self.assertEqual(self.device._get_free_space(), 500 * 1024**2)
+
+    def test_get_free_space_longest_prefix_match_wins(self):
+        """When multiple mounts enclose the path, the most specific one wins."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1a": {"mount": "/", "avail": "500M"},
+            "/dev/ad0s1f": {"mount": "/var", "avail": "2.0G"},
+        }
+        # /var/tmp is under /var (not its own mount); /var is more specific than /.
+        self.assertEqual(self.device._get_free_space(), 2 * 1024**3)
+
+    def test_get_free_space_does_not_match_prefix_that_is_not_a_directory_boundary(self):
+        """A mount named ``/vari`` must not match ``/var/tmp`` as a prefix."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1a": {"mount": "/vari", "avail": "2.0G"},
+            "/dev/ad0s1b": {"mount": "/", "avail": "500M"},
+        }
+        # /var/tmp must fall through to / — it does NOT live under /vari.
+        self.assertEqual(self.device._get_free_space(), 500 * 1024**2)
+
+    def test_get_free_space_raises_when_no_mount_matches(self):
+        """_get_free_space raises FileSystemNotFoundError when storage_usage is empty."""
+        self.device.fs.storage_usage.return_value = {}
+        with self.assertRaises(FileSystemNotFoundError):
+            self.device._get_free_space()
+
+    def test_get_free_space_raises_on_unparseable_avail(self):
+        """_get_free_space raises CommandError when the avail format cannot be parsed."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "garbage"},
+        }
+        with self.assertRaises(CommandError):
+            self.device._get_free_space()
+
+    @mock.patch("pyntc.devices.jnpr_device.os.path.getsize", return_value=10**12)
+    @mock.patch("pyntc.devices.jnpr_device.SCP")
+    def test_file_copy_raises_not_enough_free_space(self, mock_scp, _getsize):
+        """file_copy raises NotEnoughFreeSpaceError and never runs SCP.put()."""
+        self.device.fs.checksum.return_value = ""  # file_copy_remote_exists -> False
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "10M"},
+        }
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.file_copy("path/to/image.bin", "dest")
+        mock_scp.assert_not_called()
+
+    def test_remote_file_copy_raises_not_enough_free_space(self):
+        """remote_file_copy raises NotEnoughFreeSpaceError and never invokes fs.cp."""
+        self.device.fs.storage_usage.return_value = {
+            "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "10M"},
+        }
+        oversized = FileCopyModel(
+            download_url="ftp://example.com/file.bin",
+            checksum="c0ffee",
+            file_name="file.bin",
+            file_size=1,
+            file_size_unit="gigabytes",
+        )
+        with mock.patch.object(self.device, "verify_file", return_value=False):
+            with self.assertRaises(NotEnoughFreeSpaceError):
+                self.device.remote_file_copy(oversized, dest="/var/tmp/file.bin")
+        self.device.fs.cp.assert_not_called()
+
+    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self):
+        """When FileCopyModel has no file_size, _check_free_space is NOT called."""
+        self.device.fs.cp.return_value = True
+        model = FileCopyModel(
+            download_url="ftp://example.com/file.bin",
+            checksum="c0ffee",
+            file_name="file.bin",
+        )
+        self.assertIsNone(model.file_size_bytes)
+        with (
+            mock.patch.object(self.device, "verify_file", side_effect=[False, True]),
+            mock.patch.object(JunosDevice, "_check_free_space") as mock_check,
+        ):
+            self.device.remote_file_copy(model, dest="/var/tmp/file.bin")
+        mock_check.assert_not_called()
+        self.device.fs.cp.assert_called_once()
+
+    def test_remote_file_copy_appends_filename_when_url_has_no_path(self):
+        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before ``fs.cp``."""
+        self.device.fs.cp.return_value = True
+        self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        model = FileCopyModel(
+            download_url="ftp://ntc:pw@10.1.100.220",  # no path
+            checksum="c0ffee",
+            file_name="image.bin",
+            file_size=1,
+            file_size_unit="megabytes",
+        )
+        with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
+            self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
+        self.device.fs.cp.assert_called_once_with(
+            from_path="ftp://ntc:pw@10.1.100.220/image.bin",
+            to_path="/var/tmp/image.bin",
+            dev_timeout=mock.ANY,
+        )
+
+    def test_remote_file_copy_keeps_url_intact_when_path_is_present(self):
+        """When the URL already contains a path, ``fs.cp`` receives it unchanged."""
+        self.device.fs.cp.return_value = True
+        self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        model = FileCopyModel(
+            download_url="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
+            checksum="c0ffee",
+            file_name="image.bin",
+            file_size=1,
+            file_size_unit="megabytes",
+        )
+        with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
+            self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
+        self.device.fs.cp.assert_called_once_with(
+            from_path="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
+            to_path="/var/tmp/image.bin",
+            dev_timeout=mock.ANY,
+        )
 
 
 if __name__ == "__main__":

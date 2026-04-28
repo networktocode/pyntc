@@ -279,6 +279,7 @@ class NXOSDevice(BaseDevice):
         """
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
+            self._check_free_space(os.path.getsize(src), file_system=file_system)
             try:
                 file_copy = self.native.file_copy(  # pylint: disable=assignment-from-no-return
                     src, dest, file_system=file_system
@@ -336,6 +337,22 @@ class NXOSDevice(BaseDevice):
 
         log.debug("Host %s: File system %s.", self.host, file_system)
         return file_system
+
+    def _get_free_space(self, file_system=None):
+        """Return free bytes on ``file_system`` as reported by NXOS ``dir`` output."""
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        raw_data = self.show(f"dir {file_system}", raw_text=True)
+        # Example NXOS dir output: 47171194880 bytes free
+        match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
+        if match is None:
+            log.error("Host %s: could not parse free space from '%s'.", self.host, f"dir {file_system}")
+            raise CommandError(command=f"dir {file_system}", message="Unable to parse free space from dir output.")
+
+        free_bytes = int(match.group(1))
+        log.debug("Host %s: %s bytes free on %s.", self.host, free_bytes, file_system)
+        return free_bytes
 
     @staticmethod
     def _netloc(src: FileCopyModel) -> str:
@@ -511,6 +528,7 @@ class NXOSDevice(BaseDevice):
             file_system,
         )
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            self._pre_transfer_space_check(src, file_system)
             current_prompt = self.native_ssh.find_prompt()
 
             # Define prompt mapping for expected prompts during file copy

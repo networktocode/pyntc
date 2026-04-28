@@ -138,6 +138,39 @@ class ASADevice(BaseDevice):
         log.debug("Host %s: File system %s.", self.host, file_system)
         return file_system
 
+    def _get_free_space(self, file_system=None):  # pylint: disable=unused-argument
+        """Return free bytes on ``file_system`` as reported by ASA's ``dir`` output.
+
+        ASA exposes a single flash filesystem in practice and ``dir`` always prints
+        a ``<total> bytes total (<free> bytes free...)`` trailer as the last line.
+        Real platforms append an ``/<pct>% free`` suffix inside the parentheses
+        (e.g., ``(3580170240 bytes free/86% free)``); older releases and some
+        emulators omit it. The regex matches both shapes. The ``file_system``
+        argument is accepted for API parity with other drivers but is otherwise
+        unused.
+
+        Args:
+            file_system (str, optional): Ignored; retained for BaseDevice API parity.
+
+        Returns:
+            int: Free bytes available on the target filesystem.
+
+        Raises:
+            CommandError: When the ``dir`` output does not contain a parseable
+                ``N bytes free`` trailer.
+        """
+        raw_data = self.show("dir")
+        # Examples seen in the wild:
+        #   16777216 bytes total (1592488 bytes free)
+        #   4118732800 bytes total (3580170240 bytes free/86% free)
+        match = re.search(r"\((\d+)\s+bytes\s+free", raw_data)
+        if match is None:
+            log.error("Host %s: could not parse free space from 'dir' output.", self.host)
+            raise CommandError(command="dir", message="Unable to parse free space from dir output.")
+        free_bytes = int(match.group(1))
+        log.debug("Host %s: %s bytes free on flash.", self.host, free_bytes)
+        return free_bytes
+
     def _get_ipv4_addresses(self, host: str) -> Dict[str, List[IPv4Address]]:
         """
         Get IPv4 Addresses for ``host``.
@@ -555,6 +588,8 @@ class ASADevice(BaseDevice):
 
         Raises:
             FileTransferError: When the ``src`` file is unable to transfer the file to any device.
+            NotEnoughFreeSpaceError: When ``file_system`` has fewer free bytes than
+                ``src`` requires.
 
         Example:
             >>> dev = ASADevice(**connection_args)
@@ -565,6 +600,8 @@ class ASADevice(BaseDevice):
 
         if file_system is None:
             file_system = self._get_file_system()
+
+        self._check_free_space(os.path.getsize(src), file_system=file_system)
 
         # netmiko's enable_scp
         self.enable_scp()
@@ -1022,6 +1059,10 @@ class ASADevice(BaseDevice):
         Raises:
             TypeError: If ``src`` is not a ``FileCopyModel`` instance.
             FileTransferError: If the transfer fails or the file cannot be verified afterwards.
+            NotEnoughFreeSpaceError: If ``src.file_size_bytes`` is set and
+                ``file_system`` has fewer free bytes than ``src.file_size_bytes``.
+                When ``file_size`` is omitted from ``src``, the pre-transfer space
+                check is skipped entirely.
         """
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
@@ -1032,6 +1073,7 @@ class ASADevice(BaseDevice):
             dest = src.file_name
 
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            self._pre_transfer_space_check(src, file_system=file_system)
             current_prompt = self.native.find_prompt()
             prompt_answers = {
                 r"Password": src.token or "",
