@@ -1,1 +1,0 @@
-Added a pre-transfer free-space check to Cisco ASA ``file_copy`` and ``remote_file_copy`` that raises ``NotEnoughFreeSpaceError`` when the target filesystem lacks room for the image.
