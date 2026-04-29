@@ -1,3 +1,0 @@
-Fixed ``ASADevice._get_file_system`` to use ``re.search`` instead of ``re.match`` so the filesystem label is correctly parsed regardless of leading whitespace in ``dir`` output.
-Fixed ``ASADevice._send_command`` to anchor the ``%`` error pattern to the start of a line (``^% ``) to prevent false-positive ``CommandError`` raises during file copy operations.
-Fixed ``ASADevice.active_redundancy_states`` to include ``"disabled"`` so standalone (non-failover) units are correctly treated as active.
