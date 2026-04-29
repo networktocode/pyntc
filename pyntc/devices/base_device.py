@@ -450,11 +450,12 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Install the OS from specified image_name.
 
         Args:
             image_name (str): The name of the image on the device to install.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
 
         Keyword Args:
             kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.

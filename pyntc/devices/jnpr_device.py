@@ -467,11 +467,12 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, checksum, hashing_algorithm="md5"):
+    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5"):
         """Install OS on device and reboot.
 
         Args:
             image_name (str): Name of image.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             checksum (str): The checksum of the file.
             hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
 
@@ -492,6 +493,10 @@ class JunosDevice(BaseDevice):
 
         if not install_ok:
             raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+        if not reboot:
+            log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+            return True
 
         self.reboot(wait_for_reload=True)
 

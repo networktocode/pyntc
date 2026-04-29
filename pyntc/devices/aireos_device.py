@@ -971,12 +971,15 @@ class AIREOSDevice(BaseDevice):
         hostname_string = hostname.group(1)
         return hostname_string
 
-    def install_os(self, image_name, controller="both", save_config=True, disable_wlans=None, **vendor_specifics):
+    def install_os(
+        self, image_name, reboot=True, controller="both", save_config=True, disable_wlans=None, **vendor_specifics
+    ):
         """
         Install an operating system on the controller.
 
         Args:
             image_name (str): The version to install on the device.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             controller (str): The controller(s) to reboot for install (only applies to HA device).
             save_config (bool): Whether the config should be saved to the device before reboot.
             disable_wlans (str|list): Which WLANs to disable/enable before/after upgrade. Default is None.
@@ -1014,6 +1017,9 @@ class AIREOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             peer_redundancy = self.peer_redundancy_state
             self.set_boot_options(image_name, **vendor_specifics)
+            if not reboot:
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
             if disable_wlans is not None:
                 self.disable_wlans(disable_wlans)
             self.reboot(controller=controller, save_config=save_config)

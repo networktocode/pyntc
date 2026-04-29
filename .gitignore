@@ -309,3 +309,6 @@ public
 /compose.yaml
 /dump.sql
 /pyntc/static/pyntc/docs
+
+# Exception for pynxos/lib
+!/pyntc/devices/pynxos/lib/

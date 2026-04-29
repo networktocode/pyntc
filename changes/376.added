@@ -1,0 +1,2 @@
+Added reboot flag to Device.install_os for supported platforms.
+Vendored pynxos library and added reboot flag to Device.set_boot_options.

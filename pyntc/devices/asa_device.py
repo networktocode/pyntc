@@ -685,12 +685,13 @@ class ASADevice(BaseDevice):
         log.error("Host %s: Unable to parse checksum for %s from output: %s", self.host, filename, result)
         raise CommandError(cmd, f"Unable to parse checksum for {filename}")
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """
         Install OS on device.
 
         Args:
             image_name (str): Name of the image to be installed.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific arguments to pass to the install process.
 
         Raises:
@@ -702,6 +703,9 @@ class ASADevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
+            if not reboot:
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
             self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):

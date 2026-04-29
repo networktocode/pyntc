@@ -715,11 +715,12 @@ class EOSDevice(BaseDevice):
         )
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Install new OS on device.
 
         Args:
             image_name (str): Name of the image name to be installed.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options for installing OS, such as timeout.
 
         Raises:
@@ -731,6 +732,9 @@ class EOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
+            if not reboot:
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
             self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
