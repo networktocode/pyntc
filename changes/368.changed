@@ -1,8 +1,0 @@
-Improved EOS remote file copy to validate scheme and query strings before connecting, use `clean_url` to prevent credential leakage, and simplify credential routing.
-Changed copy command builders to include the source file path in the URL and use `flash:` as the destination, matching EOS CLI conventions.
-Fixed `_uptime_to_string` to use integer division, preventing `ValueError` on format specifiers.
-Fixed `check_file_exists` and `get_remote_checksum` to open the SSH connection before use, preventing `AttributeError` when called standalone.
-Fixed password-prompt handling in `remote_file_copy` to wait for the transfer to complete before proceeding to verification.
-Simplified checksum parsing in `get_remote_checksum` to use string splitting instead of regex.
-Changed `verify_file` to return early when file does not exist and use case-insensitive checksum comparison.
-Removed `include_username` parameter from `remote_file_copy` in favor of automatic credential routing based on scheme and username presence.
