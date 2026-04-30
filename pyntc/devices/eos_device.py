@@ -88,6 +88,34 @@ class EOSDevice(BaseDevice):
         log.debug("Host %s: File copy instance %s.", self.host, file_copy)
         return file_copy
 
+    def _get_free_space(self, file_system=None):  # pylint: disable=unused-argument
+        """Return free bytes on ``file_system`` as reported by Arista's ``dir`` output.
+
+        EOS only exposes a single flash filesystem in practice, and ``dir`` always
+        prints ``<total> bytes total (<free> bytes free)`` as the last line, so the
+        ``file_system`` argument is accepted for API parity with other drivers but is
+        otherwise unused.
+
+        Args:
+            file_system (str, optional): Ignored; retained for BaseDevice API parity.
+
+        Returns:
+            int: Free bytes available on the target filesystem.
+
+        Raises:
+            CommandError: When the ``dir`` output does not contain a parseable
+                ``(N bytes free)`` trailer.
+        """
+        raw_data = self.show("dir", raw_text=True)
+        # Example: 3634421760 bytes total (1951289344 bytes free)
+        match = re.search(r"\((\d+)\s+bytes\s+free\)", raw_data)
+        if match is None:
+            log.error("Host %s: could not parse free space from 'dir' output.", self.host)
+            raise CommandError(command="dir", message="Unable to parse free space from dir output.")
+        free_bytes = int(match.group(1))
+        log.debug("Host %s: %s bytes free on flash.", self.host, free_bytes)
+        return free_bytes
+
     def _get_file_system(self):
         """Determine the default file system or directory for device.
 
@@ -371,6 +399,8 @@ class EOSDevice(BaseDevice):
 
         Raises:
             FileTransferError: raise exception if there is an error
+            NotEnoughFreeSpaceError: When ``file_system`` has fewer free bytes than
+                ``src`` requires.
         """
         self.open()
         self.enable()
@@ -379,6 +409,7 @@ class EOSDevice(BaseDevice):
             file_system = self._get_file_system()
 
         if not self.file_copy_remote_exists(src, dest, file_system):
+            self._check_free_space(os.path.getsize(src), file_system=file_system)
             file_copy = self._file_copy_instance(src, dest, file_system=file_system)
 
             try:
@@ -584,6 +615,10 @@ class EOSDevice(BaseDevice):
             ValueError: If the URL scheme is unsupported or URL contains query strings.
             FileTransferError: If transfer or verification fails.
             FileSystemNotFoundError: If filesystem cannot be determined.
+            NotEnoughFreeSpaceError: If ``src.file_size_bytes`` is set and
+                ``file_system`` has fewer free bytes than ``src.file_size_bytes``.
+                When ``file_size`` is omitted from ``src``, the pre-transfer space
+                check is skipped entirely.
         """
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
@@ -605,6 +640,8 @@ class EOSDevice(BaseDevice):
 
         self.open()
         self.enable()
+
+        self._pre_transfer_space_check(src, file_system)
 
         if src.scheme == "tftp" or src.username is None:
             command, detect_prompt = self._build_url_copy_command_simple(src, file_system, dest)
@@ -678,11 +715,12 @@ class EOSDevice(BaseDevice):
         )
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Install new OS on device.
 
         Args:
             image_name (str): Name of the image name to be installed.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options for installing OS, such as timeout.
 
         Raises:
@@ -694,6 +732,9 @@ class EOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
+            if not reboot:
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
             self.reboot()
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):

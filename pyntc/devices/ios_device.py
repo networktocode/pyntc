@@ -141,6 +141,22 @@ class IOSDevice(BaseDevice):
         log.error("host %s: File system not found with command 'dir'.")
         raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
+    def _get_free_space(self, file_system=None):
+        """Return free bytes on ``file_system`` as reported by IOS ``dir`` output."""
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        raw_data = self.show(f"dir {file_system}")
+        # Example: 16777216 bytes total (1592488 bytes free)
+        match = re.search(r"\((\d+)\s+bytes\s+free\)", raw_data)
+        if match is None:
+            log.error("Host %s: could not parse free space from '%s'.", self.host, f"dir {file_system}")
+            raise CommandError(command=f"dir {file_system}", message="Unable to parse free space from dir output.")
+
+        free_bytes = int(match.group(1))
+        log.debug("Host %s: %s bytes free on %s.", self.host, free_bytes, file_system)
+        return free_bytes
+
     # Get the version of the image that is booted into on the device
     def _image_booted(self, image_name, image_pattern=r".*\.(\d+\.\d+\.\w+)\.SPA.+", **vendor_specifics):
         version_data = self.show("show version")
@@ -730,6 +746,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Local checksum for file %s is %s.", self.host, src, local_checksum)
 
         if not self.verify_file(local_checksum, dest, file_system=file_system):
+            self._check_free_space(os.path.getsize(src), file_system=file_system)
             file_copy = self._file_copy_instance(src, dest, file_system=file_system)
             #        if not self.fc.verify_space_available():
             #            raise FileTransferError('Not enough space available.')
@@ -786,6 +803,7 @@ class IOSDevice(BaseDevice):
         if dest is None:
             dest = src.file_name
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            self._pre_transfer_space_check(src, file_system)
             current_prompt = self.native.find_prompt()
 
             # Define prompt mapping for expected prompts during file copy
@@ -859,11 +877,12 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def install_os(self, image_name, install_mode=False, read_timeout=2000, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, install_mode=False, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
             image_name (str): Name of the IOS image to boot into
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
             vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
@@ -876,6 +895,11 @@ class IOSDevice(BaseDevice):
         """
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
+            if install_mode and not reboot:
+                raise ValueError(
+                    "IOS devices automatically reboot after installation when using install mode but the reboot argument was set to false."
+                )
+
             if install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
@@ -908,6 +932,9 @@ class IOSDevice(BaseDevice):
                         self.reboot()
             else:
                 self.set_boot_options(image_name, **vendor_specifics)
+                if not reboot:
+                    log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                    return True
                 self.reboot()
 
             # Wait for the reboot to finish

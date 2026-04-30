@@ -206,15 +206,23 @@ class WaitingRebootTimeoutError(NTCError):
 class NotEnoughFreeSpaceError(NTCError):
     """Error for not having enough free space to transfer a file."""
 
-    def __init__(self, hostname, min_space):
+    def __init__(self, hostname, min_space=None, *, required=None, available=None, file_system=None):
         """
         Error for not having enough free space to transfer a file.
 
         Args:
-            hostname (str): The hostname of the device that did not boot back up.
-            min_space (str): The minimum amount of space required to transfer the file.
+            hostname (str): The hostname of the device being checked.
+            min_space (str, optional): The minimum amount of space required. Retained for
+                backward compatibility with callers that only know the required value.
+            required (int, optional): Required bytes for the pending transfer.
+            available (int, optional): Free bytes currently available on the target filesystem.
+            file_system (str, optional): The target filesystem that was checked.
         """
-        message = f"{hostname} does not meet the minimum disk space requirements of {min_space}"
+        if required is not None and available is not None:
+            location = f"{file_system} " if file_system else ""
+            message = f"{hostname}: {location}has {available} bytes free; {required} bytes required for transfer"
+        else:
+            message = f"{hostname} does not meet the minimum disk space requirements of {min_space}"
         super().__init__(message)
 
 

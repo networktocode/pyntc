@@ -38,11 +38,12 @@ class IOSXEWLCDevice(IOSDevice):
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
-    def install_os(self, image_name, read_timeout=2000, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
             image_name (str): Name of the IOS image to boot into
+            reboot (bool): This platform automatically reboots after installation. Setting reboot to false will raise an exception.
             read_timeout (int): Timeout for reading the output of the command.
             vendor_specifics (dict): Vendor specific options.
 
@@ -52,6 +53,9 @@ class IOSXEWLCDevice(IOSDevice):
         Returns:
             (bool): False if no install is needed, true if the install completes successfully
         """
+        if not reboot:
+            raise ValueError("IOSXE WLC devices automatically reboot after installation. This cannot be disabled.")
+
         timeout = vendor_specifics.get("timeout", 5400)
         if not self._image_booted(image_name):
             # Change boot statement to be boot system <flash>:packages.conf

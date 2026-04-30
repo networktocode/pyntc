@@ -5,13 +5,13 @@ import re
 import time
 
 from netmiko import ConnectHandler
-from pynxos.device import Device as NXOSNative
-from pynxos.errors import CLIError
-from pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from requests.exceptions import ConnectTimeout, ReadTimeout
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
+from pyntc.devices.pynxos.device import Device as NXOSNative
+from pyntc.devices.pynxos.errors import CLIError
+from pyntc.devices.pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -279,6 +279,7 @@ class NXOSDevice(BaseDevice):
         """
         if not self.file_copy_remote_exists(src, dest, file_system):
             dest = dest or os.path.basename(src)
+            self._check_free_space(os.path.getsize(src), file_system=file_system)
             try:
                 file_copy = self.native.file_copy(  # pylint: disable=assignment-from-no-return
                     src, dest, file_system=file_system
@@ -336,6 +337,22 @@ class NXOSDevice(BaseDevice):
 
         log.debug("Host %s: File system %s.", self.host, file_system)
         return file_system
+
+    def _get_free_space(self, file_system=None):
+        """Return free bytes on ``file_system`` as reported by NXOS ``dir`` output."""
+        if file_system is None:
+            file_system = self._get_file_system()
+
+        raw_data = self.show(f"dir {file_system}", raw_text=True)
+        # Example NXOS dir output: 47171194880 bytes free
+        match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
+        if match is None:
+            log.error("Host %s: could not parse free space from '%s'.", self.host, f"dir {file_system}")
+            raise CommandError(command=f"dir {file_system}", message="Unable to parse free space from dir output.")
+
+        free_bytes = int(match.group(1))
+        log.debug("Host %s: %s bytes free on %s.", self.host, free_bytes, file_system)
+        return free_bytes
 
     @staticmethod
     def _netloc(src: FileCopyModel) -> str:
@@ -511,6 +528,7 @@ class NXOSDevice(BaseDevice):
             file_system,
         )
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            self._pre_transfer_space_check(src, file_system)
             current_prompt = self.native_ssh.find_prompt()
 
             # Define prompt mapping for expected prompts during file copy
@@ -600,11 +618,12 @@ class NXOSDevice(BaseDevice):
         )
         return False
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Upgrade device with provided image.
 
         Args:
             image_name (str): Name of the image file to upgrade the device to.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options.
 
         Raises:
@@ -617,7 +636,7 @@ class NXOSDevice(BaseDevice):
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
-            self.set_boot_options(image_name, **vendor_specifics)
+            self.set_boot_options(image_name, reboot=reboot, **vendor_specifics)
             log.info("Host %s: Waiting for device reload.", self.host)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
@@ -776,12 +795,13 @@ class NXOSDevice(BaseDevice):
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
         return self.native.save(filename=filename)
 
-    def set_boot_options(self, image_name, kickstart=None, **vendor_specifics):
+    def set_boot_options(self, image_name, kickstart=None, reboot=True, **vendor_specifics):
         """Set boot variables.
 
         Args:
             image_name (str): Main system image file.
             kickstart (str, optional): Kickstart filename. Defaults to None.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             vendor_specifics (dict): Vendor specific options.
 
         Raises:
@@ -805,7 +825,7 @@ class NXOSDevice(BaseDevice):
 
         image_name = file_system + image_name
         try:
-            self.native.set_boot_options(image_name, kickstart=kickstart)
+            self.native.set_boot_options(image_name, kickstart=kickstart, reboot=reboot)
         except (ReadTimeout, ConnectTimeout):
             pass
         log.info("Host %s: boot options have been set to %s", self.host, image_name)

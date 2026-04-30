@@ -1,15 +1,16 @@
 import unittest
 
 import mock
-from pynxos.errors import CLIError
 
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
+from pyntc.devices.pynxos.errors import CLIError
 from pyntc.errors import (
     CommandError,
     CommandListError,
     FileSystemNotFoundError,
     FileTransferError,
+    NotEnoughFreeSpaceError,
     NTCFileNotFoundError,
 )
 from pyntc.utils.models import FileCopyModel
@@ -35,7 +36,7 @@ DEVICE_FACTS = {
 class TestNXOSDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    @mock.patch("pynxos.device.Device.facts", new_callable=mock.PropertyMock)
+    @mock.patch("pyntc.devices.pynxos.device.Device.facts", new_callable=mock.PropertyMock)
     def setUp(self, mock_facts, mock_device, mock_connect_handler):
         self.mock_native_ssh = mock_connect_handler.return_value
         self.device = NXOSDevice("host", "user", "pass")
@@ -139,14 +140,18 @@ class TestNXOSDevice(unittest.TestCase):
             "source_file", "dest_file", file_system=FILE_SYSTEM
         )
 
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
-    def test_file_copy(self, mock_fcre):
+    def test_file_copy(self, mock_fcre, mock_getsize, mock_get_free_space):
         self.device.file_copy("source_file", "dest_file")
         self.device.native.file_copy.assert_called_with("source_file", "dest_file", file_system=FILE_SYSTEM)
         self.device.native.file_copy.assert_called()
 
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
-    def test_file_copy_no_dest(self, mock_fcre):
+    def test_file_copy_no_dest(self, mock_fcre, mock_getsize, mock_get_free_space):
         self.device.file_copy("source_file")
         self.device.native.file_copy.assert_called_with("source_file", "source_file", file_system=FILE_SYSTEM)
         self.device.native.file_copy.assert_called()
@@ -156,11 +161,21 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.file_copy("source_file", "dest_file")
         self.device.native.file_copy.assert_not_called()
 
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, False])
-    def test_file_copy_fail(self, mock_fcre):
+    def test_file_copy_fail(self, mock_fcre, mock_getsize, mock_get_free_space):
         with self.assertRaises(FileTransferError):
             self.device.file_copy("source_file")
         self.device.native.file_copy.assert_called()
+
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024)  # Only 1KB free
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024 * 1024)  # Trying to copy 1MB
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False])
+    def test_file_copy_raises_not_enough_free_space(self, mock_fcre, mock_getsize, mock_get_free_space):
+        """Test file_copy raises NotEnoughFreeSpaceError when insufficient space."""
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.file_copy("source_file")
 
     def test_reboot(self):
         self.device.reboot()
@@ -175,16 +190,20 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_set_boot_options(self):
         self.device.set_boot_options(BOOT_IMAGE)
-        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+        self.device.native.set_boot_options.assert_called_with(
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        )
 
     def test_set_boot_options_dir(self):
         self.device.set_boot_options(BOOT_IMAGE, file_system=FILE_SYSTEM)
-        self.device.native.set_boot_options.assert_called_with(f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None)
+        self.device.native.set_boot_options.assert_called_with(
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        )
 
     def test_set_boot_options_kickstart(self):
         self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
         self.device.native.set_boot_options.assert_called_with(
-            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}"
+            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}", reboot=True
         )
 
     @mock.patch.object(NXOSDevice, "show", return_value=FILE_SYSTEM)
@@ -251,7 +270,7 @@ class TestNXOSDevice(unittest.TestCase):
         model = self.device.model
         assert model == "Nexus9000 C9396PX Chassis"
 
-    @mock.patch("pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
+    @mock.patch("pyntc.devices.pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
     def test_running_config(self, mock_rc):
         type(self.device.native).running_config = mock_rc
         self.device.running_config()
@@ -277,6 +296,41 @@ class TestNXOSDevice(unittest.TestCase):
         with self.assertRaises(FileSystemNotFoundError):
             self.device._get_file_system()
         mock_show.assert_called_with("dir", raw_text=True)
+
+    @mock.patch.object(NXOSDevice, "show")
+    def test_get_free_space(self, mock_show):
+        """Test _get_free_space parses NXOS dir output correctly."""
+        # NXOS dir output format with free space at the end
+        mock_show.return_value = """Directory of bootflash:/
+4096         Mar 03 22:47:15 2026  .rpmstore/
+4733329408   bytes used
+47171194880  bytes free
+51904524288  bytes total
+
+"""
+        result = self.device._get_free_space()
+        self.assertEqual(result, 47171194880)
+        mock_show.assert_called_with("dir bootflash:", raw_text=True)
+
+    @mock.patch.object(NXOSDevice, "show")
+    def test_get_free_space_with_custom_filesystem(self, mock_show):
+        """Test _get_free_space uses custom file system when provided."""
+        mock_show.return_value = """Directory of disk0:/
+1000000      bytes used
+2000000      bytes free
+3000000      bytes total
+
+"""
+        result = self.device._get_free_space("disk0:")
+        self.assertEqual(result, 2000000)
+        mock_show.assert_called_with("dir disk0:", raw_text=True)
+
+    @mock.patch.object(NXOSDevice, "show")
+    def test_get_free_space_raises_on_parse_error(self, mock_show):
+        """Test _get_free_space raises CommandError when output can't be parsed."""
+        mock_show.return_value = "Directory of bootflash:/\nNo free space info here\n"
+        with self.assertRaises(CommandError):
+            self.device._get_free_space()
 
     def test_check_file_exists_true(self):
         self.device.native_ssh.send_command.return_value = "12345 bootflash:/nxos.bin"
@@ -361,6 +415,23 @@ class TestNXOSDevice(unittest.TestCase):
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, False]):
             with self.assertRaises(FileTransferError):
                 self.device.remote_file_copy(src, file_system="bootflash:")
+
+    @mock.patch.object(NXOSDevice, "verify_file", return_value=False)
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024)  # Only 1KB free
+    def test_remote_file_copy_raises_not_enough_free_space(self, mock_get_free_space, mock_verify):
+        """Test remote_file_copy raises NotEnoughFreeSpaceError when insufficient space."""
+        src = FileCopyModel(
+            download_url="http://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+            file_size=1024 * 1024,  # Trying to copy 1MB
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        with self.assertRaises(NotEnoughFreeSpaceError):
+            self.device.remote_file_copy(src, file_system="bootflash:")
+        self.device.native_ssh.send_command.assert_not_called()
 
     def test_remote_file_copy_invalid_scheme(self):
         src = FileCopyModel(

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyntc"
-version = "2.3.0"
+version = "2.4.0"
 description = "Python library focused on tasks related to device level and OS management."
 authors = ["Network to Code, LLC <opensource@networktocode.com>"]
 readme = "README.md"
@@ -26,12 +26,11 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.10,<3.15"
 f5-sdk = "^3.0.21"
-junos-eznc = "^2.6"
-netmiko = "^4.0"
-pyeapi = "^1.0.2"
-pynxos = "^0.0.5"
-requests = "^2.28"
-scp = "^0.14"
+junos-eznc = ">=2.0,<3.0"
+netmiko = ">=4.0,<5.0"
+pyeapi = ">=1.0,<2.0"
+requests = ">=2.0,<3.0"
+scp = ">=0.15,<1.0"
 
 [tool.poetry.scripts]
 pyntc = 'pyntc.cli:main'
@@ -89,6 +88,7 @@ file = "README.md"
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+exclude = ["pyntc/devices/pynxos"]
 
 [tool.ruff.lint]
 select = [
@@ -127,7 +127,7 @@ convention = "google"
 
 
 [tool.pylint.master]
-ignore=[".venv", "tests"]
+ignore=[".venv", "tests", "pynxos"]
 
 [tool.pylint.basic]
 # No docstrings required for private methods (Pylint default), or for test_ functions, or for inner Meta classes.

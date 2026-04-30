@@ -2,10 +2,13 @@
 
 import hashlib
 import importlib
+import logging
 import warnings
 
-from pyntc.errors import FeatureNotFoundError, NTCError
+from pyntc.errors import FeatureNotFoundError, NotEnoughFreeSpaceError, NTCError
 from pyntc.utils.models import FileCopyModel
+
+log = logging.getLogger(__name__)
 
 
 def fix_docs(cls):
@@ -51,6 +54,90 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         self._serial_number = None
         self._model = None
         self._vlans = None
+
+    def _check_free_space(self, required_bytes, file_system=None):
+        """Raise NotEnoughFreeSpaceError when the target filesystem lacks room for a transfer.
+
+        Drivers call this from ``file_copy`` and ``remote_file_copy`` before starting a
+        transfer. The concrete per-platform probe is ``_get_free_space``; this helper
+        centralises the comparison, logging, and error shape so every driver behaves the
+        same way.
+
+        Args:
+            required_bytes (int): Number of bytes the pending transfer needs.
+            file_system (str, optional): Target filesystem passed through to
+                ``_get_free_space``. Drivers that auto-detect a filesystem should resolve
+                it before calling.
+
+        Raises:
+            NotEnoughFreeSpaceError: When the device reports fewer free bytes than
+                ``required_bytes``.
+        """
+        available = self._get_free_space(file_system)
+        log.debug(
+            "Host %s: filesystem %s has %s bytes free; %s bytes required.",
+            self.host,
+            file_system,
+            available,
+            required_bytes,
+        )
+        if available < required_bytes:
+            log.error(
+                "Host %s: insufficient free space on %s (%s free, %s required).",
+                self.host,
+                file_system,
+                available,
+                required_bytes,
+            )
+            raise NotEnoughFreeSpaceError(
+                hostname=self.host,
+                required=required_bytes,
+                available=available,
+                file_system=file_system,
+            )
+
+    def _get_free_space(self, file_system=None):
+        """Return the number of free bytes on ``file_system``.
+
+        Drivers override this to issue a platform-specific command (e.g., ``dir`` on
+        EOS/IOS/NXOS, ``show system storage`` on JUNOS) and parse the result. Drivers
+        whose platform exposes only one practical filesystem (e.g., EOS) may safely
+        ignore ``file_system``.
+
+        Args:
+            file_system (str, optional): The target filesystem to inspect. Drivers
+                that support multiple filesystems should treat ``None`` as "auto-detect
+                the default filesystem".
+
+        Returns:
+            int: Free bytes available on ``file_system``.
+
+        Raises:
+            NotImplementedError: When a driver has not yet implemented the probe.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not implement _get_free_space")
+
+    def _pre_transfer_space_check(self, src, file_system=None):
+        """Run the free-space check if ``src.file_size_bytes`` is populated.
+
+        Drivers call this from ``remote_file_copy`` so the check is skipped
+        (fail-open) when the caller omits ``FileCopyModel.file_size``; when set,
+        ``_check_free_space`` raises ``NotEnoughFreeSpaceError`` if the device
+        lacks room. Lives on ``BaseDevice`` so every driver inherits the same
+        shape without duplicating the if/else.
+
+        Args:
+            src (FileCopyModel): The source specification for the pending transfer.
+            file_system (str, optional): Target filesystem; passed through to
+                ``_check_free_space`` (and from there to ``_get_free_space``).
+        """
+        if src.file_size_bytes is not None:
+            self._check_free_space(src.file_size_bytes, file_system=file_system)
+        else:
+            log.debug(
+                "Host %s: no file_size on FileCopyModel; skipping pre-transfer space check.",
+                self.host,
+            )
 
     def _image_booted(self, image_name, **vendor_specifics):
         """Determine if a particular image is serving as the active OS.
@@ -363,11 +450,12 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
-    def install_os(self, image_name, **vendor_specifics):
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Install the OS from specified image_name.
 
         Args:
             image_name (str): The name of the image on the device to install.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
 
         Keyword Args:
             kickstart (str): Option for ``NXOSDevice`` for devices that require a kickstart image.
