@@ -8,6 +8,13 @@ This document describes all new features and changes in the release. The format 
 - Add ability to check for sufficient free space before copying files to devices, with support for EOS, IOS, ASA, and JunOS platforms.
 - Added reboot flag to Device.install_os for supported platforms.
 
+<!-- towncrier release notes start -->
+## [v2.4.1 (2026-05-01)](https://github.com/networktocode/pyntc/releases/tag/v2.4.1)
+
+### Fixed
+
+- [#380](https://github.com/networktocode/pyntc/issues/380) - Fixed nxos install_os waiting for the device to reboot even if a reboot was not requested.
+
 ## [v2.4.0 (2026-04-29)](https://github.com/networktocode/pyntc/releases/tag/v2.4.0)
 
 ### Added
