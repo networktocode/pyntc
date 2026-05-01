@@ -637,6 +637,9 @@ class NXOSDevice(BaseDevice):
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
             self.set_boot_options(image_name, reboot=reboot, **vendor_specifics)
+            if not reboot:
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
             log.info("Host %s: Waiting for device reload.", self.host)
             self._wait_for_device_reboot(timeout=timeout)
             if not self._image_booted(image_name):
