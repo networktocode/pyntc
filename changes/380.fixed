@@ -1,1 +1,0 @@
-Fixed nxos install_os waiting for the device to reboot even if a reboot was not requested.
