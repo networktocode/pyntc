@@ -1,1 +1,0 @@
-The pyntc rotating file handler is now opt-in via the `PYNTC_LOG_FILE` environment variable. When unset, no log file is created. When set, its value is used as the log file path, and the handler is registered only once per logger to avoid duplicate entries on repeated `get_log` calls.
