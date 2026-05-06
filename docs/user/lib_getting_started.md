@@ -342,6 +342,23 @@ Full workflow example:
 >>>
 ```
 
+# Logging
+
+pyntc reads several environment variables to configure logging. None of them are required; all are read at runtime.
+
+| Variable | Description |
+| --- | --- |
+| `PYNTC_LOG_LEVEL` | Log level for the `pyntc` logger (e.g. `debug`, `info`, `warning`). Defaults to `info`. |
+| `PYNTC_DEBUG` | When set to any non-empty value, forces the log level to `DEBUG` and switches to a more verbose log format. |
+| `PYNTC_LOG_FILE` | Path to a file that pyntc should log to. When set, a `RotatingFileHandler` (2000 byte rotation) is attached to the logger using this path. When unset, no file handler is attached; log records still propagate to the root logger configured by `logging.basicConfig` (called from `pyntc.log.init` during device initialization) or by the calling application. |
+
+Example:
+
+```bash
+export PYNTC_LOG_FILE=/var/log/pyntc.log
+export PYNTC_LOG_LEVEL=debug
+```
+
 #### Cisco IOS Install Mode Option
 
 New in 0.15 there is support for [Install Mode](https://content.cisco.com/chapter.sjs?uri=/searchable/chapter/c/en/us/td/docs/switches/lan/Denali_16-1/ConfigExamples_Technotes/Config_Examples/Misc/qos/m_install_vs_bundle.html.xml) upgrades. To execute this there is an option (defaults to False) to run install mode. **file_copy must be executed before install_os**

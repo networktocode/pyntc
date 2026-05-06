@@ -17,6 +17,10 @@ DEBUG_FORMAT = "%(asctime)s [%(levelname)s] [%(module)s] [%(funcName)s] %(name)s
 def get_log(name=None):
     """Get log namespace and creates logger and rotating file handler.
 
+    A :class:`RotatingFileHandler` is attached if the ``PYNTC_LOG_FILE``
+    environment variable is set, in which case its value is used as the log
+    file path.
+
     Args:
         name (str, optional): Sublogger name. Defaults to None.
 
@@ -24,10 +28,14 @@ def get_log(name=None):
         (logger): Return a logger instance in the :data:`APP` namespace.
     """
     logger_name = f"{APP}.{name}" if name else APP
-    # file handler
-    handler = RotatingFileHandler(f"{logger_name}.log", maxBytes=2000)
     _logger = logging.getLogger(logger_name)
-    _logger.addHandler(handler)
+
+    log_file = os.environ.get("PYNTC_LOG_FILE")
+    if log_file and not any(
+        isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", None) == os.path.abspath(log_file)
+        for h in _logger.handlers
+    ):
+        _logger.addHandler(RotatingFileHandler(log_file, maxBytes=2000))
 
     return _logger
 
