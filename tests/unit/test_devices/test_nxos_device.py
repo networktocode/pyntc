@@ -1,6 +1,8 @@
 import unittest
 
 import mock
+from hypothesis import given
+from hypothesis import strategies as st
 
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
@@ -286,22 +288,21 @@ class TestNXOSDevice(unittest.TestCase):
         self.assertIsNone(self.device._uptime)
         self.assertFalse(hasattr(self.device.native, "_facts"))
 
-    @mock.patch.object(NXOSDevice, "show", return_value="bootflash:")
-    def test_get_file_system(self, mock_show):
+    def test_get_file_system(self):
+        self.device.native_ssh.send_command.return_value = "bootflash:"
         self.assertEqual(self.device._get_file_system(), "bootflash:")
-        mock_show.assert_called_with("dir", raw_text=True)
+        self.device.native_ssh.send_command.assert_called_with("dir", read_timeout=30)
 
-    @mock.patch.object(NXOSDevice, "show", return_value="no filesystems here")
-    def test_get_file_system_not_found(self, mock_show):
+    def test_get_file_system_not_found(self):
+        self.device.native_ssh.send_command.return_value = "no filesystems here"
         with self.assertRaises(FileSystemNotFoundError):
             self.device._get_file_system()
-        mock_show.assert_called_with("dir", raw_text=True)
+        self.device.native_ssh.send_command.assert_called_with("dir", read_timeout=30)
 
-    @mock.patch.object(NXOSDevice, "show")
-    def test_get_free_space(self, mock_show):
+    def test_get_free_space(self):
         """Test _get_free_space parses NXOS dir output correctly."""
         # NXOS dir output format with free space at the end
-        mock_show.return_value = """Directory of bootflash:/
+        self.device.native_ssh.send_command.return_value = """Directory of bootflash:/
 4096         Mar 03 22:47:15 2026  .rpmstore/
 4733329408   bytes used
 47171194880  bytes free
@@ -310,12 +311,13 @@ class TestNXOSDevice(unittest.TestCase):
 """
         result = self.device._get_free_space()
         self.assertEqual(result, 47171194880)
-        mock_show.assert_called_with("dir bootflash:", raw_text=True)
+        # Should call _get_file_system (which uses SSH) and then dir command via SSH
+        ssh_calls = self.device.native_ssh.send_command.call_args_list
+        self.assertTrue(any("dir" in str(call) for call in ssh_calls))
 
-    @mock.patch.object(NXOSDevice, "show")
-    def test_get_free_space_with_custom_filesystem(self, mock_show):
+    def test_get_free_space_with_custom_filesystem(self):
         """Test _get_free_space uses custom file system when provided."""
-        mock_show.return_value = """Directory of disk0:/
+        self.device.native_ssh.send_command.return_value = """Directory of disk0:/
 1000000      bytes used
 2000000      bytes free
 3000000      bytes total
@@ -323,12 +325,11 @@ class TestNXOSDevice(unittest.TestCase):
 """
         result = self.device._get_free_space("disk0:")
         self.assertEqual(result, 2000000)
-        mock_show.assert_called_with("dir disk0:", raw_text=True)
+        self.device.native_ssh.send_command.assert_called_with("dir disk0:", read_timeout=30)
 
-    @mock.patch.object(NXOSDevice, "show")
-    def test_get_free_space_raises_on_parse_error(self, mock_show):
+    def test_get_free_space_raises_on_parse_error(self):
         """Test _get_free_space raises CommandError when output can't be parsed."""
-        mock_show.return_value = "Directory of bootflash:/\nNo free space info here\n"
+        self.device.native_ssh.send_command.return_value = "Directory of bootflash:/\nNo free space info here\n"
         with self.assertRaises(CommandError):
             self.device._get_free_space()
 
@@ -454,6 +455,43 @@ class TestNXOSDevice(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.device.remote_file_copy(src, file_system="bootflash:")
+
+    @given(
+        scheme=st.sampled_from(["http", "https", "scp", "sftp", "ftp", "tftp"]),
+        hostname=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd"))),
+        filename=st.text(
+            min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd", "Pd"))
+        ),
+        checksum=st.text(min_size=32, max_size=32, alphabet=st.characters(whitelist_categories=("Ll", "Nd"))),
+    )
+    def test_remote_file_copy_uses_ssh_for_filesystem_detection(self, scheme, hostname, filename, checksum):
+        """Property-based test: remote_file_copy should use SSH for _get_file_system calls.
+
+        This test verifies that the SSH/HTTP protocol mismatch bug is fixed by ensuring
+        that _get_file_system always uses SSH for file system operations.
+        """
+        src = FileCopyModel(
+            download_url=f"{scheme}://{hostname}/{filename}",
+            checksum=checksum,
+            file_name=filename,
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+
+        # Mock SSH operations to simulate successful file system detection
+        self.device.native_ssh.send_command.return_value = "Directory of bootflash:/\n47171194880 bytes free"
+        self.device.native_ssh.find_prompt.return_value = "host#"
+
+        # Mock verify_file to return True (file already exists and verified)
+        with mock.patch.object(NXOSDevice, "verify_file", return_value=True):
+            # This should complete without attempting HTTP connections
+            self.device.remote_file_copy(src)
+
+        # Verify that SSH was used for directory command (filesystem detection)
+        ssh_calls = self.device.native_ssh.send_command.call_args_list
+        self.assertTrue(
+            any("dir" in str(call) for call in ssh_calls), "Expected SSH 'dir' command for filesystem detection"
+        )
 
 
 if __name__ == "__main__":

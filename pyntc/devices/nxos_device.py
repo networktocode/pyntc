@@ -328,7 +328,9 @@ class NXOSDevice(BaseDevice):
         Raises:
             FileSystemNotFoundError: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir", raw_text=True)
+        self.open()
+        raw_data = self.native_ssh.send_command("dir", read_timeout=30)
+
         try:
             file_system = re.search(r"bootflash:", raw_data).group(0)
         except AttributeError:
@@ -343,7 +345,8 @@ class NXOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        raw_data = self.show(f"dir {file_system}", raw_text=True)
+        self.open()
+        raw_data = self.native_ssh.send_command(f"dir {file_system}", read_timeout=30)
         # Example NXOS dir output: 47171194880 bytes free
         match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
         if match is None:
