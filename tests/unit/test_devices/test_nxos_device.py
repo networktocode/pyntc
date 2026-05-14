@@ -398,10 +398,14 @@ class TestNXOSDevice(unittest.TestCase):
             timeout=30,
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
-        self.device.native_ssh.send_command.return_value = "Copy complete"
+        # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
+        # Verify send_command was called with expect_string parameter
         self.device.native_ssh.send_command.assert_called_once()
+        call_args = self.device.native_ssh.send_command.call_args
+        self.assertIn("expect_string", call_args.kwargs)
 
     def test_remote_file_copy_transfer_fails_verification(self):
         src = FileCopyModel(
@@ -412,7 +416,8 @@ class TestNXOSDevice(unittest.TestCase):
             timeout=30,
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
-        self.device.native_ssh.send_command.return_value = "Copy complete"
+        # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, False]):
             with self.assertRaises(FileTransferError):
                 self.device.remote_file_copy(src, file_system="bootflash:")
@@ -433,6 +438,58 @@ class TestNXOSDevice(unittest.TestCase):
         with self.assertRaises(NotEnoughFreeSpaceError):
             self.device.remote_file_copy(src, file_system="bootflash:")
         self.device.native_ssh.send_command.assert_not_called()
+
+    def test_remote_file_copy_with_vrf_prompt_handling(self):
+        """Test remote_file_copy handles VRF prompts correctly."""
+        src = FileCopyModel(
+            download_url="ftp://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+            username="testuser",
+            token="testpass",
+            vrf="management",  # VRF specified for prompt response
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
+            self.device.remote_file_copy(src, file_system="bootflash:")
+
+        # Verify send_command was called with VRF prompt handling
+        self.device.native_ssh.send_command.assert_called_once()
+        call_args = self.device.native_ssh.send_command.call_args
+        self.assertIn("expect_string", call_args.kwargs)
+        # Verify the expect_string contains VRF prompt pattern
+        expect_string = call_args.kwargs["expect_string"]
+        self.assertIn("Enter vrf", expect_string)
+
+    def test_remote_file_copy_with_no_vrf_specified(self):
+        """Test remote_file_copy handles VRF prompts when no VRF is specified."""
+        src = FileCopyModel(
+            download_url="ftp://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+            username="testuser",
+            token="testpass",
+            # No VRF specified - should respond with empty string to VRF prompt
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
+            self.device.remote_file_copy(src, file_system="bootflash:")
+
+        # Verify send_command was called with VRF prompt handling
+        self.device.native_ssh.send_command.assert_called_once()
+        call_args = self.device.native_ssh.send_command.call_args
+        self.assertIn("expect_string", call_args.kwargs)
+        # Verify the expect_string contains VRF prompt pattern
+        expect_string = call_args.kwargs["expect_string"]
+        self.assertIn("Enter vrf", expect_string)
 
     def test_remote_file_copy_invalid_scheme(self):
         src = FileCopyModel(
@@ -491,6 +548,95 @@ class TestNXOSDevice(unittest.TestCase):
         ssh_calls = self.device.native_ssh.send_command.call_args_list
         self.assertTrue(
             any("dir" in str(call) for call in ssh_calls), "Expected SSH 'dir' command for filesystem detection"
+        )
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_api_port_default(self, mock_device, mock_connect_handler):
+        """Test that api_port defaults to 80."""
+        _ = NXOSDevice("host", "user", "pass")
+
+        # Verify NXOSNative was called with default api_port (80)
+        mock_device.assert_called_with(
+            "host",
+            "user",
+            "pass",
+            transport="http",
+            timeout=30,
+            port=80,  # Default api_port
+            verify=True,
+        )
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_api_port_custom(self, mock_device, mock_connect_handler):
+        """Test that custom api_port is passed to NXOSNative."""
+        _ = NXOSDevice("host", "user", "pass", api_port=8080)
+
+        # Verify NXOSNative was called with custom api_port
+        mock_device.assert_called_with(
+            "host",
+            "user",
+            "pass",
+            transport="http",
+            timeout=30,
+            port=8080,  # Custom api_port
+            verify=True,
+        )
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_api_port_with_https(self, mock_device, mock_connect_handler):
+        """Test that api_port works with HTTPS transport."""
+        _ = NXOSDevice("host", "user", "pass", transport="https", api_port=8443)
+
+        # Verify NXOSNative was called with HTTPS and custom api_port
+        mock_device.assert_called_with(
+            "host",
+            "user",
+            "pass",
+            transport="https",
+            timeout=30,
+            port=8443,  # Custom HTTPS api_port
+            verify=True,
+        )
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_port_parameter_preserved(self, mock_device, mock_connect_handler):
+        """Test that the port parameter is preserved for future SSH port customization."""
+        device = NXOSDevice("host", "user", "pass", api_port=8080, port=2222)
+
+        # Verify api_port is used for NXOSNative (NX-API)
+        mock_device.assert_called_with(
+            "host",
+            "user",
+            "pass",
+            transport="http",
+            timeout=30,
+            port=8080,  # api_port for NX-API
+            verify=True,
+        )
+
+        # Verify port parameter is stored for future SSH use
+        self.assertEqual(device.port, 2222)
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_backward_compatibility_no_api_port(self, mock_device, mock_connect_handler):
+        """Test backward compatibility when api_port is not specified."""
+        # Create device without specifying api_port
+        _ = NXOSDevice("host", "user", "pass", transport="http")
+
+        # Should default to port 80 for HTTP
+        mock_device.assert_called_with(
+            "host",
+            "user",
+            "pass",
+            transport="http",
+            timeout=30,
+            port=80,  # Default api_port for HTTP
+            verify=True,
         )
 
 
