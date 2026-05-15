@@ -1,0 +1,3 @@
+Fixed an issue where nx-api commands were mixed with ssh commands.
+Fixed an issue where a tuple was returning instead of a string.
+Fixed an issue where a prompt was not being caught.

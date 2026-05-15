@@ -328,7 +328,9 @@ class NXOSDevice(BaseDevice):
         Raises:
             FileSystemNotFoundError: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir", raw_text=True)
+        self.open()
+        raw_data = self.native_ssh.send_command("dir", read_timeout=30)
+
         try:
             file_system = re.search(r"bootflash:", raw_data).group(0)
         except AttributeError:
@@ -343,7 +345,8 @@ class NXOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        raw_data = self.show(f"dir {file_system}", raw_text=True)
+        self.open()
+        raw_data = self.native_ssh.send_command(f"dir {file_system}", read_timeout=30)
         # Example NXOS dir output: 47171194880 bytes free
         match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
         if match is None:
@@ -368,7 +371,7 @@ class NXOSDevice(BaseDevice):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
         netloc = self._netloc(src)
         path = self._source_path(src, dest)
-        return f"copy {src.scheme}://{netloc}{path} {file_system}", False
+        return f"copy {src.scheme}://{netloc}{path} {file_system}"
 
     def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
@@ -537,6 +540,7 @@ class NXOSDevice(BaseDevice):
                 r"Source username": src.username or "",
                 r"yes/no|Are you sure you want to continue connecting": "yes",
                 r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",
+                r"Enter vrf.*:": src.vrf or "",
             }
             keys = list(prompt_answers.keys()) + [current_prompt]
             expect_regex = f"({'|'.join(keys)})"
