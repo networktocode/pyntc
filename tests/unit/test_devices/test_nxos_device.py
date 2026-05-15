@@ -552,90 +552,90 @@ class TestNXOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def test_api_port_default(self, mock_device, mock_connect_handler):
-        """Test that api_port defaults to 80."""
+    def test_port_default(self, mock_device, mock_connect_handler):
+        """Test that port defaults to None when not specified."""
         _ = NXOSDevice("host", "user", "pass")
 
-        # Verify NXOSNative was called with default api_port (80)
+        # Verify NXOSNative was called with default port (None)
         mock_device.assert_called_with(
             "host",
             "user",
             "pass",
             transport="http",
             timeout=30,
-            port=80,  # Default api_port
+            port=None,  # Default port
             verify=True,
         )
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def test_api_port_custom(self, mock_device, mock_connect_handler):
-        """Test that custom api_port is passed to NXOSNative."""
-        _ = NXOSDevice("host", "user", "pass", api_port=8080)
+    def test_port_custom(self, mock_device, mock_connect_handler):
+        """Test that custom port is passed to NXOSNative."""
+        _ = NXOSDevice("host", "user", "pass", port=8080)
 
-        # Verify NXOSNative was called with custom api_port
+        # Verify NXOSNative was called with custom port
         mock_device.assert_called_with(
             "host",
             "user",
             "pass",
             transport="http",
             timeout=30,
-            port=8080,  # Custom api_port
+            port=8080,  # Custom port
             verify=True,
         )
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def test_api_port_with_https(self, mock_device, mock_connect_handler):
-        """Test that api_port works with HTTPS transport."""
-        _ = NXOSDevice("host", "user", "pass", transport="https", api_port=8443)
+    def test_port_with_https(self, mock_device, mock_connect_handler):
+        """Test that port works with HTTPS transport."""
+        _ = NXOSDevice("host", "user", "pass", transport="https", port=8443)
 
-        # Verify NXOSNative was called with HTTPS and custom api_port
+        # Verify NXOSNative was called with HTTPS and custom port
         mock_device.assert_called_with(
             "host",
             "user",
             "pass",
             transport="https",
             timeout=30,
-            port=8443,  # Custom HTTPS api_port
+            port=8443,  # Custom HTTPS port
             verify=True,
         )
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def test_port_parameter_preserved(self, mock_device, mock_connect_handler):
-        """Test that the port parameter is preserved for future SSH port customization."""
-        device = NXOSDevice("host", "user", "pass", api_port=8080, port=2222)
+    def test_port_parameter_stored(self, mock_device, mock_connect_handler):
+        """Test that the port parameter is stored and used for NX-API connection."""
+        device = NXOSDevice("host", "user", "pass", port=8080)
 
-        # Verify api_port is used for NXOSNative (NX-API)
+        # Verify port is used for NXOSNative (NX-API)
         mock_device.assert_called_with(
             "host",
             "user",
             "pass",
             transport="http",
             timeout=30,
-            port=8080,  # api_port for NX-API
+            port=8080,  # port for NX-API
             verify=True,
         )
 
-        # Verify port parameter is stored for future SSH use
-        self.assertEqual(device.port, 2222)
+        # Verify port parameter is stored
+        self.assertEqual(device.port, 8080)
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
     @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
-    def test_backward_compatibility_no_api_port(self, mock_device, mock_connect_handler):
-        """Test backward compatibility when api_port is not specified."""
-        # Create device without specifying api_port
+    def test_backward_compatibility_no_port(self, mock_device, mock_connect_handler):
+        """Test backward compatibility when port is not specified."""
+        # Create device without specifying port
         _ = NXOSDevice("host", "user", "pass", transport="http")
 
-        # Should default to port 80 for HTTP
+        # Should default to port None
         mock_device.assert_called_with(
             "host",
             "user",
             "pass",
             transport="http",
             timeout=30,
-            port=80,  # Default api_port for HTTP
+            port=None,  # Default port
             verify=True,
         )
 

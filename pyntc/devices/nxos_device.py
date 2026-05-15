@@ -34,9 +34,7 @@ class NXOSDevice(BaseDevice):
     vendor = "cisco"
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def __init__(
-        self, host, username, password, transport="http", api_port=80, timeout=30, port=None, verify=True, **kwargs
-    ):  # noqa: D403
+    def __init__(self, host, username, password, transport="http", timeout=30, port=None, verify=True, **kwargs):  # noqa: D403
         """PyNTC Device implementation for Cisco IOS.
 
         Args:
@@ -44,7 +42,6 @@ class NXOSDevice(BaseDevice):
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
             transport (str, optional): Transport protocol to connect to device. Defaults to "http".
-            api_port (str, optional): Port used by nx-api to connect to device. Defaults to 80.
             timeout (int, optional): Timeout in seconds. Defaults to 30.
             port (int, optional): Port used to connect to device. Defaults to None.
             verify (bool, optional): SSL verification.
@@ -58,7 +55,7 @@ class NXOSDevice(BaseDevice):
         self.verify = verify
         # Use self.native for NXAPI
         self.native = NXOSNative(
-            host, username, password, transport=transport, timeout=timeout, port=api_port, verify=verify
+            host, username, password, transport=transport, timeout=timeout, port=port, verify=verify
         )
         # Use self.native_ssh for Netmiko SSH
         self.native_ssh = None
