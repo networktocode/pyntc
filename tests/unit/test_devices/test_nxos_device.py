@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import mock
 
@@ -117,10 +118,25 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_save(self):
         result = self.device.save()
-        self.device.native.save.return_value = True
 
         self.assertTrue(result)
-        self.device.native.save.assert_called_with(filename="startup-config")
+        self.mock_native_ssh.send_command_timing.assert_any_call("copy running-config startup-config")
+        self.mock_native_ssh.send_command_timing.assert_any_call("\n", read_timeout=200)
+        self.mock_native_ssh.find_prompt.assert_called()
+
+    def test_save_custom_filename(self):
+        result = self.device.save("my-backup")
+
+        self.assertTrue(result)
+        self.mock_native_ssh.send_command_timing.assert_any_call("copy running-config my-backup")
+
+    def test_save_reopens_when_disconnected(self):
+        self.device._connected = False
+
+        with mock.patch.object(NXOSDevice, "open") as mock_open:
+            self.device.save()
+
+        mock_open.assert_called()
 
     def test_file_copy_remote_exists(self):
         self.device.native.file_copy_remote_exists.return_value = True
@@ -454,6 +470,59 @@ class TestNXOSDevice(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.device.remote_file_copy(src, file_system="bootflash:")
+
+
+class TestNXOSDeviceDeprecationWarnings(unittest.TestCase):
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_no_warning_on_default_kwargs(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass")
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(deprecation_warnings, [])
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_transport(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", transport="https")
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("transport", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_port(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", port=8443)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("port", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_verify(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", verify=False)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("verify", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_lists_multiple_kwargs(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", transport="https", port=8443, verify=False)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        message = str(deprecation_warnings[0].message)
+        for kwarg in ("transport", "port", "verify"):
+            self.assertIn(kwarg, message)
 
 
 if __name__ == "__main__":

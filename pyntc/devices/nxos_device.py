@@ -3,6 +3,7 @@
 import os
 import re
 import time
+import warnings
 
 from netmiko import ConnectHandler
 from requests.exceptions import ConnectTimeout, ReadTimeout
@@ -49,6 +50,21 @@ class NXOSDevice(BaseDevice):
 
         """
         super().__init__(host, username, password, device_type="cisco_nxos_nxapi")
+        deprecated_kwargs = []
+        if transport != "http":
+            deprecated_kwargs.append("transport")
+        if port is not None:
+            deprecated_kwargs.append("port")
+        if verify is not True:
+            deprecated_kwargs.append("verify")
+        if deprecated_kwargs:
+            warnings.warn(
+                f"NXOSDevice kwargs {deprecated_kwargs} are deprecated and will be removed in a future release. "
+                "NXOSDevice is migrating to Netmiko SSH exclusively; these NX-API-only kwargs will no longer "
+                "be honored once the migration is complete.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.transport = transport
         self.timeout = timeout
         self.port = port
@@ -470,7 +486,6 @@ class NXOSDevice(BaseDevice):
                 command,
                 result,
             )
-            print(f"result: {result}")
             remote_checksum = result
             return remote_checksum
 
@@ -795,8 +810,13 @@ class NXOSDevice(BaseDevice):
         Returns:
             (bool): True if configuration is saved.
         """
+        self.open()
+        command = f"copy running-config {filename}"
+        self.native_ssh.send_command_timing(command)
+        self.native_ssh.send_command_timing("\n", read_timeout=200)
+        self.native_ssh.find_prompt()
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
-        return self.native.save(filename=filename)
+        return True
 
     def set_boot_options(self, image_name, kickstart=None, reboot=True, **vendor_specifics):
         """Set boot variables.
