@@ -5,14 +5,15 @@ import re
 import time
 import warnings
 
-from netmiko import ConnectHandler
-from requests.exceptions import ConnectTimeout, ReadTimeout
+from netmiko import ConnectHandler, file_transfer
+from netmiko.exceptions import NetmikoBaseException, ReadTimeout
+from requests.exceptions import ConnectTimeout
+from requests.exceptions import ReadTimeout as RequestsReadTimeout
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, RollbackError, fix_docs
 from pyntc.devices.pynxos.device import Device as NXOSNative
 from pyntc.devices.pynxos.errors import CLIError
-from pyntc.devices.pynxos.features.file_copy import FileTransferError as NXOSFileTransferError
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -104,6 +105,7 @@ class NXOSDevice(BaseDevice):
         """Refresh caches on device instance."""
         if hasattr(self.native, "_facts"):
             delattr(self.native, "_facts")
+        self._redundancy_state = None
         super().refresh()
 
     def backup_running_config(self, filename):
@@ -112,8 +114,11 @@ class NXOSDevice(BaseDevice):
         Args:
             filename (str): Name of backup file.
         """
-        self.native.backup_running_config(filename)
-        log.debug("Host %s: Running config backed up.", self.host)
+        self.open()
+        output = self.native_ssh.send_command("show running-config")
+        with open(filename, "w", encoding="utf-8") as backup_file:
+            backup_file.write(output)
+        log.debug("Host %s: Running config backed up to %s.", self.host, filename)
 
     @property
     def boot_options(self):
@@ -131,9 +136,17 @@ class NXOSDevice(BaseDevice):
 
         Args:
             filename (str): The filename to save the checkpoint on the remote device.
+
+        Raises:
+            CommandError: If the device rejects the checkpoint command.
         """
+        self.open()
+        command = f"checkpoint file {filename}"
         log.debug("Host %s: checkpoint is %s.", self.host, filename)
-        return self.native.checkpoint(filename)
+        output = self.native_ssh.send_command(command)
+        if re.search(r"%\s*Error|ERROR:", output):
+            log.error("Host %s: Checkpoint failed for %s: %s", self.host, filename, output)
+            raise CommandError(command, output.strip())
 
     def close(self):
         """Disconnect from device."""
@@ -283,40 +296,45 @@ class NXOSDevice(BaseDevice):
         return self._serial_number
 
     def file_copy(self, src, dest=None, file_system="bootflash:"):
-        """Send a local file to the device.
+        """Send a local file to the device via SCP over the SSH session.
 
         Args:
             src (str): Path to the local file to send.
             dest (str, optional): The destination file path. Defaults to basename of source path.
-            file_system (str, optional): [The file system for the remote file. Defaults to "bootflash:".
+            file_system (str, optional): The file system for the remote file. Defaults to "bootflash:".
 
         Raises:
             FileTransferError: Error if transfer of file cannot be verified.
         """
+        dest = dest or os.path.basename(src)
+        if self.file_copy_remote_exists(src, dest, file_system):
+            return
+        self._check_free_space(os.path.getsize(src), file_system=file_system)
+        self.open()
+        try:
+            file_transfer(
+                self.native_ssh,
+                source_file=src,
+                dest_file=dest,
+                file_system=file_system,
+                direction="put",
+                overwrite_file=True,
+            )
+        except Exception as err:  # noqa: BLE001
+            log.error("Host %s: SCP file transfer error %s", self.host, str(err))
+            raise FileTransferError from err
+        log.info("Host %s: File %s transferred successfully.", self.host, src)
         if not self.file_copy_remote_exists(src, dest, file_system):
-            dest = dest or os.path.basename(src)
-            self._check_free_space(os.path.getsize(src), file_system=file_system)
-            try:
-                file_copy = self.native.file_copy(  # pylint: disable=assignment-from-no-return
-                    src, dest, file_system=file_system
-                )  # pylint: disable=assignment-from-no-return
-                log.info("Host %s: File %s transferred successfully.", self.host, src)
-                if not self.file_copy_remote_exists(src, dest, file_system):
-                    log.error(
-                        "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
-                        self.host,
-                        FileTransferError.default_message,
-                    )
-                    raise FileTransferError
-                return file_copy
-
-            except NXOSFileTransferError as err:
-                log.error("Host %s: NXOS file transfer error %s", self.host, str(err))
-                raise FileTransferError
+            log.error(
+                "Host %s: Attempted file copy, but could not validate file existed after transfer %s",
+                self.host,
+                FileTransferError.default_message,
+            )
+            raise FileTransferError
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system="bootflash:"):
-        """Check if a remote file exists.
+        """Check if a remote file exists and matches the local file's checksum.
 
         Args:
             src (str): Path to the local file to send.
@@ -324,16 +342,13 @@ class NXOSDevice(BaseDevice):
             file_system (str, optional): The file system for the remote file. Defaults to "bootflash:".
 
         Returns:
-            (bool): True if the remote file exists. Otherwise, false.
+            (bool): True if the remote file exists and its checksum matches the local file. Otherwise, false.
         """
         dest = dest or os.path.basename(src)
-        log.debug(
-            "Host %s: File %s exists on remote %s.",
-            self.host,
-            src,
-            self.native.file_copy_remote_exists(src, dest, file_system=file_system),
-        )
-        return self.native.file_copy_remote_exists(src, dest, file_system=file_system)
+        local_checksum = self.get_local_checksum(src)
+        result = self.verify_file(local_checksum, dest, file_system=file_system)
+        log.debug("Host %s: File %s exists on remote and matches local: %s", self.host, dest, result)
+        return result
 
     def _get_file_system(self):
         """Determine the default file system or directory for device.
@@ -647,7 +662,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             (bool): True if new image is boot option on device. Otherwise, false.
         """
-        self.native.show("terminal dont-ask")
+        self.native_ssh.send_command("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
@@ -689,8 +704,8 @@ class NXOSDevice(BaseDevice):
         """
         if self._redundancy_state is None:
             try:
-                output = self.native.show("show redundancy state", raw_text=True)
-                # Parse the redundancy state from output
+                self.open()
+                output = self.native_ssh.send_command("show redundancy state")
                 # Example output: "Redundancy state = active"
                 match = re.search(r"Redundancy\s+state\s*=\s*(\w+)", output, re.IGNORECASE)
                 if match:
@@ -698,8 +713,8 @@ class NXOSDevice(BaseDevice):
                 else:
                     # If no redundancy info, device may not support HA
                     self._redundancy_state = "active"
-            except CLIError:
-                # If command fails, assume active (non-HA or error condition)
+            except NetmikoBaseException:
+                # If the SSH command fails, assume active (non-HA or error condition)
                 self._redundancy_state = "active"
 
         return self._redundancy_state
@@ -764,9 +779,8 @@ class NXOSDevice(BaseDevice):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
             raise DeprecationWarning("Passing 'confirm' to reboot method is deprecated.")
         try:
-            self.native.show_list(["terminal dont-ask", "reload"])
-            # The native reboot is not always properly disabling confirmation. Above is more consistent.
-            # self.native.reboot(confirm=True)
+            self.native_ssh.send_command("terminal dont-ask")
+            self.native_ssh.send_command("reload")
         except ReadTimeout as expected_exception:
             log.info("Host %s: Device rebooted.", self.host)
             log.info("Hit expected exception during reload: %s", expected_exception.__class__)
@@ -784,12 +798,13 @@ class NXOSDevice(BaseDevice):
         Raises:
             RollbackError: Error if rollback command is unsuccesfull.
         """
-        try:
-            self.native.rollback(filename)
-            log.info("Host %s: Rollback to %s.", self.host, filename)
-        except CLIError:
-            log.error("Host %s: Rollback unsuccessful. %s may not exist.", self.host, filename)
+        self.open()
+        command = f"rollback running-config file {filename}"
+        output = self.native_ssh.send_command(command)
+        if re.search(r"%\s*Error|ERROR:|Rollback failed|does not exist", output, re.IGNORECASE):
+            log.error("Host %s: Rollback unsuccessful. %s may not exist. Output: %s", self.host, filename, output)
             raise RollbackError(f"Rollback unsuccessful, {filename} may not exist.")
+        log.info("Host %s: Rollback to %s.", self.host, filename)
 
     @property
     def running_config(self):
@@ -799,7 +814,8 @@ class NXOSDevice(BaseDevice):
             (str): Running configuration of device.
         """
         log.debug("Host %s: Show running config.", self.host)
-        return self.native.running_config
+        self.open()
+        return self.native_ssh.send_command("show running-config")
 
     def save(self, filename="startup-config"):
         """Save a device's running configuration.
@@ -849,7 +865,7 @@ class NXOSDevice(BaseDevice):
         image_name = file_system + image_name
         try:
             self.native.set_boot_options(image_name, kickstart=kickstart, reboot=reboot)
-        except (ReadTimeout, ConnectTimeout):
+        except (RequestsReadTimeout, ConnectTimeout):
             pass
         log.info("Host %s: boot options have been set to %s", self.host, image_name)
 
@@ -860,7 +876,8 @@ class NXOSDevice(BaseDevice):
             timeout (int): Timeout value.
         """
         log.debug("Host %s: Timeout set to %s.", self.host, timeout)
-        self.native.timeout = timeout
+        self.timeout = timeout
+        self.native_ssh.timeout = timeout
 
     def show(self, command, raw_text=False):
         """Send a non-configuration command.

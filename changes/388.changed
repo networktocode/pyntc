@@ -1,0 +1,1 @@
+Migrated `NXOSDevice` methods from NX-API to Netmiko SSH: `running_config`, `set_timeout`, `install_os`, `reboot`, `backup_running_config`, `checkpoint`, `rollback`, `redundancy_state`, `file_copy_remote_exists`, and `file_copy`. 
