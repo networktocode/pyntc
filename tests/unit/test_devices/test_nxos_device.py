@@ -1,4 +1,5 @@
 import unittest
+import warnings
 
 import mock
 
@@ -117,57 +118,95 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_save(self):
         result = self.device.save()
-        self.device.native.save.return_value = True
 
         self.assertTrue(result)
-        self.device.native.save.assert_called_with(filename="startup-config")
+        self.mock_native_ssh.send_command_timing.assert_any_call("copy running-config startup-config")
+        self.mock_native_ssh.send_command_timing.assert_any_call("\n", read_timeout=200)
+        self.mock_native_ssh.find_prompt.assert_called()
 
-    def test_file_copy_remote_exists(self):
-        self.device.native.file_copy_remote_exists.return_value = True
+    def test_save_custom_filename(self):
+        result = self.device.save("my-backup")
+
+        self.assertTrue(result)
+        self.mock_native_ssh.send_command_timing.assert_any_call("copy running-config my-backup")
+
+    def test_save_reopens_when_disconnected(self):
+        self.device._connected = False
+
+        with mock.patch.object(NXOSDevice, "open") as mock_open:
+            self.device.save()
+
+        mock_open.assert_called()
+
+    @mock.patch.object(NXOSDevice, "verify_file", return_value=True)
+    @mock.patch.object(NXOSDevice, "get_local_checksum", return_value="abc123")
+    def test_file_copy_remote_exists(self, mock_local_checksum, mock_verify):
         result = self.device.file_copy_remote_exists("source_file", "dest_file")
 
         self.assertTrue(result)
-        self.device.native.file_copy_remote_exists.assert_called_with(
-            "source_file", "dest_file", file_system=FILE_SYSTEM
-        )
+        mock_local_checksum.assert_called_with("source_file")
+        mock_verify.assert_called_with("abc123", "dest_file", file_system=FILE_SYSTEM)
 
-    def test_file_copy_remote_exists_failure(self):
-        self.device.native.file_copy_remote_exists.return_value = False
+    @mock.patch.object(NXOSDevice, "verify_file", return_value=False)
+    @mock.patch.object(NXOSDevice, "get_local_checksum", return_value="abc123")
+    def test_file_copy_remote_exists_failure(self, mock_local_checksum, mock_verify):
         result = self.device.file_copy_remote_exists("source_file", "dest_file")
 
         self.assertFalse(result)
-        self.device.native.file_copy_remote_exists.assert_called_with(
-            "source_file", "dest_file", file_system=FILE_SYSTEM
+        mock_verify.assert_called_with("abc123", "dest_file", file_system=FILE_SYSTEM)
+
+    @mock.patch("pyntc.devices.nxos_device.file_transfer")
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
+    def test_file_copy(self, mock_fcre, mock_getsize, mock_get_free_space, mock_transfer):
+        self.device.file_copy("source_file", "dest_file")
+        mock_transfer.assert_called_with(
+            self.mock_native_ssh,
+            source_file="source_file",
+            dest_file="dest_file",
+            file_system=FILE_SYSTEM,
+            direction="put",
+            overwrite_file=True,
         )
 
+    @mock.patch("pyntc.devices.nxos_device.file_transfer")
     @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
     @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
-    def test_file_copy(self, mock_fcre, mock_getsize, mock_get_free_space):
-        self.device.file_copy("source_file", "dest_file")
-        self.device.native.file_copy.assert_called_with("source_file", "dest_file", file_system=FILE_SYSTEM)
-        self.device.native.file_copy.assert_called()
-
-    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
-    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
-    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, True])
-    def test_file_copy_no_dest(self, mock_fcre, mock_getsize, mock_get_free_space):
+    def test_file_copy_no_dest(self, mock_fcre, mock_getsize, mock_get_free_space, mock_transfer):
         self.device.file_copy("source_file")
-        self.device.native.file_copy.assert_called_with("source_file", "source_file", file_system=FILE_SYSTEM)
-        self.device.native.file_copy.assert_called()
+        mock_transfer.assert_called_with(
+            self.mock_native_ssh,
+            source_file="source_file",
+            dest_file="source_file",
+            file_system=FILE_SYSTEM,
+            direction="put",
+            overwrite_file=True,
+        )
 
+    @mock.patch("pyntc.devices.nxos_device.file_transfer")
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[True])
-    def test_file_copy_file_exists(self, mock_fcre):
+    def test_file_copy_file_exists(self, mock_fcre, mock_transfer):
         self.device.file_copy("source_file", "dest_file")
-        self.device.native.file_copy.assert_not_called()
+        mock_transfer.assert_not_called()
 
+    @mock.patch("pyntc.devices.nxos_device.file_transfer")
     @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
     @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
     @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False, False])
-    def test_file_copy_fail(self, mock_fcre, mock_getsize, mock_get_free_space):
+    def test_file_copy_fail(self, mock_fcre, mock_getsize, mock_get_free_space, mock_transfer):
         with self.assertRaises(FileTransferError):
             self.device.file_copy("source_file")
-        self.device.native.file_copy.assert_called()
+        mock_transfer.assert_called()
+
+    @mock.patch("pyntc.devices.nxos_device.file_transfer", side_effect=OSError("scp broken"))
+    @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024 * 1024 * 1024)
+    @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024)
+    @mock.patch.object(NXOSDevice, "file_copy_remote_exists", side_effect=[False])
+    def test_file_copy_raises_on_transfer_error(self, mock_fcre, mock_getsize, mock_get_free_space, mock_transfer):
+        with self.assertRaises(FileTransferError):
+            self.device.file_copy("source_file")
 
     @mock.patch.object(NXOSDevice, "_get_free_space", return_value=1024)  # Only 1KB free
     @mock.patch("pyntc.devices.nxos_device.os.path.getsize", return_value=1024 * 1024)  # Trying to copy 1MB
@@ -179,8 +218,19 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_reboot(self):
         self.device.reboot()
-        self.device.native.show_list.assert_called_with(["terminal dont-ask", "reload"])
-        # self.device.native.reboot.assert_called_with(confirm=True)
+        self.mock_native_ssh.send_command.assert_any_call("terminal dont-ask")
+        self.mock_native_ssh.send_command.assert_any_call("reload")
+
+    def test_reboot_handles_read_timeout(self):
+        from netmiko.exceptions import ReadTimeout as NetmikoReadTimeout
+
+        self.mock_native_ssh.send_command.side_effect = [None, NetmikoReadTimeout("reload killed the session")]
+        self.device.reboot()
+        self.mock_native_ssh.send_command.assert_any_call("reload")
+
+    def test_reboot_rejects_confirm_kwarg(self):
+        with self.assertRaises(DeprecationWarning):
+            self.device.reboot(confirm=True)
 
     def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}
@@ -220,23 +270,34 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_backup_running_config(self):
         filename = "local_running_config"
-        self.device.backup_running_config(filename)
+        expected = "!\nhostname n9k1\n!\n"
+        self.mock_native_ssh.send_command.return_value = expected
+        with mock.patch("builtins.open", mock.mock_open()) as mock_file:
+            self.device.backup_running_config(filename)
 
-        self.device.native.backup_running_config.assert_called_with(filename)
+        self.mock_native_ssh.send_command.assert_called_with("show running-config")
+        mock_file.assert_called_with(filename, "w", encoding="utf-8")
+        mock_file().write.assert_called_with(expected)
 
     def test_rollback(self):
+        self.mock_native_ssh.send_command.return_value = ""
         self.device.rollback("good_checkpoint")
-        self.device.native.rollback.assert_called_with("good_checkpoint")
+        self.mock_native_ssh.send_command.assert_called_with("rollback running-config file good_checkpoint")
 
     def test_bad_rollback(self):
-        self.device.native.rollback.side_effect = CLIError("rollback", "bad rollback command")
-
+        self.mock_native_ssh.send_command.return_value = "Rollback failed: file bad_checkpoint does not exist"
         with self.assertRaises(RollbackError):
             self.device.rollback("bad_checkpoint")
 
-    def test_checkpiont(self):
+    def test_checkpoint(self):
+        self.mock_native_ssh.send_command.return_value = ""
         self.device.checkpoint("good_checkpoint")
-        self.device.native.checkpoint.assert_called_with("good_checkpoint")
+        self.mock_native_ssh.send_command.assert_called_with("checkpoint file good_checkpoint")
+
+    def test_checkpoint_failure(self):
+        self.mock_native_ssh.send_command.return_value = "ERROR: Checkpoint named good_checkpoint already exists"
+        with self.assertRaises(CommandError):
+            self.device.checkpoint("good_checkpoint")
 
     def test_uptime(self):
         uptime = self.device.uptime
@@ -270,11 +331,17 @@ class TestNXOSDevice(unittest.TestCase):
         model = self.device.model
         assert model == "Nexus9000 C9396PX Chassis"
 
-    @mock.patch("pyntc.devices.pynxos.device.Device.running_config", new_callable=mock.PropertyMock)
-    def test_running_config(self, mock_rc):
-        type(self.device.native).running_config = mock_rc
-        self.device.running_config()
-        self.device.native.running_config.assert_called_with()
+    def test_running_config(self):
+        expected = "!\nhostname n9k1\n!\n"
+        self.mock_native_ssh.send_command.return_value = expected
+        result = self.device.running_config
+        self.assertEqual(result, expected)
+        self.mock_native_ssh.send_command.assert_called_with("show running-config")
+
+    def test_set_timeout(self):
+        self.device.set_timeout(120)
+        self.assertEqual(self.device.timeout, 120)
+        self.assertEqual(self.mock_native_ssh.timeout, 120)
 
     def test_starting_config(self):
         expected = self.device.show("show startup-config", raw_text=True)
@@ -285,6 +352,46 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.refresh()
         self.assertIsNone(self.device._uptime)
         self.assertFalse(hasattr(self.device.native, "_facts"))
+
+    def test_refresh_clears_redundancy_state(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = active"
+        self.device.redundancy_state  # noqa: B018  # populate cache
+        self.assertEqual(self.device._redundancy_state, "active")
+        self.device.refresh()
+        self.assertIsNone(self.device._redundancy_state)
+
+    def test_redundancy_state_active(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = active"
+        self.assertEqual(self.device.redundancy_state, "active")
+        self.mock_native_ssh.send_command.assert_called_with("show redundancy state")
+
+    def test_redundancy_state_standby(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = standby"
+        self.assertEqual(self.device.redundancy_state, "standby")
+
+    def test_redundancy_state_no_match_falls_back_to_active(self):
+        self.mock_native_ssh.send_command.return_value = "% Invalid command at marker"
+        self.assertEqual(self.device.redundancy_state, "active")
+
+    def test_redundancy_state_session_error_falls_back_to_active(self):
+        from netmiko.exceptions import NetmikoBaseException
+
+        self.mock_native_ssh.send_command.side_effect = NetmikoBaseException("session dropped")
+        self.assertEqual(self.device.redundancy_state, "active")
+
+    def test_redundancy_state_is_memoized(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = active"
+        self.device.redundancy_state  # noqa: B018  # trigger memoization
+        self.device.redundancy_state  # noqa: B018  # second access should not re-send
+        self.assertEqual(self.mock_native_ssh.send_command.call_count, 1)
+
+    def test_is_active_returns_true_when_active(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = active"
+        self.assertTrue(self.device.is_active())
+
+    def test_is_active_returns_false_when_standby(self):
+        self.mock_native_ssh.send_command.return_value = "Redundancy state = standby"
+        self.assertFalse(self.device.is_active())
 
     @mock.patch.object(NXOSDevice, "show", return_value="bootflash:")
     def test_get_file_system(self, mock_show):
@@ -454,6 +561,59 @@ class TestNXOSDevice(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.device.remote_file_copy(src, file_system="bootflash:")
+
+
+class TestNXOSDeviceDeprecationWarnings(unittest.TestCase):
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_no_warning_on_default_kwargs(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass")
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(deprecation_warnings, [])
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_transport(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", transport="https")
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("transport", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_port(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", port=8443)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("port", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_on_non_default_verify(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", verify=False)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        self.assertIn("verify", str(deprecation_warnings[0].message))
+
+    @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)
+    @mock.patch("pyntc.devices.nxos_device.NXOSNative", autospec=True)
+    def test_warning_lists_multiple_kwargs(self, _mock_native, _mock_connect_handler):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            NXOSDevice("host", "user", "pass", transport="https", port=8443, verify=False)
+        deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+        self.assertEqual(len(deprecation_warnings), 1)
+        message = str(deprecation_warnings[0].message)
+        for kwarg in ("transport", "port", "verify"):
+            self.assertIn(kwarg, message)
 
 
 if __name__ == "__main__":

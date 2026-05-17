@@ -1,0 +1,1 @@
+Deprecated the `transport`, `verify`, and `port` constructor kwargs on `NXOSDevice`. Supplying any of these now emits a `DeprecationWarning`. These kwargs will be removed in a future release as `NXOSDevice` migrates to Netmiko SSH exclusively.
