@@ -328,7 +328,6 @@ class NXOSDevice(BaseDevice):
         Raises:
             FileSystemNotFoundError: When the module is unable to determine the default file system.
         """
-        self.open()
         raw_data = self.native_ssh.send_command("dir", read_timeout=30)
 
         try:
@@ -345,7 +344,6 @@ class NXOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        self.open()
         raw_data = self.native_ssh.send_command(f"dir {file_system}", read_timeout=30)
         # Example NXOS dir output: 47171194880 bytes free
         match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
@@ -403,7 +401,6 @@ class NXOSDevice(BaseDevice):
         """
         exists = False
 
-        self.open()
         file_system = file_system or self._get_file_system()
         command = f"dir {file_system}/{filename}"
         result = self.native_ssh.send_command(command, read_timeout=30)
@@ -451,7 +448,6 @@ class NXOSDevice(BaseDevice):
                 f"Supported algorithms: {sorted(NXOS_SUPPORTED_HASHING_ALGORITHMS)}"
             )
 
-        self.open()
         file_system = kwargs.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()

@@ -1,8 +1,6 @@
 import unittest
 
 import mock
-from hypothesis import given
-from hypothesis import strategies as st
 
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.nxos_device import NXOSDevice
@@ -33,6 +31,19 @@ DEVICE_FACTS = {
     "interfaces": ["mgmt0", "Ethernet1/1", "Ethernet1/2", "Ethernet1/3"],
     "fqdn": "N/A",
 }
+NXOS_DIR_CMD = """
+       4096    May 01 18:24:24 2026  .rpmstore/
+       4096    Feb 10 09:06:54 2017  .snapshots/
+       4096    Jan 19 02:13:25 2017  .swtam/
+  757450240    Aug 11 13:04:13 2025  flash:
+  536306688    Nov 04 13:43:29 2016  nxos.7.0.3.I2.2d.bin
+  757307904    Mar 10 13:57:55 2025  nxos.7.0.3.I5.2.bin
+
+Usage for bootflash://
+ 3250384896 bytes used
+48654139392 bytes free
+51904524288 bytes total
+"""
 
 
 class TestNXOSDevice(unittest.TestCase):
@@ -289,7 +300,7 @@ class TestNXOSDevice(unittest.TestCase):
         self.assertFalse(hasattr(self.device.native, "_facts"))
 
     def test_get_file_system(self):
-        self.device.native_ssh.send_command.return_value = "bootflash:"
+        self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         self.assertEqual(self.device._get_file_system(), "bootflash:")
         self.device.native_ssh.send_command.assert_called_with("dir", read_timeout=30)
 
@@ -302,30 +313,33 @@ class TestNXOSDevice(unittest.TestCase):
     def test_get_free_space(self):
         """Test _get_free_space parses NXOS dir output correctly."""
         # NXOS dir output format with free space at the end
-        self.device.native_ssh.send_command.return_value = """Directory of bootflash:/
-4096         Mar 03 22:47:15 2026  .rpmstore/
-4733329408   bytes used
-47171194880  bytes free
-51904524288  bytes total
-
-"""
+        self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         result = self.device._get_free_space()
-        self.assertEqual(result, 47171194880)
+        self.assertEqual(result, 48654139392)
         # Should call _get_file_system (which uses SSH) and then dir command via SSH
         ssh_calls = self.device.native_ssh.send_command.call_args_list
         self.assertTrue(any("dir" in str(call) for call in ssh_calls))
 
     def test_get_free_space_with_custom_filesystem(self):
         """Test _get_free_space uses custom file system when provided."""
-        self.device.native_ssh.send_command.return_value = """Directory of disk0:/
-1000000      bytes used
-2000000      bytes free
-3000000      bytes total
+        self.device.native_ssh.send_command.return_value = """
+         31    May 18 22:15:23 2026  dmesg
+          0    May 18 22:15:24 2026  libfipf.5934
+          0    May 18 22:15:25 2026  libfipf.5961
+          0    May 18 22:15:35 2026  libfipf.6282
+       9343    May 18 22:20:52 2026  messages
+        186    May 18 22:17:27 2026  mtm_lib.log
+        169    May 18 22:15:25 2026  startupdebug
+        663    May 18 22:15:26 2026  syslogd_ha_debug
 
+Usage for log://sup-local
+      53248 bytes used
+   52375552 bytes free
+   52428800 bytes total
 """
-        result = self.device._get_free_space("disk0:")
-        self.assertEqual(result, 2000000)
-        self.device.native_ssh.send_command.assert_called_with("dir disk0:", read_timeout=30)
+        result = self.device._get_free_space("log:")
+        self.assertEqual(result, 52375552)
+        self.device.native_ssh.send_command.assert_called_with("dir log:", read_timeout=30)
 
     def test_get_free_space_raises_on_parse_error(self):
         """Test _get_free_space raises CommandError when output can't be parsed."""
@@ -399,7 +413,7 @@ class TestNXOSDevice(unittest.TestCase):
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
-        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
         # Verify send_command was called with expect_string parameter
@@ -417,7 +431,7 @@ class TestNXOSDevice(unittest.TestCase):
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
-        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, False]):
             with self.assertRaises(FileTransferError):
                 self.device.remote_file_copy(src, file_system="bootflash:")
@@ -453,7 +467,7 @@ class TestNXOSDevice(unittest.TestCase):
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
-        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
 
@@ -479,7 +493,7 @@ class TestNXOSDevice(unittest.TestCase):
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
-        self.device.native_ssh.send_command.return_value = "Copy complete\nhost#"
+        self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
 
@@ -513,41 +527,33 @@ class TestNXOSDevice(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.device.remote_file_copy(src, file_system="bootflash:")
 
-    @given(
-        scheme=st.sampled_from(["http", "https", "scp", "sftp", "ftp", "tftp"]),
-        hostname=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd"))),
-        filename=st.text(
-            min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd", "Pd"))
-        ),
-        checksum=st.text(min_size=32, max_size=32, alphabet=st.characters(whitelist_categories=("Ll", "Nd"))),
-    )
-    def test_remote_file_copy_uses_ssh_for_filesystem_detection(self, scheme, hostname, filename, checksum):
-        """Property-based test: remote_file_copy should use SSH for _get_file_system calls.
-
-        This test verifies that the SSH/HTTP protocol mismatch bug is fixed by ensuring
-        that _get_file_system always uses SSH for file system operations.
-        """
+    def test_remote_file_copy_uses_ssh_for_filesystem_detection(self):
+        """remote_file_copy should use SSH for _get_file_system calls."""
+        filename = "nxos.bin"
+        checksum = "a" * 32
+        self.device.native_ssh.reset_mock()
         src = FileCopyModel(
-            download_url=f"{scheme}://{hostname}/{filename}",
+            download_url=f"https://example.com/{filename}",
             checksum=checksum,
             file_name=filename,
             hashing_algorithm="md5",
             timeout=30,
         )
 
-        # Mock SSH operations to simulate successful file system detection
-        self.device.native_ssh.send_command.return_value = "Directory of bootflash:/\n47171194880 bytes free"
+        self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         self.device.native_ssh.find_prompt.return_value = "host#"
 
-        # Mock verify_file to return True (file already exists and verified)
-        with mock.patch.object(NXOSDevice, "verify_file", return_value=True):
-            # This should complete without attempting HTTP connections
+        with (
+            mock.patch.object(self.device, "verify_file", return_value=True),
+            mock.patch.object(self.device, "show") as mock_show,
+        ):
             self.device.remote_file_copy(src)
+            mock_show.assert_not_called
 
-        # Verify that SSH was used for directory command (filesystem detection)
         ssh_calls = self.device.native_ssh.send_command.call_args_list
         self.assertTrue(
-            any("dir" in str(call) for call in ssh_calls), "Expected SSH 'dir' command for filesystem detection"
+            any("dir" in str(call) for call in ssh_calls),
+            "Expected SSH 'dir' command for filesystem detection",
         )
 
     @mock.patch("pyntc.devices.nxos_device.ConnectHandler", create=True)

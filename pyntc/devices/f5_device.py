@@ -7,7 +7,13 @@ import time
 import warnings
 
 import requests
-from f5.bigip import ManagementRoot
+
+try:
+    from f5.bigip import ManagementRoot
+
+    HAS_F5_BIGIP = True
+except ModuleNotFoundError:
+    HAS_F5_BIGIP = False
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice
@@ -30,6 +36,8 @@ class F5Device(BaseDevice):
             password (str): The password to authenticate with the device.
             kwargs (dict): Additional keyword arguments.
         """
+        if not HAS_F5_BIGIP:
+            raise RuntimeError("F5 SDK does not support this version of Python")
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
