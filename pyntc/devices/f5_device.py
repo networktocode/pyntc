@@ -36,8 +36,10 @@ class F5Device(BaseDevice):
             password (str): The password to authenticate with the device.
             kwargs (dict): Additional keyword arguments.
         """
+        # Re-import f5.bigip so that the error raises if running Python >3.11
         if not HAS_F5_BIGIP:
-            raise RuntimeError("F5 SDK does not support this version of Python")
+            from f5.bigip import ManagementRoot as _ManagementRoot  # pylint: disable=import-outside-toplevel  # noqa: F401, I001
+
         super().__init__(host, username, password, device_type="f5_tmos_icontrol")
 
         self.api_handler = ManagementRoot(self.host, self.username, self.password)
