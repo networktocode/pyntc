@@ -1,3 +1,3 @@
-Fixed an issue where nx-api commands were mixed with ssh commands.
-Fixed an issue where a tuple was returning instead of a string.
-Fixed an issue where a prompt was not being caught.
+Fixed a bug in nxos where nx-api commands were mixed with ssh commands.
+Fixed a bug in nxos `_build_url_copy_command_simple` returning the wrong type of data.
+Fixed a bug in nxos failing to answer a prompt when using remote_file_copy.
