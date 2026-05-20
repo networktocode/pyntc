@@ -3,8 +3,10 @@
 import os
 import re
 import time
+from functools import cached_property
 
 from netmiko import ConnectHandler
+from netmiko.exceptions import NetmikoBaseException, NetmikoTimeoutException
 from requests.exceptions import ConnectTimeout, ReadTimeout
 
 from pyntc import log
@@ -66,15 +68,15 @@ class NXOSDevice(BaseDevice):
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
-        version_data = self.show("show version", raw_text=True)
+        version_data = self.show_netmiko("show version", raw_text=True)
         return bool(re.search(image_name, version_data))
 
     def _wait_for_device_reboot(self, timeout=3600):
+        original_uptime = self.uptime
         start = time.time()
         while time.time() - start < timeout:
             try:  # NXOS stays online, when it installs OS
-                self.refresh()
-                if self.uptime < 180:
+                if self.uptime < original_uptime:
                     log.info("Host %s: Device rebooted.", self.host)
                     return
             except:  # noqa E722 # nosec  # pylint: disable=bare-except
@@ -157,11 +159,26 @@ class NXOSDevice(BaseDevice):
         Returns:
             (int): Uptime of the device in seconds.
         """
-        if self._uptime is None:
-            self._uptime = self.native.facts.get("uptime")
+        uptime = 0
+        try:
+            parsed_uptime = self.show_netmiko("show version")[0]["uptime"]
+            for interval in parsed_uptime.split(","):
+                duration, unit = interval.strip().split(" ")
+                if "day" in unit.lower():
+                    uptime += int(duration) * 24 * 60 * 60
+                elif "hour" in unit.lower():
+                    uptime += int(duration) * 60 * 60
+                elif "minute" in unit.lower():
+                    uptime += int(duration) * 60
+                elif "second" in unit.lower():
+                    uptime += int(duration)
+                else:
+                    raise ValueError(f"Unknown time unit in uptime: {unit}")
+        except (IndexError, KeyError, ValueError) as e:
+            raise CommandError("Unable to parse 'show version' command.") from e
 
-        log.debug("Host %s: Uptime %s", self.host, self._uptime)
-        return self._uptime
+        log.debug("Host %s: Uptime %s", self.host, uptime)
+        return uptime
 
     @property
     def uptime_string(self):
@@ -170,23 +187,19 @@ class NXOSDevice(BaseDevice):
         Returns:
             (str): Uptime of device.
         """
-        if self._uptime_string is None:
-            self._uptime_string = self.native.facts.get("uptime_string")
+        return self.native.facts.get("uptime_string")
 
-        return self._uptime_string
-
-    @property
+    @cached_property
     def hostname(self):
         """Get hostname of the device.
 
         Returns:
             (str): Hostname of the device.
         """
-        if self._hostname is None:
-            self._hostname = self.native.facts.get("hostname")
+        hostname = self.show_netmiko("show hostname")[0]["hostname"]
 
-        log.debug("Host %s: Hostname %s", self.host, self._hostname)
-        return self._hostname
+        log.debug("Host %s: Hostname %s", self.host, hostname)
+        return hostname
 
     @property
     def interfaces(self):
@@ -632,7 +645,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             (bool): True if new image is boot option on device. Otherwise, false.
         """
-        self.native.show("terminal dont-ask")
+        self.show_netmiko("terminal dont-ask")
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
@@ -674,7 +687,7 @@ class NXOSDevice(BaseDevice):
         """
         if self._redundancy_state is None:
             try:
-                output = self.native.show("show redundancy state", raw_text=True)
+                output = self.native.show_netmiko("show redundancy state", raw_text=True)
                 # Parse the redundancy state from output
                 # Example output: "Redundancy state = active"
                 match = re.search(r"Redundancy\s+state\s*=\s*(\w+)", output, re.IGNORECASE)
@@ -749,7 +762,7 @@ class NXOSDevice(BaseDevice):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
             raise DeprecationWarning("Passing 'confirm' to reboot method is deprecated.")
         try:
-            self.native.show_list(["terminal dont-ask", "reload"])
+            self.show_netmiko(["terminal dont-ask", "reload"])
             # The native reboot is not always properly disabling confirmation. Above is more consistent.
             # self.native.reboot(confirm=True)
         except ReadTimeout as expected_exception:
@@ -812,15 +825,14 @@ class NXOSDevice(BaseDevice):
         """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
-            file_system = "bootflash:"
+            file_system = self._get_file_system()
 
-        file_system_files = self.show(f"dir {file_system}", raw_text=True)
-        if re.search(image_name, file_system_files) is None:
+        if not self.check_file_exists(image_name, file_system=file_system):
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
 
         if kickstart is not None:
-            if re.search(kickstart, file_system_files) is None:
+            if not self.check_file_exists(kickstart, file_system=file_system):
                 log.error("Host %s: File not found error for image %s.", self.host, image_name)
                 raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, directory=file_system)
 
@@ -828,7 +840,20 @@ class NXOSDevice(BaseDevice):
 
         image_name = file_system + image_name
         try:
-            self.native.set_boot_options(image_name, kickstart=kickstart, reboot=reboot)
+            self.show_netmiko("terminal dont-ask")
+            if reboot:
+                reboot_arg = ""
+            else:
+                reboot_arg = " no-reload"
+            try:
+                if kickstart is None:
+                    self.show_netmiko(f"install all nxos {image_name}{reboot_arg}", raw_text=True)
+                else:
+                    self.show_netmiko(
+                        f"install all system {image_name} kickstart {kickstart}{reboot_arg}", raw_text=True
+                    )
+            except (NetmikoBaseException, NetmikoTimeoutException):
+                pass
         except (ReadTimeout, ConnectTimeout):
             pass
         log.info("Host %s: boot options have been set to %s", self.host, image_name)
@@ -843,7 +868,10 @@ class NXOSDevice(BaseDevice):
         self.native.timeout = timeout
 
     def show(self, command, raw_text=False):
-        """Send a non-configuration command.
+        """Send a non-configuration command using pynxos.
+
+        This method is using the deprecated pynxos library and will switch to netmiko in a future
+        release. The show_netmiko method can be used to test compatibility with existing code.
 
         Args:
             command (str): The command to send to the device.
@@ -855,6 +883,11 @@ class NXOSDevice(BaseDevice):
         Returns:
             (str): Results of the command ran.
         """
+        deprecation_warning = (
+            "NXOSDevice.show is using the deprecated pynxos nx-api library and will be replaced by netmiko in a future release."
+            "Please use the NXOSDevice.show_netmiko method to test compatibility with existing code."
+        )
+        log.warning(deprecation_warning)
         log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
         if isinstance(command, list):
             try:
@@ -870,6 +903,38 @@ class NXOSDevice(BaseDevice):
             log.error("Host %s: Command error %s.", self.host, str(e))
             raise CommandError(command, str(e))
 
+    def show_netmiko(self, command, raw_text=False, read_timeout=None):
+        """Send a non-configuration command using netmiko.
+
+        Args:
+            command (str): The command to send to the device.
+            raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
+            read_timeout (int, optional): Timeout to pass to Netmiko read_timeout. Defaults to the Netmiko timeout if not set.
+
+        Raises:
+            CommandError: Error message stating which command failed.
+
+        Returns:
+            (str): Results of the command ran.
+        """
+        if read_timeout is None:
+            read_timeout = self.native_ssh.timeout
+        if isinstance(command, list):
+            results = []
+            for inner in command:
+                results.append(self.show_netmiko(inner, raw_text=raw_text, read_timeout=read_timeout))
+            return results
+        try:
+            result = self.native_ssh.send_command(command, use_textfsm=not raw_text, read_timeout=read_timeout)
+            log.debug(f"Host %s: Successfully executed command '{command}'.", self.host)
+            return result
+        except NetmikoTimeoutException as e:
+            log.error("Host %s: Command timed out %s.", self.host, str(e))
+            raise CommandError(command) from e
+        except NetmikoBaseException as e:
+            log.error("Host %s: Command failed %s.", self.host, str(e))
+            raise CommandError(command) from e
+
     @property
     def startup_config(self):
         """Get startup configuration.
@@ -877,4 +942,4 @@ class NXOSDevice(BaseDevice):
         Returns:
             (str): Startup configuration.
         """
-        return self.show("show startup-config", raw_text=True)
+        return self.show_netmiko("show startup-config", raw_text=True)
