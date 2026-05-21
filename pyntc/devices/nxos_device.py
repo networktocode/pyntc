@@ -3,7 +3,6 @@
 import os
 import re
 import time
-from functools import cached_property
 
 from netmiko import ConnectHandler
 from netmiko.exceptions import NetmikoBaseException, NetmikoTimeoutException
@@ -175,7 +174,7 @@ class NXOSDevice(BaseDevice):
                 else:
                     raise ValueError(f"Unknown time unit in uptime: {unit}")
         except (IndexError, KeyError, ValueError) as e:
-            raise CommandError("Unable to parse 'show version' command.") from e
+            raise CommandError(command="show version", message="Failed to parse 'show version' command.") from e
 
         log.debug("Host %s: Uptime %s", self.host, uptime)
         return uptime
@@ -189,17 +188,18 @@ class NXOSDevice(BaseDevice):
         """
         return self.native.facts.get("uptime_string")
 
-    @cached_property
+    @property
     def hostname(self):
         """Get hostname of the device.
 
         Returns:
             (str): Hostname of the device.
         """
-        hostname = self.show_netmiko("show hostname")[0]["hostname"]
+        if self._hostname is None:
+            self._hostname = self.show_netmiko("show hostname")[0]["hostname"]
 
-        log.debug("Host %s: Hostname %s", self.host, hostname)
-        return hostname
+        log.debug("Host %s: Hostname %s", self.host, self._hostname)
+        return self._hostname
 
     @property
     def interfaces(self):
@@ -687,7 +687,7 @@ class NXOSDevice(BaseDevice):
         """
         if self._redundancy_state is None:
             try:
-                output = self.native.show_netmiko("show redundancy state", raw_text=True)
+                output = self.show_netmiko("show redundancy state", raw_text=True)
                 # Parse the redundancy state from output
                 # Example output: "Redundancy state = active"
                 match = re.search(r"Redundancy\s+state\s*=\s*(\w+)", output, re.IGNORECASE)
@@ -930,10 +930,10 @@ class NXOSDevice(BaseDevice):
             return result
         except NetmikoTimeoutException as e:
             log.error("Host %s: Command timed out %s.", self.host, str(e))
-            raise CommandError(command) from e
+            raise CommandError(command=command, message="Command timed out") from e
         except NetmikoBaseException as e:
             log.error("Host %s: Command failed %s.", self.host, str(e))
-            raise CommandError(command) from e
+            raise CommandError(command=command, message="Error retrieving command output") from e
 
     @property
     def startup_config(self):

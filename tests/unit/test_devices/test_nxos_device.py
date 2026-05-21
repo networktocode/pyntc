@@ -257,7 +257,7 @@ class TestNXOSDevice(unittest.TestCase):
         )
 
     def test_set_boot_options_no_file(self):
-        self.device.hostname = "n9k1"
+        self.device._hostname = "n9k1"
         self.device.native_ssh.send_command.side_effect = [
             NXOS_DIR_CMD,  # _get_file_system
             "No such file or directory",  # check_file_exists - file not found
@@ -267,7 +267,7 @@ class TestNXOSDevice(unittest.TestCase):
         self.assertIn(f"{BOOT_IMAGE} was not found in {FILE_SYSTEM}", no_file.exception.message)
 
     def test_set_boot_options_no_kickstart(self):
-        self.device.hostname = "n9k1"
+        self.device._hostname = "n9k1"
         self.device.native_ssh.send_command.side_effect = [
             NXOS_DIR_CMD,  # _get_file_system
             f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
