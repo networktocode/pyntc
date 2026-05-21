@@ -427,10 +427,11 @@ Usage for log://sup-local
 
     def test_get_remote_checksum(self):
         self.device.native_ssh.send_command.side_effect = None
-        self.device.native_ssh.send_command.return_value = "abc123"
+        # NXOS returns just the hex digest on its own line for ``show file <path> md5sum``.
+        self.device.native_ssh.send_command.return_value = "4357603f1a9ed6ae27906b96d4daac49"
         result = self.device.get_remote_checksum("nxos.bin", hashing_algorithm="md5", file_system="bootflash:")
-        self.assertEqual(result, "abc123")
-        self.device.native_ssh.send_command.assert_called_with("show file bootflash:/nxos.bin md5sum", read_timeout=30)
+        self.assertEqual(result, "4357603f1a9ed6ae27906b96d4daac49")
+        self.device.native_ssh.send_command.assert_called_with("show file bootflash:nxos.bin md5sum", read_timeout=30)
 
     def test_get_remote_checksum_invalid_algorithm(self):
         with self.assertRaises(ValueError):

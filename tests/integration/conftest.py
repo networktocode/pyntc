@@ -22,7 +22,7 @@ _PLATFORM_HASH_ALGOS = {
     "test_asa_device": "sha512",
     "test_jnpr_device": "sha256",
     "test_ios_device": "md5",
-    "test_nxos_device": "sha256",
+    "test_nxos_device": "md5",
 }
 
 # Maps each hashing algorithm to the suffix convention used on the

@@ -475,9 +475,11 @@ class NXOSDevice(BaseDevice):
         if not file_system.startswith("/") and not file_system.endswith(":"):
             file_system = f"{file_system}:"
 
-        # Use NXOS verify command to get the checksum
-        # Example: show file bootflash:nautobot.png sha512sum
-        command = f"show file {file_system}/{filename} {hashing_algorithm}sum"
+        # Use NXOS verify command to get the checksum. The file_system already
+        # ends with ":" (e.g. "bootflash:"), so concatenate directly — NXOS rejects
+        # "bootflash:/name" as a syntax error.
+        # Example: show file bootflash:nautobot.png md5sum
+        command = f"show file {file_system}{filename} {hashing_algorithm}sum"
 
         try:
             result = self.native_ssh.send_command(command, read_timeout=30)
@@ -488,13 +490,18 @@ class NXOSDevice(BaseDevice):
                 command,
                 result,
             )
-            print(f"result: {result}")
-            remote_checksum = result
-            return remote_checksum
-
         except Exception as e:
             log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
+
+        # NXOS sometimes returns just the digest, sometimes prefixes/suffixes it
+        # with the filename or other context. Extract the first hex run long
+        # enough to be a real digest (md5=32, sha256=64, sha512=128).
+        match = re.search(r"\b([a-fA-F0-9]{32,128})\b", result)
+        if not match:
+            log.error("Host %s: Could not parse checksum from '%s': %s", self.host, command, result)
+            raise CommandError(command, f"Could not parse checksum from device output: {result}")
+        return match.group(1)
 
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):  # noqa: R0912 pylint: disable=too-many-branches
         """Copy a file from remote source to device.  Skips if file already exists and is verified on remote device.
