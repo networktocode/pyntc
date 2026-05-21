@@ -310,6 +310,8 @@ class TestNXOSDevice(unittest.TestCase):
         assert vendor == "cisco"
 
     def test_os_version(self):
+        self.device.native_ssh.send_command.side_effect = None
+        self.device.native_ssh.send_command.return_value = [{"os": "7.0(3)I2(1)"}]
         os_version = self.device.os_version
         assert os_version == "7.0(3)I2(1)"
 

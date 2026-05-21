@@ -267,7 +267,7 @@ class NXOSDevice(BaseDevice):
             (str): Device version.
         """
         if self._os_version is None:
-            self._os_version = self.native.facts.get("os_version")
+            self._os_version = self.show_netmiko("show version")[0]["os"]
 
         log.debug("Host %s: OS version %s", self.host, self._os_version)
         return self._os_version
