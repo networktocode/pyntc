@@ -882,38 +882,27 @@ class NXOSDevice(BaseDevice):
         self.native.timeout = timeout
 
     def show(self, command, raw_text=False):
-        """Send a non-configuration command using pynxos.
-
-        This method is using the deprecated pynxos library and will switch to netmiko in a future
-        release. The show_netmiko method can be used to test compatibility with existing code.
+        """Send a non-configuration command using netmiko.
 
         Args:
-            command (str): The command to send to the device.
-            raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
+            command (str, list): The command (or list of commands) to send to the device.
+            raw_text (bool, optional): When True return raw text; when False parse with TextFSM
+                into a list of dicts. Defaults to False.
 
         Raises:
-            CommandError: Error message stating which command failed.
+            CommandError: A single command failed on the device.
+            CommandListError: A command within a list failed on the device.
 
         Returns:
-            (str): Results of the command ran.
+            (str | list): Raw text or TextFSM-parsed result for a single command; a list of those
+            results when ``command`` is a list.
         """
-        deprecation_warning = (
-            "NXOSDevice.show is using the deprecated pynxos nx-api library and will be replaced by netmiko in a future release."
-            "Please use the NXOSDevice.show_netmiko method to test compatibility with existing code."
-        )
-        log.warning(deprecation_warning)
-        log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
-        if isinstance(command, list):
-            try:
-                log.debug("Host %s: Successfully executed command 'show' with commands %s.", self.host, command)
-                return self.native.show_list(command, raw_text=raw_text)
-            except CLIError as e:
+        try:
+            return self.show_netmiko(command, raw_text=raw_text)
+        except CLIError as e:
+            if isinstance(command, list):
                 log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
                 raise CommandListError(command, e.command, str(e))
-        try:
-            log.debug("Host %s: Successfully executed command 'show'.", self.host)
-            return self.native.show(command, raw_text=raw_text)
-        except CLIError as e:
             log.error("Host %s: Command error %s.", self.host, str(e))
             raise CommandError(command, str(e))
 

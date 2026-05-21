@@ -95,10 +95,9 @@ class TestNXOSDevice(unittest.TestCase):
         command = "show cdp neighbors"
         result = self.device.show(command)
 
-        self.assertIsInstance(result, dict)
-        self.assertIsInstance(result.get("neigh_count"), int)
-
-        self.device.native.show.assert_called_with(command, raw_text=False)
+        # TextFSM-parsed output is a list of per-neighbor dicts.
+        self.assertIsInstance(result, list)
+        self.assertIn("neighbor_name", result[0])
 
     def test_bad_show(self):
         command = "show microsoft"
@@ -111,18 +110,15 @@ class TestNXOSDevice(unittest.TestCase):
 
         self.assertIsInstance(result, str)
         self.assertEqual(result, "n9k1.cisconxapi.com")
-        self.device.native.show.assert_called_with(command, raw_text=True)
 
     def test_show_list(self):
         commands = ["show hostname", "show clock"]
 
         result = self.device.show(commands)
         self.assertIsInstance(result, list)
-
-        self.assertIn("hostname", result[0])
-        self.assertIn("simple_time", result[1])
-
-        self.device.native.show_list.assert_called_with(commands, raw_text=False)
+        # Each element is itself a TextFSM-parsed list of dicts.
+        self.assertIn("hostname", result[0][0])
+        self.assertIn("time", result[1][0])
 
     def test_bad_show_list(self):
         commands = ["show badcommand", "show clock"]
