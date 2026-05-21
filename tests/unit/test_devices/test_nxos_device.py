@@ -15,7 +15,7 @@ from pyntc.errors import (
 )
 from pyntc.utils.models import FileCopyModel
 
-from .device_mocks.nxos import show, show_list
+from .device_mocks.nxos import netmiko_send_command, show, show_list
 
 BOOT_IMAGE = "n9000-dk9.9.2.1.bin"
 KICKSTART_IMAGE = "n9000-kickstart.9.2.1.bin"
@@ -52,6 +52,7 @@ class TestNXOSDevice(unittest.TestCase):
     @mock.patch("pyntc.devices.pynxos.device.Device.facts", new_callable=mock.PropertyMock)
     def setUp(self, mock_facts, mock_device, mock_connect_handler):
         self.mock_native_ssh = mock_connect_handler.return_value
+        self.mock_native_ssh.send_command.side_effect = netmiko_send_command
         self.device = NXOSDevice("host", "user", "pass")
         mock_device.show.side_effect = show
         mock_device.show_list.side_effect = show_list
@@ -191,9 +192,13 @@ class TestNXOSDevice(unittest.TestCase):
             self.device.file_copy("source_file")
 
     def test_reboot(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.reboot()
-        self.device.native.show_list.assert_called_with(["terminal dont-ask", "reload"])
-        # self.device.native.reboot.assert_called_with(confirm=True)
+        calls = [
+            mock.call("terminal dont-ask", use_textfsm=False, read_timeout=mock.ANY),
+            mock.call("reload", use_textfsm=False, read_timeout=mock.ANY),
+        ]
+        self.device.native_ssh.send_command.assert_has_calls(calls)
 
     def test_boot_options(self):
         expected = {"sys": "my_sys", "boot": "my_boot"}
@@ -202,31 +207,72 @@ class TestNXOSDevice(unittest.TestCase):
         self.assertEqual(boot_options, expected)
 
     def test_set_boot_options(self):
+        self.device.native_ssh.send_command.side_effect = [
+            NXOS_DIR_CMD,  # _get_file_system
+            f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
+            "",  # terminal dont-ask
+            "",  # install all nxos
+        ]
         self.device.set_boot_options(BOOT_IMAGE)
-        self.device.native.set_boot_options.assert_called_with(
-            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        self.device.native_ssh.send_command.assert_called_with(
+            f"install all nxos {FILE_SYSTEM}{BOOT_IMAGE}", use_textfsm=False, read_timeout=mock.ANY
+        )
+
+    def test_set_boot_options_no_reboot(self):
+        self.device.native_ssh.send_command.side_effect = [
+            NXOS_DIR_CMD,  # _get_file_system
+            f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
+            "",  # terminal dont-ask
+            "",  # install all nxos
+        ]
+        self.device.set_boot_options(BOOT_IMAGE, reboot=False)
+        self.device.native_ssh.send_command.assert_called_with(
+            f"install all nxos {FILE_SYSTEM}{BOOT_IMAGE} no-reload", use_textfsm=False, read_timeout=mock.ANY
         )
 
     def test_set_boot_options_dir(self):
+        self.device.native_ssh.send_command.side_effect = [
+            f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
+            "",  # terminal dont-ask
+            "",  # install all nxos
+        ]
         self.device.set_boot_options(BOOT_IMAGE, file_system=FILE_SYSTEM)
-        self.device.native.set_boot_options.assert_called_with(
-            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=None, reboot=True
+        self.device.native_ssh.send_command.assert_called_with(
+            f"install all nxos {FILE_SYSTEM}{BOOT_IMAGE}", use_textfsm=False, read_timeout=mock.ANY
         )
 
     def test_set_boot_options_kickstart(self):
+        self.device.native_ssh.send_command.side_effect = [
+            NXOS_DIR_CMD,  # _get_file_system
+            f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
+            f"12345 bootflash:/{KICKSTART_IMAGE}",  # check_file_exists for kickstart
+            "",  # terminal dont-ask
+            "",  # install all system
+        ]
         self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
-        self.device.native.set_boot_options.assert_called_with(
-            f"{FILE_SYSTEM}{BOOT_IMAGE}", kickstart=f"{FILE_SYSTEM}{KICKSTART_IMAGE}", reboot=True
+        self.device.native_ssh.send_command.assert_called_with(
+            f"install all system {FILE_SYSTEM}{BOOT_IMAGE} kickstart {FILE_SYSTEM}{KICKSTART_IMAGE}",
+            use_textfsm=False,
+            read_timeout=mock.ANY,
         )
 
-    @mock.patch.object(NXOSDevice, "show", return_value=FILE_SYSTEM)
-    def test_set_boot_options_no_file(self, mock_show):
+    def test_set_boot_options_no_file(self):
+        self.device.hostname = "n9k1"
+        self.device.native_ssh.send_command.side_effect = [
+            NXOS_DIR_CMD,  # _get_file_system
+            "No such file or directory",  # check_file_exists - file not found
+        ]
         with self.assertRaises(NTCFileNotFoundError) as no_file:
             self.device.set_boot_options(BOOT_IMAGE)
         self.assertIn(f"{BOOT_IMAGE} was not found in {FILE_SYSTEM}", no_file.exception.message)
 
-    @mock.patch.object(NXOSDevice, "show", return_value=f"{FILE_SYSTEM}\n{BOOT_IMAGE}")
-    def test_set_boot_options_no_kickstart(self, mock_show):
+    def test_set_boot_options_no_kickstart(self):
+        self.device.hostname = "n9k1"
+        self.device.native_ssh.send_command.side_effect = [
+            NXOS_DIR_CMD,  # _get_file_system
+            f"12345 bootflash:/{BOOT_IMAGE}",  # check_file_exists for image
+            "No such file or directory",  # check_file_exists - kickstart not found
+        ]
         with self.assertRaises(NTCFileNotFoundError) as no_file:
             self.device.set_boot_options(BOOT_IMAGE, kickstart=KICKSTART_IMAGE)
         self.assertIn(f"{KICKSTART_IMAGE} was not found in {FILE_SYSTEM}", no_file.exception.message)
@@ -252,8 +298,12 @@ class TestNXOSDevice(unittest.TestCase):
         self.device.native.checkpoint.assert_called_with("good_checkpoint")
 
     def test_uptime(self):
+        self.device.native_ssh.send_command.side_effect = None
+        self.device.native_ssh.send_command.return_value = [
+            {"uptime": "13 day(s), 1 hour(s), 8 minute(s), 6 second(s)"}
+        ]
         uptime = self.device.uptime
-        assert uptime == 1127286
+        self.assertEqual(uptime, (13 * 24 * 60 * 60) + (1 * 60 * 60) + (8 * 60) + 6)
 
     def test_vendor(self):
         vendor = self.device.vendor
@@ -269,7 +319,7 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_hostname(self):
         hostname = self.device.hostname
-        assert hostname == "n9k1"
+        assert hostname == "n9k1.cisconxapi.com"
 
     def test_fqdn(self):
         fqdn = self.device.fqdn
@@ -294,17 +344,20 @@ class TestNXOSDevice(unittest.TestCase):
         self.assertEqual(self.device.startup_config, expected)
 
     def test_refresh(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.assertTrue(hasattr(self.device.native, "_facts"))
         self.device.refresh()
-        self.assertIsNone(self.device._uptime)
+        self.assertIsNone(self.device._interfaces)
         self.assertFalse(hasattr(self.device.native, "_facts"))
 
     def test_get_file_system(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         self.assertEqual(self.device._get_file_system(), "bootflash:")
         self.device.native_ssh.send_command.assert_called_with("dir", read_timeout=30)
 
     def test_get_file_system_not_found(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "no filesystems here"
         with self.assertRaises(FileSystemNotFoundError):
             self.device._get_file_system()
@@ -313,6 +366,7 @@ class TestNXOSDevice(unittest.TestCase):
     def test_get_free_space(self):
         """Test _get_free_space parses NXOS dir output correctly."""
         # NXOS dir output format with free space at the end
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         result = self.device._get_free_space()
         self.assertEqual(result, 48654139392)
@@ -322,6 +376,7 @@ class TestNXOSDevice(unittest.TestCase):
 
     def test_get_free_space_with_custom_filesystem(self):
         """Test _get_free_space uses custom file system when provided."""
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = """
          31    May 18 22:15:23 2026  dmesg
           0    May 18 22:15:24 2026  libfipf.5934
@@ -343,28 +398,33 @@ Usage for log://sup-local
 
     def test_get_free_space_raises_on_parse_error(self):
         """Test _get_free_space raises CommandError when output can't be parsed."""
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "Directory of bootflash:/\nNo free space info here\n"
         with self.assertRaises(CommandError):
             self.device._get_free_space()
 
     def test_check_file_exists_true(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "12345 bootflash:/nxos.bin"
         result = self.device.check_file_exists("nxos.bin", file_system="bootflash:")
         self.assertTrue(result)
         self.device.native_ssh.send_command.assert_called_with("dir bootflash:/nxos.bin", read_timeout=30)
 
     def test_check_file_exists_false(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "No such file or directory"
         result = self.device.check_file_exists("nxos.bin", file_system="bootflash:")
         self.assertFalse(result)
         self.device.native_ssh.send_command.assert_called_with("dir bootflash:/nxos.bin", read_timeout=30)
 
     def test_check_file_exists_command_error(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "some ambiguous output"
         with self.assertRaises(CommandError):
             self.device.check_file_exists("nxos.bin", file_system="bootflash:")
 
     def test_get_remote_checksum(self):
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "abc123"
         result = self.device.get_remote_checksum("nxos.bin", hashing_algorithm="md5", file_system="bootflash:")
         self.assertEqual(result, "abc123")
@@ -413,6 +473,7 @@ Usage for log://sup-local
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
@@ -431,6 +492,7 @@ Usage for log://sup-local
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, False]):
             with self.assertRaises(FileTransferError):
@@ -467,6 +529,7 @@ Usage for log://sup-local
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
@@ -493,6 +556,7 @@ Usage for log://sup-local
         )
         self.device.native_ssh.find_prompt.return_value = "host#"
         # Mock send_command to return success message that includes the prompt
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = "Copy complete, now saving to disk (please wait)...\nhost#"
         with mock.patch.object(NXOSDevice, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(src, file_system="bootflash:")
@@ -540,6 +604,7 @@ Usage for log://sup-local
             timeout=30,
         )
 
+        self.device.native_ssh.send_command.side_effect = None
         self.device.native_ssh.send_command.return_value = NXOS_DIR_CMD
         self.device.native_ssh.find_prompt.return_value = "host#"
 

@@ -645,7 +645,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             (bool): True if new image is boot option on device. Otherwise, false.
         """
-        self.show_netmiko("terminal dont-ask")
+        self.show_netmiko("terminal dont-ask", raw_text=True)
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
@@ -762,7 +762,7 @@ class NXOSDevice(BaseDevice):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
             raise DeprecationWarning("Passing 'confirm' to reboot method is deprecated.")
         try:
-            self.show_netmiko(["terminal dont-ask", "reload"])
+            self.show_netmiko(["terminal dont-ask", "reload"], raw_text=True)
             # The native reboot is not always properly disabling confirmation. Above is more consistent.
             # self.native.reboot(confirm=True)
         except ReadTimeout as expected_exception:
@@ -840,7 +840,7 @@ class NXOSDevice(BaseDevice):
 
         image_name = file_system + image_name
         try:
-            self.show_netmiko("terminal dont-ask")
+            self.show_netmiko("terminal dont-ask", raw_text=True)
             if reboot:
                 reboot_arg = ""
             else:

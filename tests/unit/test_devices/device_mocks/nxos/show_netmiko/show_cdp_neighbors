@@ -1,0 +1,18 @@
+[
+    {
+        "neighbor_name": "PERIMETER",
+        "local_interface": "mgmt0",
+        "holdtime": "129",
+        "capabilities": "R S I",
+        "platform": "WS-C3750-48TS",
+        "neighbor_interface": "Fas1/0/32"
+    },
+    {
+        "neighbor_name": "nyc-leaf-01.networktocode.com",
+        "local_interface": "Eth1/1",
+        "holdtime": "179",
+        "capabilities": "R S I s",
+        "platform": "N9K-C9372TX",
+        "neighbor_interface": "Eth1/1"
+    }
+]

@@ -1,0 +1,9 @@
+[
+    {"size": "4096", "date_time": "May 01 18:24:24 2026", "item_name": ".rpmstore/", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "4096", "date_time": "Feb 10 09:06:54 2017", "item_name": ".snapshots/", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "4096", "date_time": "Jan 19 02:13:25 2017", "item_name": ".swtam/", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "757450240", "date_time": "Aug 11 13:04:13 2025", "item_name": "flash:", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "536306688", "date_time": "Nov 04 13:43:29 2016", "item_name": "nxos.7.0.3.I2.2d.bin", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "757307904", "date_time": "Mar 10 13:57:55 2025", "item_name": "nxos.7.0.3.I5.2.bin", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"},
+    {"size": "568", "date_time": "Mar 20 10:04:03 2017", "item_name": "vlan.dat", "total_size": "51904524288", "total_free": "48916582400", "total_used": "2987941888", "file_system": "bootflash"}
+]
