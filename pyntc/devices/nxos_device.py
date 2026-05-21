@@ -71,10 +71,12 @@ class NXOSDevice(BaseDevice):
         return bool(re.search(image_name, version_data))
 
     def _wait_for_device_reboot(self, timeout=3600):
+        self._uptime = None
         original_uptime = self.uptime
         start = time.time()
         while time.time() - start < timeout:
             try:  # NXOS stays online, when it installs OS
+                self._uptime = None
                 if self.uptime < original_uptime:
                     log.info("Host %s: Device rebooted.", self.host)
                     return
@@ -158,26 +160,27 @@ class NXOSDevice(BaseDevice):
         Returns:
             (int): Uptime of the device in seconds.
         """
-        uptime = 0
-        try:
-            parsed_uptime = self.show_netmiko("show version")[0]["uptime"]
-            for interval in parsed_uptime.split(","):
-                duration, unit = interval.strip().split(" ")
-                if "day" in unit.lower():
-                    uptime += int(duration) * 24 * 60 * 60
-                elif "hour" in unit.lower():
-                    uptime += int(duration) * 60 * 60
-                elif "minute" in unit.lower():
-                    uptime += int(duration) * 60
-                elif "second" in unit.lower():
-                    uptime += int(duration)
-                else:
-                    raise ValueError(f"Unknown time unit in uptime: {unit}")
-        except (IndexError, KeyError, ValueError) as e:
-            raise CommandError(command="show version", message="Failed to parse 'show version' command.") from e
+        if self._uptime is None:
+            self._uptime = 0
+            try:
+                parsed_uptime = self.show_netmiko("show version")[0]["uptime"]
+                for interval in parsed_uptime.split(","):
+                    duration, unit = interval.strip().split(" ")
+                    if "day" in unit.lower():
+                        self._uptime += int(duration) * 24 * 60 * 60
+                    elif "hour" in unit.lower():
+                        self._uptime += int(duration) * 60 * 60
+                    elif "minute" in unit.lower():
+                        self._uptime += int(duration) * 60
+                    elif "second" in unit.lower():
+                        self._uptime += int(duration)
+                    else:
+                        raise CommandError(command="show version", message=f"Unknown time unit in uptime: {unit}")
+            except (IndexError, KeyError, ValueError) as e:
+                raise CommandError(command="show version", message="Failed to parse 'show version' command.") from e
 
-        log.debug("Host %s: Uptime %s", self.host, uptime)
-        return uptime
+        log.debug("Host %s: Uptime %s", self.host, self._uptime)
+        return self._uptime
 
     @property
     def uptime_string(self):
@@ -186,7 +189,10 @@ class NXOSDevice(BaseDevice):
         Returns:
             (str): Uptime of device.
         """
-        return self.native.facts.get("uptime_string")
+        if self._uptime_string is None:
+            self._uptime_string = self.native.facts.get("uptime_string")
+
+        return self._uptime_string
 
     @property
     def hostname(self):
