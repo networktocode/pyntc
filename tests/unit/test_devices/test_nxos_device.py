@@ -130,11 +130,16 @@ class TestNXOSDevice(unittest.TestCase):
             self.device.show(commands)
 
     def test_save(self):
+        self.device.native_ssh.send_command.side_effect = None
+        self.device.native_ssh.send_command.return_value = (
+            "[########################################] 100%\nCopy complete."
+        )
         result = self.device.save()
-        self.device.native.save.return_value = True
 
         self.assertTrue(result)
-        self.device.native.save.assert_called_with(filename="startup-config")
+        self.device.native_ssh.send_command.assert_called_with(
+            "copy running-config startup-config", use_textfsm=False, read_timeout=self.device.native_ssh.timeout
+        )
 
     def test_file_copy_remote_exists(self):
         self.device.native.file_copy_remote_exists.return_value = True

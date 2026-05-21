@@ -822,7 +822,8 @@ class NXOSDevice(BaseDevice):
             (bool): True if configuration is saved.
         """
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
-        return self.native.save(filename=filename)
+        self.show_netmiko(f"copy running-config {filename}", raw_text=True)
+        return True
 
     def set_boot_options(self, image_name, kickstart=None, reboot=True, **vendor_specifics):
         """Set boot variables.
