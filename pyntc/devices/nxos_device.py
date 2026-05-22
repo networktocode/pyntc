@@ -953,7 +953,8 @@ class NXOSDevice(BaseDevice):
             CommandError: Error message stating which command failed.
 
         Returns:
-            (str): Results of the command ran.
+            (str | list): Raw text or TextFSM-parsed result for a single command; a list of those
+            results when ``command`` is a list.
         """
         if read_timeout is None:
             read_timeout = self.native_ssh.timeout
@@ -964,7 +965,7 @@ class NXOSDevice(BaseDevice):
             return results
         try:
             result = self.native_ssh.send_command(command, use_textfsm=not raw_text, read_timeout=read_timeout)
-            log.debug(f"Host %s: Successfully executed command '{command}'.", self.host)
+            log.debug("Host %s: Successfully executed command '%s'.", self.host, command)
             return result
         except NetmikoTimeoutException as e:
             log.error("Host %s: Command timed out %s.", self.host, str(e))
