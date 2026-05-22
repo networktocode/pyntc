@@ -929,8 +929,7 @@ class NXOSDevice(BaseDevice):
             CommandListError: A command within a list failed on the device.
 
         Returns:
-            (str | list): Raw text or TextFSM-parsed result for a single command; a list of those
-            results when ``command`` is a list.
+            (str | list): Raw text or TextFSM-parsed result; a list when ``command`` is a list, else a string.
         """
         try:
             return self.show_netmiko(command, raw_text=raw_text)
@@ -953,8 +952,7 @@ class NXOSDevice(BaseDevice):
             CommandError: Error message stating which command failed.
 
         Returns:
-            (str | list): Raw text or TextFSM-parsed result for a single command; a list of those
-            results when ``command`` is a list.
+            (str | list): Raw text or TextFSM-parsed result; a list when ``command`` is a list, else a string.
         """
         if read_timeout is None:
             read_timeout = self.native_ssh.timeout
