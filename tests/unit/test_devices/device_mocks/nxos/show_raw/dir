@@ -1,0 +1,11 @@
+       4096    May 01 18:24:24 2026  .rpmstore/
+       4096    Feb 10 09:06:54 2017  .snapshots/
+       4096    Jan 19 02:13:25 2017  .swtam/
+  757450240    Aug 11 13:04:13 2025  flash:
+  536306688    Nov 04 13:43:29 2016  nxos.7.0.3.I2.2d.bin
+  757307904    Mar 10 13:57:55 2025  nxos.7.0.3.I5.2.bin
+
+Usage for bootflash://
+ 3250384896 bytes used
+48654139392 bytes free
+51904524288 bytes total
