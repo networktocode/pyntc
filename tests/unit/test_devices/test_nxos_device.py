@@ -1,3 +1,4 @@
+import itertools
 import unittest
 
 import mock
@@ -12,6 +13,7 @@ from pyntc.errors import (
     FileTransferError,
     NotEnoughFreeSpaceError,
     NTCFileNotFoundError,
+    RebootTimeoutError,
 )
 from pyntc.utils.models import FileCopyModel
 
@@ -124,6 +126,32 @@ class TestNXOSDevice(unittest.TestCase):
         commands = ["show badcommand", "show clock"]
         with self.assertRaisesRegex(CommandListError, "show badcommand"):
             self.device.show(commands)
+
+    @mock.patch("pyntc.devices.nxos_device.time.sleep", return_value=None)
+    @mock.patch.object(NXOSDevice, "open")
+    @mock.patch.object(NXOSDevice, "close")
+    def test_wait_for_device_reboot_returns_when_uptime_drops(self, mock_close, mock_open, mock_sleep):
+        # First read establishes the pre-reboot uptime; second read (after open()) returns
+        # a lower value, signalling the reboot completed.
+        with mock.patch.object(NXOSDevice, "uptime", new_callable=mock.PropertyMock, side_effect=[100, 5]):
+            self.device._wait_for_device_reboot(timeout=60)
+
+        # Pre-reboot session dropped, then reopened before re-reading uptime.
+        mock_close.assert_called_once()
+        mock_open.assert_called()
+        self.assertIsNone(self.device.native_ssh)
+
+    @mock.patch(
+        "pyntc.devices.nxos_device.time.time",
+        side_effect=itertools.chain([0], itertools.repeat(999)),
+    )
+    @mock.patch("pyntc.devices.nxos_device.time.sleep", return_value=None)
+    @mock.patch.object(NXOSDevice, "open", side_effect=Exception("connection refused"))
+    @mock.patch.object(NXOSDevice, "close")
+    def test_wait_for_device_reboot_raises_on_timeout(self, mock_close, mock_open, mock_sleep, mock_time):
+        with mock.patch.object(NXOSDevice, "uptime", new_callable=mock.PropertyMock, return_value=100):
+            with self.assertRaises(RebootTimeoutError):
+                self.device._wait_for_device_reboot(timeout=1)
 
     def test_save(self):
         self.device.native_ssh.send_command.side_effect = None

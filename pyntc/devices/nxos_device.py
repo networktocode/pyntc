@@ -71,21 +71,56 @@ class NXOSDevice(BaseDevice):
         return bool(re.search(image_name, version_data))
 
     def _wait_for_device_reboot(self, timeout=3600):
+        """Block until the device reboots and accepts a fresh SSH session.
+
+        Records the pre-reboot uptime, drops the existing SSH session, and polls
+        for the device to come back. The reboot is considered complete when a new
+        SSH connection succeeds and reports an uptime lower than the original.
+
+        The pre-reboot SSH session must be discarded — once the device restarts the
+        socket is dead but reads against it will hang or return stale buffered
+        bytes, so each iteration opens a brand-new connection.
+        """
         self._uptime = None
         original_uptime = self.uptime
         start = time.time()
+
+        # Drop the pre-reboot SSH session so subsequent probes can't read from
+        # a half-closed socket.
+        try:
+            self.close()
+        except Exception as close_exc:  # pylint: disable=broad-except
+            log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
+        self.native_ssh = None
+        self._connected = False
+
         while time.time() - start < timeout:
-            try:  # NXOS stays online, when it installs OS
+            try:
+                self.open()
                 self._uptime = None
-                if self.uptime < original_uptime:
-                    log.info("Host %s: Device rebooted.", self.host)
+                current_uptime = self.uptime
+                if current_uptime < original_uptime:
+                    log.info(
+                        "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
+                        self.host,
+                        current_uptime,
+                        original_uptime,
+                    )
                     return
-            except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                log.debug("Host %s: Pausing for 10 sec before retrying.", self.host)
-                time.sleep(10)
+                log.debug(
+                    "Host %s: SSH reachable but uptime %ss >= pre-reboot %ss; still waiting.",
+                    self.host,
+                    current_uptime,
+                    original_uptime,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
+                self.native_ssh = None
+                self._connected = False
+            time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
-        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
     def refresh(self):
         """Refresh caches on device instance."""
