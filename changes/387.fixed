@@ -1,8 +1,0 @@
-Fixed a bug in nxos where nx-api commands were mixed with ssh commands.
-Fixed a bug in nxos `_build_url_copy_command_simple` returning the wrong type of data.
-Fixed a bug in nxos failing to answer a prompt when using remote_file_copy.
-Fixed NXOSDevice.os_version to use netmiko SSH instead of NX-API.
-Fixed NXOSDevice.get_remote_checksum to use the correct `show file` command form and parse the digest out of the device output.
-Fixed NXOSDevice.save to use netmiko SSH instead of NX-API.
-Fixed NXOSDevice.show to use netmiko SSH instead of NX-API. Structured (non-`raw_text`) results are now TextFSM-parsed lists of dicts.
-Fixed NXOSDevice._wait_for_device_reboot to drop the pre-reboot SSH session and reconnect each poll so it reliably detects when the device comes back from a reload.

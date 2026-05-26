@@ -1,1 +1,0 @@
-Added an `NXOSDevice.show_netmiko` method and deprecated the existing `NXOSDevice.show` method that uses pynxos. Developers should transition to the `show_netmiko` method to prepare for the eventual removal of pynxos.
