@@ -1,0 +1,1 @@
+Changed the following NXOSDevice methods/properties to use Netmiko instead of pynxos: `_image_booted`, `_wait_for_device_reboot`, `uptime`, `hostname`, `os_version`, `_get_file_system`, `_get_free_space`, `remote_file_copy`, `redundancy_state`, `reboot`, `set_boot_options`, and `startup_config`.

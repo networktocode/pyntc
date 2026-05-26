@@ -5,6 +5,7 @@ import re
 import time
 
 from netmiko import ConnectHandler
+from netmiko.exceptions import NetmikoBaseException, NetmikoTimeoutException
 from requests.exceptions import ConnectTimeout, ReadTimeout
 
 from pyntc import log
@@ -66,23 +67,60 @@ class NXOSDevice(BaseDevice):
         log.init(host=host)
 
     def _image_booted(self, image_name, **vendor_specifics):
-        version_data = self.show("show version", raw_text=True)
+        version_data = self.show_netmiko("show version", raw_text=True)
         return bool(re.search(image_name, version_data))
 
     def _wait_for_device_reboot(self, timeout=3600):
+        """Block until the device reboots and accepts a fresh SSH session.
+
+        Records the pre-reboot uptime, drops the existing SSH session, and polls
+        for the device to come back. The reboot is considered complete when a new
+        SSH connection succeeds and reports an uptime lower than the original.
+
+        The pre-reboot SSH session must be discarded — once the device restarts the
+        socket is dead but reads against it will hang or return stale buffered
+        bytes, so each iteration opens a brand-new connection.
+        """
+        self._uptime = None
+        original_uptime = self.uptime
         start = time.time()
+
+        # Drop the pre-reboot SSH session so subsequent probes can't read from
+        # a half-closed socket.
+        try:
+            self.close()
+        except Exception as close_exc:  # pylint: disable=broad-except
+            log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
+        self.native_ssh = None
+        self._connected = False
+
         while time.time() - start < timeout:
-            try:  # NXOS stays online, when it installs OS
-                self.refresh()
-                if self.uptime < 180:
-                    log.info("Host %s: Device rebooted.", self.host)
+            try:
+                self.open()
+                self._uptime = None
+                current_uptime = self.uptime
+                if current_uptime < original_uptime:
+                    log.info(
+                        "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
+                        self.host,
+                        current_uptime,
+                        original_uptime,
+                    )
                     return
-            except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                log.debug("Host %s: Pausing for 10 sec before retrying.", self.host)
-                time.sleep(10)
+                log.debug(
+                    "Host %s: SSH reachable but uptime %ss >= pre-reboot %ss; still waiting.",
+                    self.host,
+                    current_uptime,
+                    original_uptime,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
+                self.native_ssh = None
+                self._connected = False
+            time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
-        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+        raise RebootTimeoutError(hostname=self.host, wait_time=timeout)
 
     def refresh(self):
         """Refresh caches on device instance."""
@@ -158,7 +196,23 @@ class NXOSDevice(BaseDevice):
             (int): Uptime of the device in seconds.
         """
         if self._uptime is None:
-            self._uptime = self.native.facts.get("uptime")
+            self._uptime = 0
+            try:
+                parsed_uptime = self.show_netmiko("show version")[0]["uptime"]
+                for interval in parsed_uptime.split(","):
+                    duration, unit = interval.strip().split(" ")
+                    if "day" in unit.lower():
+                        self._uptime += int(duration) * 24 * 60 * 60
+                    elif "hour" in unit.lower():
+                        self._uptime += int(duration) * 60 * 60
+                    elif "minute" in unit.lower():
+                        self._uptime += int(duration) * 60
+                    elif "second" in unit.lower():
+                        self._uptime += int(duration)
+                    else:
+                        raise CommandError(command="show version", message=f"Unknown time unit in uptime: {unit}")
+            except (IndexError, KeyError, ValueError) as e:
+                raise CommandError(command="show version", message="Failed to parse 'show version' command.") from e
 
         log.debug("Host %s: Uptime %s", self.host, self._uptime)
         return self._uptime
@@ -183,7 +237,7 @@ class NXOSDevice(BaseDevice):
             (str): Hostname of the device.
         """
         if self._hostname is None:
-            self._hostname = self.native.facts.get("hostname")
+            self._hostname = self.show_netmiko("show hostname")[0]["hostname"]
 
         log.debug("Host %s: Hostname %s", self.host, self._hostname)
         return self._hostname
@@ -248,7 +302,7 @@ class NXOSDevice(BaseDevice):
             (str): Device version.
         """
         if self._os_version is None:
-            self._os_version = self.native.facts.get("os_version")
+            self._os_version = self.show_netmiko("show version")[0]["os"]
 
         log.debug("Host %s: OS version %s", self.host, self._os_version)
         return self._os_version
@@ -328,7 +382,8 @@ class NXOSDevice(BaseDevice):
         Raises:
             FileSystemNotFoundError: When the module is unable to determine the default file system.
         """
-        raw_data = self.show("dir", raw_text=True)
+        raw_data = self.native_ssh.send_command("dir", read_timeout=30)
+
         try:
             file_system = re.search(r"bootflash:", raw_data).group(0)
         except AttributeError:
@@ -343,7 +398,7 @@ class NXOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
 
-        raw_data = self.show(f"dir {file_system}", raw_text=True)
+        raw_data = self.native_ssh.send_command(f"dir {file_system}", read_timeout=30)
         # Example NXOS dir output: 47171194880 bytes free
         match = re.search(r"(\d+)\s+bytes\s+free", raw_data)
         if match is None:
@@ -368,7 +423,7 @@ class NXOSDevice(BaseDevice):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
         netloc = self._netloc(src)
         path = self._source_path(src, dest)
-        return f"copy {src.scheme}://{netloc}{path} {file_system}", False
+        return f"copy {src.scheme}://{netloc}{path} {file_system}"
 
     def _build_url_copy_command_with_creds(self, src, file_system, dest):
         """Build copy command for URL-based transfers with credentials (HTTP/HTTPS/SCP/FTP/SFTP)."""
@@ -400,7 +455,6 @@ class NXOSDevice(BaseDevice):
         """
         exists = False
 
-        self.open()
         file_system = file_system or self._get_file_system()
         command = f"dir {file_system}/{filename}"
         result = self.native_ssh.send_command(command, read_timeout=30)
@@ -448,7 +502,6 @@ class NXOSDevice(BaseDevice):
                 f"Supported algorithms: {sorted(NXOS_SUPPORTED_HASHING_ALGORITHMS)}"
             )
 
-        self.open()
         file_system = kwargs.get("file_system")
         if file_system is None:
             file_system = self._get_file_system()
@@ -457,9 +510,11 @@ class NXOSDevice(BaseDevice):
         if not file_system.startswith("/") and not file_system.endswith(":"):
             file_system = f"{file_system}:"
 
-        # Use NXOS verify command to get the checksum
-        # Example: show file bootflash:nautobot.png sha512sum
-        command = f"show file {file_system}/{filename} {hashing_algorithm}sum"
+        # Use NXOS verify command to get the checksum. The file_system already
+        # ends with ":" (e.g. "bootflash:"), so concatenate directly — NXOS rejects
+        # "bootflash:/name" as a syntax error.
+        # Example: show file bootflash:nautobot.png md5sum
+        command = f"show file {file_system}{filename} {hashing_algorithm}sum"
 
         try:
             result = self.native_ssh.send_command(command, read_timeout=30)
@@ -470,13 +525,18 @@ class NXOSDevice(BaseDevice):
                 command,
                 result,
             )
-            print(f"result: {result}")
-            remote_checksum = result
-            return remote_checksum
-
         except Exception as e:
             log.error("Host %s: Error getting remote checksum: %s", self.host, str(e))
             raise CommandError(command, f"Error getting remote checksum: {str(e)}")
+
+        # NXOS sometimes returns just the digest, sometimes prefixes/suffixes it
+        # with the filename or other context. Extract the first hex run long
+        # enough to be a real digest (md5=32, sha256=64, sha512=128).
+        match = re.search(r"\b([a-fA-F0-9]{32,128})\b", result)
+        if not match:
+            log.error("Host %s: Could not parse checksum from '%s': %s", self.host, command, result)
+            raise CommandError(command, f"Could not parse checksum from device output: {result}")
+        return match.group(1)
 
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):  # noqa: R0912 pylint: disable=too-many-branches
         """Copy a file from remote source to device.  Skips if file already exists and is verified on remote device.
@@ -537,6 +597,7 @@ class NXOSDevice(BaseDevice):
                 r"Source username": src.username or "",
                 r"yes/no|Are you sure you want to continue connecting": "yes",
                 r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",
+                r"Enter vrf.*:": src.vrf or "",
             }
             keys = list(prompt_answers.keys()) + [current_prompt]
             expect_regex = f"({'|'.join(keys)})"
@@ -632,7 +693,7 @@ class NXOSDevice(BaseDevice):
         Returns:
             (bool): True if new image is boot option on device. Otherwise, false.
         """
-        self.native.show("terminal dont-ask")
+        self.show_netmiko("terminal dont-ask", raw_text=True)
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             log.info("Host %s: Setting Image %s in boot options.", self.host, image_name)
@@ -674,7 +735,7 @@ class NXOSDevice(BaseDevice):
         """
         if self._redundancy_state is None:
             try:
-                output = self.native.show("show redundancy state", raw_text=True)
+                output = self.show_netmiko("show redundancy state", raw_text=True)
                 # Parse the redundancy state from output
                 # Example output: "Redundancy state = active"
                 match = re.search(r"Redundancy\s+state\s*=\s*(\w+)", output, re.IGNORECASE)
@@ -749,7 +810,7 @@ class NXOSDevice(BaseDevice):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
             raise DeprecationWarning("Passing 'confirm' to reboot method is deprecated.")
         try:
-            self.native.show_list(["terminal dont-ask", "reload"])
+            self.show_netmiko(["terminal dont-ask", "reload"], raw_text=True)
             # The native reboot is not always properly disabling confirmation. Above is more consistent.
             # self.native.reboot(confirm=True)
         except ReadTimeout as expected_exception:
@@ -796,7 +857,8 @@ class NXOSDevice(BaseDevice):
             (bool): True if configuration is saved.
         """
         log.debug("Host %s: Copy running config with name %s.", self.host, filename)
-        return self.native.save(filename=filename)
+        self.show_netmiko(f"copy running-config {filename}", raw_text=True)
+        return True
 
     def set_boot_options(self, image_name, kickstart=None, reboot=True, **vendor_specifics):
         """Set boot variables.
@@ -812,15 +874,14 @@ class NXOSDevice(BaseDevice):
         """
         file_system = vendor_specifics.get("file_system")
         if file_system is None:
-            file_system = "bootflash:"
+            file_system = self._get_file_system()
 
-        file_system_files = self.show(f"dir {file_system}", raw_text=True)
-        if re.search(image_name, file_system_files) is None:
+        if not self.check_file_exists(image_name, file_system=file_system):
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
             raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
 
         if kickstart is not None:
-            if re.search(kickstart, file_system_files) is None:
+            if not self.check_file_exists(kickstart, file_system=file_system):
                 log.error("Host %s: File not found error for image %s.", self.host, image_name)
                 raise NTCFileNotFoundError(hostname=self.hostname, file=kickstart, directory=file_system)
 
@@ -828,7 +889,20 @@ class NXOSDevice(BaseDevice):
 
         image_name = file_system + image_name
         try:
-            self.native.set_boot_options(image_name, kickstart=kickstart, reboot=reboot)
+            self.show_netmiko("terminal dont-ask", raw_text=True)
+            if reboot:
+                reboot_arg = ""
+            else:
+                reboot_arg = " no-reload"
+            try:
+                if kickstart is None:
+                    self.show_netmiko(f"install all nxos {image_name}{reboot_arg}", raw_text=True)
+                else:
+                    self.show_netmiko(
+                        f"install all system {image_name} kickstart {kickstart}{reboot_arg}", raw_text=True
+                    )
+            except (NetmikoBaseException, NetmikoTimeoutException):
+                pass
         except (ReadTimeout, ConnectTimeout):
             pass
         log.info("Host %s: boot options have been set to %s", self.host, image_name)
@@ -843,32 +917,60 @@ class NXOSDevice(BaseDevice):
         self.native.timeout = timeout
 
     def show(self, command, raw_text=False):
-        """Send a non-configuration command.
+        """Send a non-configuration command using netmiko.
+
+        Args:
+            command (str, list): The command (or list of commands) to send to the device.
+            raw_text (bool, optional): When True return raw text; when False parse with TextFSM
+                into a list of dicts. Defaults to False.
+
+        Raises:
+            CommandError: A single command failed on the device.
+            CommandListError: A command within a list failed on the device.
+
+        Returns:
+            (str | list): Raw text or TextFSM-parsed result; a list when ``command`` is a list, else a string.
+        """
+        try:
+            return self.show_netmiko(command, raw_text=raw_text)
+        except CLIError as e:
+            if isinstance(command, list):
+                log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
+                raise CommandListError(command, e.command, str(e))
+            log.error("Host %s: Command error %s.", self.host, str(e))
+            raise CommandError(command, str(e))
+
+    def show_netmiko(self, command, raw_text=False, read_timeout=None):
+        """Send a non-configuration command using netmiko.
 
         Args:
             command (str): The command to send to the device.
             raw_text (bool, optional): Whether to return raw text or structured data. Defaults to False.
+            read_timeout (int, optional): Timeout to pass to Netmiko read_timeout. Defaults to the Netmiko timeout if not set.
 
         Raises:
             CommandError: Error message stating which command failed.
 
         Returns:
-            (str): Results of the command ran.
+            (str | list): Raw text or TextFSM-parsed result; a list when ``command`` is a list, else a string.
         """
-        log.debug("Host %s: Successfully executed command 'show' with responses.", self.host)
+        if read_timeout is None:
+            read_timeout = self.native_ssh.timeout
         if isinstance(command, list):
-            try:
-                log.debug("Host %s: Successfully executed command 'show' with commands %s.", self.host, command)
-                return self.native.show_list(command, raw_text=raw_text)
-            except CLIError as e:
-                log.error("Host %s: Command error for command %s with message %s.", self.host, e.command, str(e))
-                raise CommandListError(command, e.command, str(e))
+            results = []
+            for inner in command:
+                results.append(self.show_netmiko(inner, raw_text=raw_text, read_timeout=read_timeout))
+            return results
         try:
-            log.debug("Host %s: Successfully executed command 'show'.", self.host)
-            return self.native.show(command, raw_text=raw_text)
-        except CLIError as e:
-            log.error("Host %s: Command error %s.", self.host, str(e))
-            raise CommandError(command, str(e))
+            result = self.native_ssh.send_command(command, use_textfsm=not raw_text, read_timeout=read_timeout)
+            log.debug("Host %s: Successfully executed command '%s'.", self.host, command)
+            return result
+        except NetmikoTimeoutException as e:
+            log.error("Host %s: Command timed out %s.", self.host, str(e))
+            raise CommandError(command=command, message="Command timed out") from e
+        except NetmikoBaseException as e:
+            log.error("Host %s: Command failed %s.", self.host, str(e))
+            raise CommandError(command=command, message="Error retrieving command output") from e
 
     @property
     def startup_config(self):
@@ -877,4 +979,4 @@ class NXOSDevice(BaseDevice):
         Returns:
             (str): Startup configuration.
         """
-        return self.show("show startup-config", raw_text=True)
+        return self.show_netmiko("show startup-config", raw_text=True)
