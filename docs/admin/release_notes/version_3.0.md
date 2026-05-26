@@ -7,7 +7,7 @@ This document describes all new features and changes in the release. The format 
 - Pyntc now requires the `PYNTC_LOG_FILE` environment variable to output logging to a file. The new default behavior is to only log to stderr.
 
 <!-- towncrier release notes start -->
-# vv3.0 Release Notes
+# v3.0 Release Notes
 
 This document describes all new features and changes in the release. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -17,7 +17,7 @@ This document describes all new features and changes in the release. The format 
 - Changes to compatibility with Nautobot and/or other apps, libraries etc.
 
 <!-- towncrier release notes start -->
-## [vv3.0.1 (2026-05-26)](https://github.com/networktocode/pyntc/releases/tag/vv3.0.1)
+## [v3.0.1 (2026-05-26)](https://github.com/networktocode/pyntc/releases/tag/vv3.0.1)
 
 ### Added
 
