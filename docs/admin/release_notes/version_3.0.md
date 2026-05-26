@@ -17,7 +17,7 @@ This document describes all new features and changes in the release. The format 
 - Changes to compatibility with Nautobot and/or other apps, libraries etc.
 
 <!-- towncrier release notes start -->
-## [v3.0.1 (2026-05-26)](https://github.com/networktocode/pyntc/releases/tag/vv3.0.1)
+## [v3.0.1 (2026-05-26)](https://github.com/networktocode/pyntc/releases/tag/v3.0.1)
 
 ### Added
 
