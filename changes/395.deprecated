@@ -1,0 +1,1 @@
+Deprecated the ``install_mode`` argument to ``IOSDevice.install_os``; install mode is now derived from the device's ``boot_options`` via the new ``install_mode`` property and will be removed in a future release.
