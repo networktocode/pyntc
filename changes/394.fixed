@@ -1,0 +1,1 @@
+Fixed Junos reboots not being detected when waiting for the device to reload.
