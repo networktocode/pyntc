@@ -244,18 +244,28 @@ class TestJnprDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.jnpr_device.time.sleep")
     def test_wait_for_device_to_reboot(self, mock_sleep):
-        with mock.patch.object(self.device, "open") as mock_open:
-            # Emulate the device disconnected and reconnecting
-            type(self.device.native).connected = mock.PropertyMock(side_effect=[True, False, True])
-            mock_open.side_effect = [Exception, Exception, True]
-            self.device.reboot(wait_for_reload=True, timeout=3)
-            mock_open.assert_has_calls([mock.call()] * 3)
+        """Reboot completes when the device returns with a lower uptime than the baseline."""
+        with (
+            mock.patch.object(self.device, "open") as mock_open,
+            mock.patch.object(self.device, "close"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            # First read is the pre-reboot baseline; second is the post-reboot uptime.
+            mock_uptime.side_effect = [455, 30]
+            self.device.reboot(wait_for_reload=True, timeout=30)
+
+        self.device.sw.reboot.assert_called_with(in_min=0)
+        mock_open.assert_called()
 
     @mock.patch("pyntc.devices.jnpr_device.time.sleep")
     def test_wait_for_device_to_reboot_error(self, mock_sleep):
-        with mock.patch.object(self.device, "open") as mock_open:
-            type(self.device.native).connected = mock.PropertyMock(side_effect=[True, False])
-            mock_open.side_effect = Exception
+        """Raise RebootTimeoutError when the device never reports a lower uptime within the timeout."""
+        with (
+            mock.patch.object(self.device, "open"),
+            mock.patch.object(self.device, "close"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 455
             with pytest.raises(RebootTimeoutError):
                 self.device.reboot(wait_for_reload=True, timeout=1)
 
@@ -290,8 +300,33 @@ class TestJnprDevice(unittest.TestCase):
         self.device.show.assert_called_with("show config")
 
     def test_uptime(self):
+        """Cold cache (_uptime is None) refreshes facts and parses the uptime."""
+        self.assertIsNone(self.device._uptime)
         uptime = self.device.uptime
-        assert uptime == 455
+        self.assertEqual(uptime, 455)
+        self.device.native.facts_refresh.assert_called_once_with(keys="RE0")
+
+    def test_uptime_cached(self):
+        """A populated cache is returned as-is, with no device round-trip."""
+        self.device._uptime = 1234
+        uptime = self.device.uptime
+        self.assertEqual(uptime, 1234)
+        self.device.native.facts_refresh.assert_not_called()
+
+    def test_uptime_refreshes_after_cache_cleared(self):
+        """Clearing the cache forces a fresh read."""
+        self.assertEqual(self.device.uptime, 455)
+
+        self.device._uptime = None
+        self.device.native.facts = {"RE0": {"up_time": "30 seconds"}}
+
+        self.assertEqual(self.device.uptime, 30)
+
+    def test_uptime_none_when_facts_unavailable(self):
+        """Missing/unavailable facts return None gracefully instead of raising an Exception."""
+        self.device._uptime = None
+        self.device.native.facts = {}
+        self.assertIsNone(self.device.uptime)
 
     def test_uptime_string(self):
         uptime_string = self.device.uptime_string
