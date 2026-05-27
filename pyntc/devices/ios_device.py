@@ -889,6 +889,18 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
+    def _resolve_install_mode(self, install_mode):
+        """Return the effective install_mode flag, warning if the caller passed it explicitly."""
+        if install_mode is None:
+            return self.install_mode
+        warnings.warn(
+            "The install_mode argument to install_os is deprecated; install mode is now "
+            "derived from the device's boot_options via the install_mode property.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return install_mode
+
     def install_os(self, image_name, reboot=True, install_mode=None, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
@@ -909,17 +921,7 @@ class IOSDevice(BaseDevice):
         Returns:
             (bool): False if no install is needed, true if the install completes successfully
         """
-        if install_mode is not None:
-            warnings.warn(
-                "The install_mode argument to install_os is deprecated; install mode is now "
-                "derived from the device's boot_options via the install_mode property.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            use_install_mode = install_mode
-        else:
-            use_install_mode = self.install_mode
-
+        use_install_mode = self._resolve_install_mode(install_mode)
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
             if use_install_mode and not reboot:
