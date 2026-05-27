@@ -250,7 +250,7 @@ class JunosDevice(BaseDevice):
         # a stale connection PyEZ still reports as connected.
         try:
             self.close()
-        except Exception as close_exc:
+        except Exception as close_exc:  # pylint: disable=broad-exception-caught
             log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
 
         while time.time() - start < timeout:
@@ -272,7 +272,7 @@ class JunosDevice(BaseDevice):
                     current_uptime,
                     original_uptime,
                 )
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-exception-caught
                 log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
                 self.native.connected = False
             time.sleep(10)
