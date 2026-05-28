@@ -7,6 +7,20 @@ This document describes all new features and changes in the release. The format 
 - Pyntc now requires the `PYNTC_LOG_FILE` environment variable to output logging to a file. The new default behavior is to only log to stderr.
 
 <!-- towncrier release notes start -->
+## [v3.0.2 (2026-05-28)](https://github.com/networktocode/pyntc/releases/tag/v3.0.2)
+
+### Added
+
+- [#395](https://github.com/networktocode/pyntc/issues/395) - Added an ``install_mode`` property to ``BaseDevice`` (abstract) and ``IOSDevice``; the IOS implementation returns ``True`` when the device boots from ``packages.conf``.
+
+### Deprecated
+
+- [#395](https://github.com/networktocode/pyntc/issues/395) - Deprecated the ``install_mode`` argument to ``IOSDevice.install_os``; install mode is now derived from the device's ``boot_options`` via the new ``install_mode`` property and will be removed in a future release.
+
+### Fixed
+
+- [#394](https://github.com/networktocode/pyntc/issues/394) - Fixed Junos reboots not being detected when waiting for the device to reload.
+- [#394](https://github.com/networktocode/pyntc/issues/394) - Increased the default Junos reboot wait timeout from 1 hour to 2 hours.
 
 ## [v3.0.1 (2026-05-26)](https://github.com/networktocode/pyntc/releases/tag/v3.0.1)
 
