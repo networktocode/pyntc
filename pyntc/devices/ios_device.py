@@ -897,7 +897,6 @@ class IOSDevice(BaseDevice):
             "The install_mode argument to install_os is deprecated; install mode is now "
             "derived from the device's boot_options via the install_mode property.",
             DeprecationWarning,
-            stacklevel=3,
         )
         return install_mode
 
