@@ -228,18 +228,53 @@ class JunosDevice(BaseDevice):
         days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
         return f"{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-    def _wait_for_device_reboot(self, timeout=3600):
+    def _wait_for_device_reboot(self, original_uptime, timeout=7200):
+        """Block until the device reboots and accepts a fresh connection.
+
+        Drops the existing NETCONF session and polls for the device to come back.
+        The reboot is considered complete when a new connection succeeds and the
+        device reports an uptime lower than ``original_uptime`` (i.e., it has
+        booted since the reboot was issued).
+
+        The pre-reboot session must be discarded first: once the device restarts,
+        PyEZ still reports it as connected even though the transport is dead, so it
+        is closed here to force each probe to establish a fresh connection.
+
+        Args:
+            original_uptime (int): Device uptime in seconds captured before the reboot.
+            timeout (int, optional): Max seconds to wait for the device to return. Defaults to 2 hours.
+        """
         start = time.time()
-        disconnected = False
+
+        # Drop the pre-reboot NETCONF session so subsequent probes can't read from
+        # a stale connection PyEZ still reports as connected.
+        try:
+            self.close()
+        except Exception as close_exc:  # pylint: disable=broad-exception-caught
+            log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
+
         while time.time() - start < timeout:
-            if disconnected:
-                try:
-                    self.open()
+            try:
+                self.open()
+                self._uptime = None
+                current_uptime = self.uptime
+                if current_uptime is not None and current_uptime < original_uptime:
+                    log.info(
+                        "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
+                        self.host,
+                        current_uptime,
+                        original_uptime,
+                    )
                     return
-                except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                    pass
-            elif not self.connected:
-                disconnected = True
+                log.debug(
+                    "Host %s: Reachable but uptime %ss >= pre-reboot %ss; still waiting.",
+                    self.host,
+                    current_uptime,
+                    original_uptime,
+                )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
+                self.native.connected = False
             time.sleep(10)
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -318,12 +353,14 @@ class JunosDevice(BaseDevice):
         Returns:
             (int): Device uptime in seconds.
         """
-        try:
-            native_uptime_string = self.native.facts["RE0"]["up_time"]
-        except (AttributeError, TypeError):
-            native_uptime_string = None
-
         if self._uptime is None:
+            try:
+                # Bust PyEZ's cached facts so a cold cache always reflects the live device.
+                self.native.facts_refresh(keys="RE0")
+                native_uptime_string = self.native.facts["RE0"]["up_time"]
+            except (AttributeError, TypeError, KeyError):
+                native_uptime_string = None
+
             if native_uptime_string is not None:
                 self._uptime = self._uptime_to_seconds(native_uptime_string)
 
@@ -337,13 +374,16 @@ class JunosDevice(BaseDevice):
         Returns:
             (str): Device uptime.
         """
-        try:
-            native_uptime_string = self.native.facts["RE0"]["up_time"]
-        except (AttributeError, TypeError):
-            native_uptime_string = None
-
         if self._uptime_string is None:
-            self._uptime_string = self._uptime_to_string(native_uptime_string)
+            try:
+                # Bust PyEZ's cached facts so a cold cache always reflects the live device.
+                self.native.facts_refresh(keys="RE0")
+                native_uptime_string = self.native.facts["RE0"]["up_time"]
+            except (AttributeError, TypeError, KeyError):
+                native_uptime_string = None
+
+            if native_uptime_string is not None:
+                self._uptime_string = self._uptime_to_string(native_uptime_string)
 
         return self._uptime_string
 
@@ -505,13 +545,13 @@ class JunosDevice(BaseDevice):
         if not self.connected:
             self.native.open()
 
-    def reboot(self, wait_for_reload=False, timeout=3600, confirm=None):
+    def reboot(self, wait_for_reload=False, timeout=7200, confirm=None):
         """
         Reload the controller or controller pair.
 
         Args:
             wait_for_reload (bool): Whether the reboot method should wait for the device to come back up before returning. Defaults to False.
-            timeout (int, optional): Time in seconds to wait for the device to return after reboot. Defaults to 1 hour.
+            timeout (int, optional): Time in seconds to wait for the device to return after reboot. Defaults to 2 hours.
             confirm (None): Not used. Deprecated since v0.17.0.
 
         Example:
@@ -522,9 +562,16 @@ class JunosDevice(BaseDevice):
         if confirm is not None:
             warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
+        self._uptime = None
+        original_uptime = self.uptime
+        if original_uptime is None:
+            raise CommandError(
+                command="reboot",
+                message="Could not determine pre-reboot uptime; refusing to wait for reload.",
+            )
         self.sw.reboot(in_min=0)
         if wait_for_reload:
-            self._wait_for_device_reboot(timeout=timeout)
+            self._wait_for_device_reboot(original_uptime, timeout=timeout)
 
     def rollback(self, filename):
         """Rollback to a specific configuration file.
