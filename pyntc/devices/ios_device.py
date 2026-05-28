@@ -3,6 +3,7 @@
 import os
 import re
 import time
+import warnings
 
 from netmiko import ConnectHandler, FileTransfer
 from netmiko.exceptions import ReadTimeout
@@ -318,6 +319,17 @@ class IOSDevice(BaseDevice):
 
         log.debug("Host %s: the boot options are {dict(sys=boot_image)}", self.host)
         return {"sys": boot_image}
+
+    @property
+    def install_mode(self):
+        """Return whether the device is currently booted in install mode.
+
+        Returns:
+            (bool): True when the current boot image equals
+                :data:`INSTALL_MODE_FILE_NAME` (i.e., ``packages.conf``),
+                False otherwise.
+        """
+        return self.boot_options.get("sys") == INSTALL_MODE_FILE_NAME
 
     def checkpoint(self, checkpoint_file):
         """Create checkpoint file.
@@ -877,13 +889,28 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: File %s does not already exist on remote.", self.host, src)
         return False
 
-    def install_os(self, image_name, reboot=True, install_mode=False, read_timeout=2000, **vendor_specifics):
+    def _resolve_install_mode(self, install_mode):
+        """Return the effective install_mode flag, warning if the caller passed it explicitly."""
+        if install_mode is None:
+            return self.install_mode
+        warnings.warn(
+            "The install_mode argument to install_os is deprecated; install mode is now "
+            "derived from the device's boot_options via the install_mode property.",
+            DeprecationWarning,
+        )
+        return install_mode
+
+    def install_os(self, image_name, reboot=True, install_mode=None, read_timeout=2000, **vendor_specifics):
         """Installs the prescribed Network OS, which must be present before issuing this command.
 
         Args:
             image_name (str): Name of the IOS image to boot into
             reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
-            install_mode (bool, optional): Uses newer install method on devices. Defaults to False.
+            install_mode (bool, optional): **Deprecated.** Whether to use the newer install-mode
+                upgrade procedure. When omitted (the default), the value is derived from
+                :attr:`install_mode`, which reads the device's current boot configuration.
+                Passing the argument explicitly still works but emits a ``DeprecationWarning``
+                and will be removed in a future release.
             read_timeout (int, optional): Netmiko timeout when waiting for device prompt. Default 2000.
             vendor_specifics (dict, optional): Vendor specific arguments to pass to the install command.
 
@@ -893,14 +920,15 @@ class IOSDevice(BaseDevice):
         Returns:
             (bool): False if no install is needed, true if the install completes successfully
         """
+        use_install_mode = self._resolve_install_mode(install_mode)
         timeout = vendor_specifics.get("timeout", 3600)
         if not self._image_booted(image_name):
-            if install_mode and not reboot:
+            if use_install_mode and not reboot:
                 raise ValueError(
                     "IOS devices automatically reboot after installation when using install mode but the reboot argument was set to false."
                 )
 
-            if install_mode:
+            if use_install_mode:
                 # Change boot statement to be boot system <flash>:packages.conf
                 self.set_boot_options(INSTALL_MODE_FILE_NAME, **vendor_specifics)
 
@@ -942,7 +970,7 @@ class IOSDevice(BaseDevice):
             self._wait_for_device_reboot(timeout=timeout)
 
             # Set FastCLI back to originally set when using install mode
-            if install_mode:
+            if use_install_mode:
                 image_name = INSTALL_MODE_FILE_NAME
             # Verify the OS level
             if not self._image_booted(image_name):

@@ -450,6 +450,20 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
         """
         raise NotImplementedError
 
+    @property
+    def install_mode(self):
+        """Indicate whether the device is operating in install mode.
+
+        Drivers override this to derive the value from the device's current boot
+        configuration. Used by ``install_os`` to choose between install-mode and
+        legacy upgrade procedures.
+
+        Returns:
+            (bool): True when the device boots from an install-mode bundle
+                (e.g., ``packages.conf`` on IOS-XE), False otherwise.
+        """
+        raise NotImplementedError
+
     def install_os(self, image_name, reboot=True, **vendor_specifics):
         """Install the OS from specified image_name.
 
