@@ -1,1 +1,0 @@
-Added an ``install_mode`` property to ``BaseDevice`` (abstract) and ``IOSDevice``; the IOS implementation returns ``True`` when the device boots from ``packages.conf``.
