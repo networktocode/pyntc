@@ -1,0 +1,2 @@
+Fixed Junos reboots not being detected when waiting for the device to reload.
+Increased the default Junos reboot wait timeout from 1 hour to 2 hours.
