@@ -374,13 +374,16 @@ class JunosDevice(BaseDevice):
         Returns:
             (str): Device uptime.
         """
-        try:
-            native_uptime_string = self.native.facts["RE0"]["up_time"]
-        except (AttributeError, TypeError):
-            native_uptime_string = None
-
         if self._uptime_string is None:
-            self._uptime_string = self._uptime_to_string(native_uptime_string)
+            try:
+                # Bust PyEZ's cached facts so a cold cache always reflects the live device.
+                self.native.facts_refresh(keys="RE0")
+                native_uptime_string = self.native.facts["RE0"]["up_time"]
+            except (AttributeError, TypeError, KeyError):
+                native_uptime_string = None
+
+            if native_uptime_string is not None:
+                self._uptime_string = self._uptime_to_string(native_uptime_string)
 
         return self._uptime_string
 
@@ -559,7 +562,13 @@ class JunosDevice(BaseDevice):
         if confirm is not None:
             warnings.warn("Passing 'confirm' to reboot method is deprecated.", DeprecationWarning)
 
+        self._uptime = None
         original_uptime = self.uptime
+        if original_uptime is None:
+            raise CommandError(
+                command="reboot",
+                message="Could not determine pre-reboot uptime; refusing to wait for reload.",
+            )
         self.sw.reboot(in_min=0)
         if wait_for_reload:
             self._wait_for_device_reboot(original_uptime, timeout=timeout)

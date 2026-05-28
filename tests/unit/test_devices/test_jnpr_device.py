@@ -329,8 +329,33 @@ class TestJnprDevice(unittest.TestCase):
         self.assertIsNone(self.device.uptime)
 
     def test_uptime_string(self):
+        """Cold cache (_uptime_string is None) refreshes facts and formats the uptime."""
+        self.assertIsNone(self.device._uptime_string)
         uptime_string = self.device.uptime_string
-        assert uptime_string == "00:00:07:35"
+        self.assertEqual(uptime_string, "00:00:07:35")
+        self.device.native.facts_refresh.assert_called_once_with(keys="RE0")
+
+    def test_uptime_string_cached(self):
+        """A populated cache is returned as-is, with no device round-trip."""
+        self.device._uptime_string = "01:02:03:04"
+        uptime_string = self.device.uptime_string
+        self.assertEqual(uptime_string, "01:02:03:04")
+        self.device.native.facts_refresh.assert_not_called()
+
+    def test_uptime_string_refreshes_after_cache_cleared(self):
+        """Clearing the cache forces a fresh read."""
+        self.assertEqual(self.device.uptime_string, "00:00:07:35")
+
+        self.device._uptime_string = None
+        self.device.native.facts = {"RE0": {"up_time": "30 seconds"}}
+
+        self.assertEqual(self.device.uptime_string, "00:00:00:30")
+
+    def test_uptime_string_none_when_facts_unavailable(self):
+        """Missing/unavailable facts return None gracefully instead of raising an Exception."""
+        self.device._uptime_string = None
+        self.device.native.facts = {}
+        self.assertIsNone(self.device.uptime_string)
 
     def test_vendor(self):
         vendor = self.device.vendor
