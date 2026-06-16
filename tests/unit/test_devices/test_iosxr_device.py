@@ -104,24 +104,19 @@ DIR_HARDDISK_KBYTES = (
     "9948012 kbytes total (9396256 kbytes free)\n"
 )
 
-# 'show install request' states: add op (activation not finished), activate succeeded, activate failed.
-SHOW_INSTALL_REQUEST_ADD = (
-    "Tue Jun 16 02:15:50.891 UTC\n"
-    "No install operation in progress\n\n"
-    "Last operation performed:\n"
-    "Operation Id : 17\nRequest      : Install add\nState        : Success\n"
+# 'show install request' states observed on real eXR during an activation.
+SHOW_INSTALL_REQUEST_IN_PROGRESS = (
+    "Tue Jun 16 03:31:04.338 UTC\n"
+    "User ntc, Op Id 26\ninstall activate\nncs5k-mini-x-7.11.2\n"
+    "install operation 26 is in progress\n"
+    "Install prepare operation 26 is in progress\n"
+    "0/RP0                     In Progress               Partition preparation in progress\n"
 )
-SHOW_INSTALL_REQUEST_ACTIVATE_SUCCESS = (
-    "Tue Jun 16 02:20:00.000 UTC\n"
-    "No install operation in progress\n\n"
-    "Last operation performed:\n"
-    "Operation Id : 18\nRequest      : Install activate\nState        : Success\n"
-)
+SHOW_INSTALL_REQUEST_PENDING_RELOAD = "Tue Jun 16 03:35:12.838 UTC\nInstall operation completed, pending reload\n"
 SHOW_INSTALL_REQUEST_ACTIVATE_FAILURE = (
-    "Tue Jun 16 02:20:00.000 UTC\n"
-    "No install operation in progress\n\n"
-    "Last operation performed:\n"
-    "Operation Id : 18\nRequest      : Install activate\nState        : Failure\n"
+    "Tue Jun 16 00:29:55.000 UTC\n"
+    "Error: An exception is hit while executing the install operation.\n"
+    "Install operation 26 aborted\n"
 )
 
 
@@ -294,34 +289,34 @@ class TestIOSXRDevice(unittest.TestCase):
             self.device._wait_for_install_op(17, timeout=3600)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
-    def test_install_activate_issues_async_and_polls_until_finished(self, mock_sleep):
-        self.device.native.send_command_timing.return_value = "Install operation 18 started by ntc"
-        self.device.native.send_command.return_value = SHOW_INSTALL_REQUEST_ACTIVATE_SUCCESS
-        self.device._install_activate(17)
-        self.device.native.send_command_timing.assert_any_call("install activate id 17 noprompt", read_timeout=180)
+    def test_install_activate_issues_async_and_returns_on_pending_reload(self, mock_sleep):
+        self.device.native.send_command_timing.return_value = "Install operation 26 started by ntc"
+        self.device.native.send_command.return_value = SHOW_INSTALL_REQUEST_PENDING_RELOAD
+        self.device._install_activate(25)
+        self.device.native.send_command_timing.assert_any_call("install activate id 25 noprompt", read_timeout=180)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     def test_install_activate_raises_on_failure(self, mock_sleep):
-        self.device.native.send_command_timing.return_value = "Install operation 18 started by ntc"
+        self.device.native.send_command_timing.return_value = "Install operation 26 started by ntc"
         self.device.native.send_command.return_value = SHOW_INSTALL_REQUEST_ACTIVATE_FAILURE
         with self.assertRaises(iosxr_module.OSInstallError):
-            self.device._install_activate(17)
+            self.device._install_activate(25)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     def test_install_activate_tolerates_session_drop(self, mock_sleep):
         # The reload drops the session while polling: that is the success signal, not an error.
-        self.device.native.send_command_timing.return_value = "Install operation 18 started by ntc"
+        self.device.native.send_command_timing.return_value = "Install operation 26 started by ntc"
         self.device.native.send_command.side_effect = OSError("socket closed")
-        self.device._install_activate(17)  # must not raise
+        self.device._install_activate(25)  # must not raise
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     @mock.patch("pyntc.devices.iosxr_device.time.time", side_effect=_fake_clock([0, 0]))
     def test_install_activate_timeout_raises(self, mock_time, mock_sleep):
-        # Activation never finishes (status keeps showing only the add op) -> timeout -> raise.
-        self.device.native.send_command_timing.return_value = "Install operation 18 started by ntc"
-        self.device.native.send_command.return_value = SHOW_INSTALL_REQUEST_ADD
+        # Activation never reaches pending-reload (status stays in progress) -> timeout -> raise.
+        self.device.native.send_command_timing.return_value = "Install operation 26 started by ntc"
+        self.device.native.send_command.return_value = SHOW_INSTALL_REQUEST_IN_PROGRESS
         with self.assertRaises(iosxr_module.OSInstallError):
-            self.device._install_activate(17, timeout=3600)
+            self.device._install_activate(25, timeout=3600)
 
     def test_install_commit(self):
         self.device.native.send_command.return_value = "Install operation 18 completed successfully"

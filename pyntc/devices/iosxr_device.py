@@ -175,10 +175,12 @@ class IOSXRDevice(BaseDevice):
         the install status. A synchronous activate would hold the session and, when the reload
         tore the device down, trap the read on a half-open socket until ``read_timeout``.
 
-        The activation creates its own operation id (distinct from the ``install add`` id).
-        This method polls ``show install request`` once per ``poll_interval`` — logging each
-        poll — until that operation finishes successfully, then returns so the caller can wait
-        for the reload.
+        For an ISO upgrade the activation always ends in a reload, so "success" manifests as
+        ``show install request`` reporting *completed, pending reload* (or the SSH session
+        dropping as the reload starts) — not a committed ``State : Success`` (the device
+        reloads before that appears). This method polls ``show install request`` once per
+        ``poll_interval`` — logging each poll — and returns when it sees the pending-reload
+        marker or the session drops, and raises if the operation reports an abort/error.
 
         Args:
             op_id (int): The staged ``install add`` operation id to activate.
@@ -204,16 +206,15 @@ class IOSXRDevice(BaseDevice):
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 log.info("Host %s: session dropped while polling activation (reload underway): %s", self.host, exc)
                 return
-            op_ids = [int(match) for match in re.findall(r"Operation Id\s*:\s*(\d+)", request)]
-            newest = max(op_ids) if op_ids else op_id
-            log.info("Host %s: polled activation status (latest operation %s).", self.host, newest)
-            if newest > op_id and re.search(r"install activate", request, re.IGNORECASE):
-                if re.search(r"State\s*:\s*Failure|aborted", request, re.IGNORECASE):
-                    log.error("Host %s: activation operation %s failed: %s", self.host, newest, request)
-                    raise OSInstallError(hostname=self.host, desired_boot=f"operation {newest}")
-                if re.search(r"State\s*:\s*Success", request, re.IGNORECASE):
-                    log.info("Host %s: activation operation %s finished successfully.", self.host, newest)
-                    return
+            log.info("Host %s: polled activation status.", self.host)
+            if re.search(r"abort|Error[:!]", request, re.IGNORECASE):
+                log.error("Host %s: activation of operation %s failed: %s", self.host, op_id, request)
+                raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
+            if re.search(
+                r"completed, pending reload|finished successfully|completed successfully", request, re.IGNORECASE
+            ):
+                log.info("Host %s: activation completed; reload imminent.", self.host)
+                return
 
         log.error("Host %s: activation of operation %s did not finish within %ss.", self.host, op_id, timeout)
         raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
