@@ -15,11 +15,14 @@ FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "fixtures")
 @mock.patch("pyntc.devices.f5_device.ManagementRoot")
 @mock.patch("pyntc.devices.asa_device.ASADevice.open")
 @mock.patch("pyntc.devices.ios_device.IOSDevice.open")
+@mock.patch("pyntc.devices.iosxr_device.IOSXRDevice.open")
 @mock.patch("pyntc.devices.nxos_device.NXOSDevice.open")
 @mock.patch("pyntc.devices.jnpr_device.JunosNativeSW")
 @mock.patch("pyntc.devices.jnpr_device.JunosNativeDevice.open")
 @mock.patch("pyntc.devices.jnpr_device.JunosNativeDevice.timeout")
-def test_device_creation(j_timeout, j_open, j_nsw, nx_open, i_open, a_open, f_mr, air_open, device_type, expected):
+def test_device_creation(
+    j_timeout, j_open, j_nsw, nx_open, xr_open, i_open, a_open, f_mr, air_open, device_type, expected
+):
     device = ntc_device(device_type, "host", "user", "pass")
     assert isinstance(device, expected)
 
