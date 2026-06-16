@@ -1,6 +1,7 @@
 import unittest
 
 import mock
+from netmiko.exceptions import AuthenticationException, SSHException
 
 from pyntc.devices import IOSXRDevice, supported_devices
 from pyntc.devices import iosxr_device as iosxr_module
@@ -362,6 +363,46 @@ class TestIOSXRDevice(unittest.TestCase):
     def test_wait_for_device_reboot_timeout(self, mock_close, mock_open, mock_time, mock_sleep):
         with self.assertRaises(iosxr_module.RebootTimeoutError):
             self.device._wait_for_device_reboot(timeout=3600)
+
+    # --- connection retry (eXR SSH rate-limit / banner race) ---
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch("pyntc.devices.iosxr_device.ConnectHandler")
+    def test_connect_retries_transient_then_succeeds(self, mock_connect, mock_sleep):
+        conn = mock.MagicMock()
+        mock_connect.side_effect = [SSHException("Error reading SSH protocol banner"), conn]
+        self.assertIs(self.device._connect(self.device._connect_attempts), conn)
+        self.assertEqual(mock_connect.call_count, 2)
+        mock_sleep.assert_called_once_with(self.device._connect_retry_delay)
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch("pyntc.devices.iosxr_device.ConnectHandler")
+    def test_connect_does_not_retry_auth_failure(self, mock_connect, mock_sleep):
+        mock_connect.side_effect = AuthenticationException("bad creds")
+        with self.assertRaises(AuthenticationException):
+            self.device._connect(self.device._connect_attempts)
+        self.assertEqual(mock_connect.call_count, 1)
+        mock_sleep.assert_not_called()
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch("pyntc.devices.iosxr_device.ConnectHandler")
+    def test_connect_raises_after_exhausting_attempts(self, mock_connect, mock_sleep):
+        mock_connect.side_effect = SSHException("Error reading SSH protocol banner")
+        with self.assertRaises(SSHException):
+            self.device._connect(3)
+        self.assertEqual(mock_connect.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch("pyntc.devices.iosxr_device.ConnectHandler")
+    def test_open_retry_false_makes_single_attempt(self, mock_connect, mock_sleep):
+        # The reboot-wait loop is its own retry; each probe must fail fast.
+        mock_connect.side_effect = OSError("down")
+        self.device._connected = False
+        with self.assertRaises(OSError):
+            self.device.open(retry=False)
+        self.assertEqual(mock_connect.call_count, 1)
+        mock_sleep.assert_not_called()
 
     # --- install_os orchestration ---
 

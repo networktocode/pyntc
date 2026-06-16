@@ -17,7 +17,7 @@ import re
 import time
 
 from netmiko import ConnectHandler
-from netmiko.exceptions import ReadTimeout
+from netmiko.exceptions import AuthenticationException, ReadTimeout, SSHException
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
@@ -25,6 +25,15 @@ from pyntc.errors import CommandError, CommandListError, FileTransferError, OSIn
 from pyntc.utils.models import FileCopyModel
 
 DEFAULT_FILE_SYSTEM = "harddisk:"
+# A freshly reloaded eXR node — or one hit by the upgrade workflow's rapid, short-lived
+# sessions — refuses new SSH connections once it exceeds its `ssh server rate-limit`,
+# closing the socket before the version exchange (the client sees "Error reading SSH
+# protocol banner" or a connection timeout). These failures are transient: waiting a few
+# seconds lets the per-minute rate-limit window drain, so connections are retried with a
+# backoff. Override per device via the `ssh_connect_attempts` / `ssh_connect_retry_delay`
+# kwargs.
+DEFAULT_SSH_CONNECT_ATTEMPTS = 5
+DEFAULT_SSH_CONNECT_RETRY_DELAY = 15
 # Parse the operation id from an "install add" response, e.g. "Install operation 17 started".
 RE_INSTALL_OP = re.compile(r"[Ii]nstall operation (\d+)")
 # Parse the active boot package and its version from "show install active", e.g. "ncs5k-xr-7.11.2".
@@ -67,6 +76,8 @@ class IOSXRDevice(BaseDevice):
         self.secret = secret
         self.port = int(port) if port else 22
         self.read_timeout_override = kwargs.get("read_timeout_override")
+        self._connect_attempts = int(kwargs.get("ssh_connect_attempts", DEFAULT_SSH_CONNECT_ATTEMPTS))
+        self._connect_retry_delay = int(kwargs.get("ssh_connect_retry_delay", DEFAULT_SSH_CONNECT_RETRY_DELAY))
         self._connected = False
         self.open()
         log.init(host=host)
@@ -289,7 +300,9 @@ class IOSXRDevice(BaseDevice):
         seen_down = False
         while time.time() - start < timeout:
             try:
-                self.open()
+                # This loop is itself the retry mechanism, so each probe fails fast
+                # (retry=False) rather than paying the connect backoff on every poll.
+                self.open(retry=False)
                 self.show("show version")
                 if seen_down:
                     log.info("Host %s: device is back up after reload.", self.host)
@@ -582,8 +595,70 @@ class IOSXRDevice(BaseDevice):
         log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
         return True
 
-    def open(self):
-        """Open a connection to the network device."""
+    def _connect(self, attempts):
+        """Establish a Netmiko connection, retrying transient SSH failures with backoff.
+
+        eXR refuses new SSH sessions once its ``ssh server rate-limit`` is exceeded — and
+        the upgrade workflow opens many short-lived sessions in quick succession, so a fresh
+        connection (e.g. the post-reboot verification) can be rejected: the device closes the
+        socket before the version exchange, surfacing as ``Error reading SSH protocol banner``
+        or a connection timeout. These are transient, so connect is retried with a backoff
+        long enough to let the per-minute window drain. Authentication failures are not
+        transient and are re-raised immediately.
+
+        Args:
+            attempts (int): Maximum number of connection attempts.
+
+        Returns:
+            ConnectHandler: A live Netmiko connection.
+
+        Raises:
+            AuthenticationException: On a genuine auth failure (never retried).
+            SSHException: When every attempt fails to connect (last error re-raised).
+        """
+        last_exc = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return ConnectHandler(
+                    device_type="cisco_xr",
+                    ip=self.host,
+                    username=self.username,
+                    password=self.password,
+                    port=self.port,
+                    read_timeout_override=self.read_timeout_override,
+                    secret=self.secret,
+                    # Keepalives let the status polls notice a dropped session promptly.
+                    keepalive=30,
+                    verbose=False,
+                )
+            except AuthenticationException:
+                # Bad credentials are not transient — fail fast.
+                raise
+            except (SSHException, OSError, EOFError) as exc:
+                # SSHException covers Netmiko's banner/timeout wrappers and raw paramiko
+                # banner errors; OSError/EOFError cover the rate-limited socket close.
+                last_exc = exc
+                if attempt < attempts:
+                    log.info(
+                        "Host %s: SSH connect attempt %s/%s failed (%s); retrying in %ss.",
+                        self.host,
+                        attempt,
+                        attempts,
+                        exc,
+                        self._connect_retry_delay,
+                    )
+                    time.sleep(self._connect_retry_delay)
+        log.error("Host %s: SSH connect failed after %s attempts.", self.host, attempts)
+        raise last_exc
+
+    def open(self, retry=True):
+        """Open a connection to the network device.
+
+        Args:
+            retry (bool): Retry transient SSH failures (rate-limit / banner) with backoff.
+                Defaults to True. Callers that run their own polling loop (e.g.
+                ``_wait_for_device_reboot``) pass False so each probe fails fast.
+        """
         if self.connected:
             try:
                 self.native.find_prompt()
@@ -591,18 +666,7 @@ class IOSXRDevice(BaseDevice):
                 self._connected = False
 
         if not self.connected:
-            self.native = ConnectHandler(
-                device_type="cisco_xr",
-                ip=self.host,
-                username=self.username,
-                password=self.password,
-                port=self.port,
-                read_timeout_override=self.read_timeout_override,
-                secret=self.secret,
-                # Keepalives let the status polls notice a dropped session promptly.
-                keepalive=30,
-                verbose=False,
-            )
+            self.native = self._connect(self._connect_attempts if retry else 1)
             self._connected = True
 
         log.debug("Host %s: Connection to controller was opened successfully.", self.host)
