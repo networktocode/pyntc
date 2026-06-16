@@ -1,15 +1,16 @@
 """Module for using a Cisco IOS-XR (eXR / 64-bit) device over SSH.
 
 This driver targets 64-bit IOS-XR (eXR) platforms (initial target: NCS5000 /
-NCS-5011) and implements the asynchronous, package-based OS upgrade workflow:
+NCS-5011) and implements the asynchronous OS upgrade workflow:
 
     install add -> poll for completion -> install activate -> reload -> install commit -> verify
 
-Phase 1 installs the base ISO only. The ``additional_files`` argument to
-``install_os`` is accepted for forward compatibility but is currently inert:
-when supplied it logs a warning and the files are ignored, and only the base
-ISO is installed. Feature RPMs are therefore not installed and must be handled
-manually until full-bundle support lands.
+The driver upgrades from a single **golden ISO** image. A golden ISO bundles the
+base XR image together with the matching-version feature RPMs (IS-IS, OSPF, MPLS,
+multicast, etc.) into one file, so it can be added and activated on its own — eXR
+will not abort the activation demanding separate feature RPMs. Build a golden ISO
+with Cisco's gisobuild tool (https://github.com/ios-xr/gisobuild). Installing a
+bare base ISO plus separate feature RPMs is not supported by this driver.
 """
 
 import re
@@ -111,15 +112,15 @@ class IOSXRDevice(BaseDevice):
         days = days + weeks * 7
         return f"{days:02d}:{hours:02d}:{minutes:02d}:00"
 
-    def _install_add(self, source, packages):
-        """Stage packages into the install repository.
+    def _install_add(self, source, image_name):
+        """Stage the golden ISO into the install repository.
 
         ``install add`` returns immediately and continues asynchronously in the
         background, printing an operation id that subsequent steps reference.
 
         Args:
             source (str): The on-device source path, e.g. ``harddisk:/``.
-            packages (list): Package filenames to add (the base ISO for Phase 1).
+            image_name (str): The golden ISO filename to add.
 
         Returns:
             (int): The install operation id parsed from the device response.
@@ -127,13 +128,13 @@ class IOSXRDevice(BaseDevice):
         Raises:
             OSInstallError: When the device response does not contain an operation id.
         """
-        command = f"install add source {source} {' '.join(packages)}"
+        command = f"install add source {source} {image_name}"
         response = self.native.send_command(command, read_timeout=120)
 
         match = RE_INSTALL_OP.search(response)
         if match is None:
             log.error("Host %s: Unable to parse install operation id from response: %s", self.host, response)
-            raise OSInstallError(hostname=self.host, desired_boot=" ".join(packages))
+            raise OSInstallError(hostname=self.host, desired_boot=image_name)
 
         op_id = int(match.group(1))
         log.info("Host %s: install add started operation %s.", self.host, op_id)
@@ -219,10 +220,45 @@ class IOSXRDevice(BaseDevice):
         log.error("Host %s: activation of operation %s did not finish within %ss.", self.host, op_id, timeout)
         raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
 
-    def _install_commit(self):
-        """Persist the activated software so it survives the reload."""
-        self.native.send_command("install commit")
-        log.info("Host %s: install commit issued.", self.host)
+    def _install_commit(self, retries=3, retry_delay=30, read_timeout=120):
+        """Persist the activated software so it survives future reloads.
+
+        Issued immediately after the activation reload, where the install manager can be slow
+        to respond, so the command uses a generous ``read_timeout`` and is retried a few times
+        on failure. Re-issuing ``install commit`` when there is nothing left to commit is a
+        harmless no-op, so retrying is safe even if a prior attempt actually committed but the
+        prompt was slow to return.
+
+        Args:
+            retries (int): Number of attempts before giving up. Defaults to 3.
+            retry_delay (int): Seconds to wait between attempts. Defaults to 30.
+            read_timeout (int): Per-attempt Netmiko read timeout. Defaults to 120.
+
+        Raises:
+            OSInstallError: When the commit does not complete cleanly after ``retries`` attempts.
+        """
+        for attempt in range(1, retries + 1):
+            try:
+                self.native.send_command("install commit", read_timeout=read_timeout)
+                log.info("Host %s: install commit issued.", self.host)
+                return
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                log.warning(
+                    "Host %s: install commit attempt %s/%s did not return cleanly (%s).",
+                    self.host,
+                    attempt,
+                    retries,
+                    exc,
+                )
+                if attempt < retries:
+                    time.sleep(retry_delay)
+                    try:
+                        self.open()
+                    except Exception as open_exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                        log.debug("Host %s: reopen before commit retry failed (%s).", self.host, open_exc)
+
+        log.error("Host %s: install commit did not complete after %s attempts.", self.host, retries)
+        raise OSInstallError(hostname=self.host, desired_boot="install commit")
 
     def _wait_for_device_reboot(self, timeout=3600, interval=60):
         """Wait for the activation reload: watch the session drop, then poll until it returns.
@@ -282,10 +318,8 @@ class IOSXRDevice(BaseDevice):
         """
         show_install_active = self.show("show install active")
         match = RE_XR_BOOT_IMAGE.search(show_install_active)
-        if match:
-            boot_options = {"sys": match.group("sys"), "version": match.group("version")}
-        else:
-            boot_options = {"sys": None, "version": None}
+        # The regex's named groups are exactly "sys" and "version".
+        boot_options = match.groupdict() if match else {"sys": None, "version": None}
 
         log.debug("Host %s: boot options %s.", self.host, boot_options)
         return boot_options
@@ -494,25 +528,23 @@ class IOSXRDevice(BaseDevice):
         log.debug("Host %s: %s bytes free on %s.", self.host, free_bytes, file_system)
         return free_bytes
 
-    def install_os(self, image_name, reboot=True, additional_files=None, **vendor_specifics):
-        """Install the base IOS-XR ISO and verify the device boots into it.
+    def install_os(self, image_name, reboot=True, **vendor_specifics):
+        """Install a golden IOS-XR ISO and verify the device boots into it.
 
         Orchestrates the eXR install workflow over the native primitives:
-        ``install add`` (ISO + any feature RPMs) -> poll for completion ->
-        ``install activate`` -> poll the activation operation -> wait for reboot ->
-        ``install commit`` -> verify.
+        ``install add`` (golden ISO) -> poll for completion -> ``install activate`` ->
+        poll the activation operation -> wait for reboot -> ``install commit`` -> verify.
 
-        On eXR the base ISO cannot be activated on its own when feature packages
-        (IS-IS, OSPF, MPLS, etc.) are active: ``install activate`` aborts demanding the
-        matching-version RPMs be activated in the same operation. Pass those RPMs via
-        ``additional_files`` so the whole set is added and activated together.
+        ``image_name`` must be a **golden ISO** that already bundles the base XR image
+        and the matching-version feature RPMs (IS-IS, OSPF, MPLS, multicast, etc.). A
+        bare base ISO cannot be activated on its own when feature packages are active —
+        eXR aborts the activation demanding the matching RPMs — so build a golden ISO
+        with Cisco's gisobuild tool (https://github.com/ios-xr/gisobuild) and stage that
+        single file. Installing a base ISO plus separate feature RPMs is not supported.
 
         Args:
-            image_name (str): The base ISO filename already staged on ``harddisk:``.
+            image_name (str): The golden ISO filename already staged on ``harddisk:``.
             reboot (bool): Must be ``True``; activation reloads the device automatically.
-            additional_files (list, optional): Feature RPM filenames (already staged on
-                ``harddisk:``) to add and activate alongside the base ISO. Required on any
-                device that runs optional feature packages.
             vendor_specifics (dict, optional): Supports ``timeout`` (default 3600) for the
                 install-operation and reboot waits.
 
@@ -537,8 +569,7 @@ class IOSXRDevice(BaseDevice):
                 "the reboot argument cannot be set to False."
             )
 
-        packages = [image_name, *(additional_files or [])]
-        add_id = self._install_add(f"{DEFAULT_FILE_SYSTEM}/", packages)
+        add_id = self._install_add(f"{DEFAULT_FILE_SYSTEM}/", image_name)
         self._wait_for_install_op(add_id, timeout=timeout)
         self._install_activate(add_id, timeout=timeout)
         self._wait_for_device_reboot(timeout=timeout)

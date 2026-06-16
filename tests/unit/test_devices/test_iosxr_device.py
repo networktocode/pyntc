@@ -7,32 +7,34 @@ from pyntc.devices import iosxr_device as iosxr_module
 from pyntc.errors import FileTransferError
 from pyntc.utils.models import FileCopyModel
 
-ISO = "ncs5k-mini-x-7.11.2.iso"
+ISO = "ncs5k-golden-x-7.11.2-NTC7112.iso"
 ACTIVE_VERSION = "7.11.2"
-ISO_URL = "http://10.1.100.220/IOS-XR/7.11.2/ncs5k-mini-x-7.11.2.iso"
+ISO_URL = "http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso"
 PROMPT = "RP/0/RP0/CPU0:ncs#"
 
 DIR_FILE_PRESENT = (
     "Mon Jun 15 12:00:00.000 UTC\n\n"
     "Directory of harddisk:\n"
-    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-mini-x-7.11.2.iso\n"
+    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-golden-x-7.11.2-NTC7112.iso\n"
 )
-DIR_FILE_ABSENT = "Mon Jun 15 12:00:00.000 UTC\n%Error: dir: '/harddisk:/ncs5k-mini-x-7.11.2.iso': No such file\n"
+DIR_FILE_ABSENT = (
+    "Mon Jun 15 12:00:00.000 UTC\n%Error: dir: '/harddisk:/ncs5k-golden-x-7.11.2-NTC7112.iso': No such file\n"
+)
 COPY_SUCCESS = (
     "Mon Jun 15 12:00:00.000 UTC\n"
-    "Destination filename [/harddisk:/ncs5k-mini-x-7.11.2.iso]?\n"
-    "Accessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-mini-x-7.11.2.iso\n"
+    "Destination filename [/harddisk:/ncs5k-golden-x-7.11.2-NTC7112.iso]?\n"
+    "Accessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso\n"
     "1500000000 bytes copied in 42 secs (35714285 bytes/sec)\n"
     "RP/0/RP0/CPU0:ncs#"
 )
 COPY_ERROR = (
     "Mon Jun 15 12:00:00.000 UTC\n"
-    "%Error opening http://10.1.100.220/IOS-XR/7.11.2/ncs5k-mini-x-7.11.2.iso: Connection refused\n"
+    "%Error opening http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso: Connection refused\n"
 )
 # Real eXR (NCS5011) copy output: netmiko strips the trailing prompt, and the
 # success markers are "Successfully copied ... Bytes" / "Copy operation success".
 COPY_SUCCESS_EXR = (
-    "\nAccessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-mini-x-7.11.2.iso\n"
+    "\nAccessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso\n"
     + ("!" * 60)
     + "\nSuccessfully copied 1432756224 Bytes\n\n\nCopy operation success\n"
 )
@@ -60,7 +62,7 @@ SHOW_INSTALL_ACTIVE_MULTI = (
 INSTALL_ADD_RESPONSE = (
     "Mon Jun 15 12:00:00.000 UTC\n"
     "Install operation 17 started by admin:\n"
-    "  install add source harddisk:/ ncs5k-mini-x-7.11.2.iso\n"
+    "  install add source harddisk:/ ncs5k-golden-x-7.11.2-NTC7112.iso\n"
     "This operation will continue asynchronously.\n"
     "Install add operation 17 will continue in the background.\n"
 )
@@ -89,7 +91,7 @@ SHOW_VERSION = (
 DIR_HARDDISK = (
     "Mon Jun 15 12:00:00.000 UTC\n\n"
     "Directory of harddisk:\n"
-    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-mini-x-7.11.2.iso\n\n"
+    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-golden-x-7.11.2-NTC7112.iso\n\n"
     "3000000000 bytes total (2000000000 bytes free)\n"
 )
 
@@ -107,7 +109,7 @@ DIR_HARDDISK_KBYTES = (
 # 'show install request' states observed on real eXR during an activation.
 SHOW_INSTALL_REQUEST_IN_PROGRESS = (
     "Tue Jun 16 03:31:04.338 UTC\n"
-    "User ntc, Op Id 26\ninstall activate\nncs5k-mini-x-7.11.2\n"
+    "User ntc, Op Id 26\ninstall activate\nncs5k-golden-x-7.11.2-NTC7112\n"
     "install operation 26 is in progress\n"
     "Install prepare operation 26 is in progress\n"
     "0/RP0                     In Progress               Partition preparation in progress\n"
@@ -258,12 +260,12 @@ class TestIOSXRDevice(unittest.TestCase):
 
     def test_install_add_parses_op_id(self):
         self.device.native.send_command.return_value = INSTALL_ADD_RESPONSE
-        self.assertEqual(self.device._install_add("harddisk:/", [ISO]), 17)
+        self.assertEqual(self.device._install_add("harddisk:/", ISO), 17)
 
     def test_install_add_no_op_id_raises(self):
         self.device.native.send_command.return_value = INSTALL_ADD_NO_OP_ID
         with self.assertRaises(iosxr_module.OSInstallError):
-            self.device._install_add("harddisk:/", [ISO])
+            self.device._install_add("harddisk:/", ISO)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     def test_wait_for_install_op_success(self, mock_sleep):
@@ -321,7 +323,22 @@ class TestIOSXRDevice(unittest.TestCase):
     def test_install_commit(self):
         self.device.native.send_command.return_value = "Install operation 18 completed successfully"
         self.device._install_commit()
-        self.device.native.send_command.assert_any_call("install commit")
+        self.device.native.send_command.assert_any_call("install commit", read_timeout=120)
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch.object(IOSXRDevice, "open")
+    def test_install_commit_retries_then_succeeds(self, mock_open, mock_sleep):
+        # The install manager can be slow right after the reload; the first attempt fails.
+        self.device.native.send_command.side_effect = [Exception("read timeout"), "ok"]
+        self.device._install_commit()
+        self.assertEqual(self.device.native.send_command.call_count, 2)
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch.object(IOSXRDevice, "open")
+    def test_install_commit_raises_after_exhausting_retries(self, mock_open, mock_sleep):
+        self.device.native.send_command.side_effect = Exception("read timeout")
+        with self.assertRaises(iosxr_module.OSInstallError):
+            self.device._install_commit(retries=2)
 
     # --- reboot / _wait_for_device_reboot ---
 
@@ -360,27 +377,11 @@ class TestIOSXRDevice(unittest.TestCase):
     ):
         result = self.device.install_os(ISO)
         self.assertTrue(result)
-        mock_add.assert_called_once_with("harddisk:/", [ISO])
+        mock_add.assert_called_once_with("harddisk:/", ISO)
         mock_wait_op.assert_called_once_with(17, timeout=3600)  # add op only
         mock_activate.assert_called_once_with(17, timeout=3600)
         mock_wait_reboot.assert_called_once_with(timeout=3600)
         mock_commit.assert_called_once()
-
-    @mock.patch.object(IOSXRDevice, "_install_commit")
-    @mock.patch.object(IOSXRDevice, "_wait_for_device_reboot")
-    @mock.patch.object(IOSXRDevice, "_install_activate", return_value=18)
-    @mock.patch.object(IOSXRDevice, "_wait_for_install_op")
-    @mock.patch.object(IOSXRDevice, "_install_add", return_value=17)
-    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=1000)
-    @mock.patch.object(IOSXRDevice, "_image_booted", side_effect=[False, True])
-    def test_install_os_with_additional_files(
-        self, mock_booted, mock_uptime, mock_add, mock_wait_op, mock_activate, mock_wait_reboot, mock_commit
-    ):
-        rpms = ["ncs5k-mpls-7.11.2.rpm", "ncs5k-ospf-7.11.2.rpm"]
-        result = self.device.install_os(ISO, additional_files=rpms)
-        self.assertTrue(result)
-        # The base ISO and the feature RPMs are added together as a single set.
-        mock_add.assert_called_once_with("harddisk:/", [ISO, *rpms])
 
     @mock.patch.object(IOSXRDevice, "_install_add")
     @mock.patch.object(IOSXRDevice, "_image_booted", return_value=True)

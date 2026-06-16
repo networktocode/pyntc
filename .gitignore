@@ -1,6 +1,3 @@
-# Local IOS-XR lab harness (not part of the package)
-/test-iosxr.py
-
 # Ansible Retry Files
 *.retry
 

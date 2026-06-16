@@ -1,0 +1,1 @@
+Added native Cisco IOS-XR (eXR / 64-bit) support via the `cisco_iosxr_ssh` driver (`IOSXRDevice`), including `remote_file_copy` (FTP/TFTP/SCP/HTTP/HTTPS) and OS upgrades from a single golden ISO (built with Cisco's gisobuild tool) through the asynchronous `install add` / `install activate` / `install commit` workflow.
