@@ -119,7 +119,7 @@ class IOSXRDevice(BaseDevice):
             found_filesystems = set()
             fs_list = raw_data.split("File Systems:")[1].strip().split("\n")[1:]
             for fs in fs_list:
-                size_bytes, free_bytes, fs_type, fs_flags, fs_name = fs.split()
+                _size_bytes, _free_bytes, fs_type, _fs_flags, fs_name = fs.split()
                 if "disk" in fs_type:
                     found_filesystems.add(fs_name)
                     log.debug("Host %s: Found filesystem %s.", self.host, fs_name)
