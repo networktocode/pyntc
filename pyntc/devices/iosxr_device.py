@@ -21,10 +21,16 @@ from netmiko.exceptions import AuthenticationException, ReadTimeout, SSHExceptio
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
-from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, RebootTimeoutError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileSystemNotFoundError,
+    FileTransferError,
+    OSInstallError,
+    RebootTimeoutError,
+)
 from pyntc.utils.models import FileCopyModel
 
-DEFAULT_FILE_SYSTEM = "harddisk:"
 # A freshly reloaded eXR node — or one hit by the upgrade workflow's rapid, short-lived
 # sessions — refuses new SSH connections once it exceeds its `ssh server rate-limit`,
 # closing the socket before the version exchange (the client sees "Error reading SSH
@@ -34,22 +40,9 @@ DEFAULT_FILE_SYSTEM = "harddisk:"
 # kwargs.
 DEFAULT_SSH_CONNECT_ATTEMPTS = 5
 DEFAULT_SSH_CONNECT_RETRY_DELAY = 15
-# Parse the operation id from an "install add" response, e.g. "Install operation 17 started".
-RE_INSTALL_OP = re.compile(r"[Ii]nstall operation (\d+)")
-# Parse the active boot package and its version from "show install active", e.g. "ncs5k-xr-7.11.2".
-RE_XR_BOOT_IMAGE = re.compile(r"(?P<sys>\S*xr-(?P<version>\d+\.\d+\.\d+\w*))")
+
 # Parse the running version from "show version", e.g. "Version 7.11.2".
 RE_XR_VERSION = re.compile(r"Version\s+(\d+\.\d+\.\d+\w*)")
-# Success / error markers emitted by the IOS-XR "copy" command (eXR uses
-# "Successfully copied ... Bytes" / "Copy operation success").
-RE_COPY_SUCCESS = re.compile(
-    r"Successfully copied|Copy operation success|bytes copied|copied in|\[OK\]|Download Complete|transfer successful",
-    re.IGNORECASE,
-)
-RE_COPY_ERROR = re.compile(
-    r"%Error|Error opening|Invalid input|Failed|Aborted|denied|No such file|Connection refused|timed out|could not",
-    re.IGNORECASE,
-)
 
 
 @fix_docs
@@ -59,15 +52,29 @@ class IOSXRDevice(BaseDevice):
     vendor = "cisco"
 
     # pylint: disable=too-many-arguments, too-many-positional-arguments
-    def __init__(self, host, username, password, secret="", port=None, **kwargs):  # noqa: D403  # nosec
+    def __init__(
+        self,
+        host,
+        username,
+        password,
+        secret="",
+        port=None,
+        read_timeout_override=None,
+        ssh_connect_attempts=DEFAULT_SSH_CONNECT_ATTEMPTS,
+        ssh_connect_retry_delay=DEFAULT_SSH_CONNECT_RETRY_DELAY,
+        **kwargs,
+    ):  # noqa: D403  # nosec
         """PyNTC Device implementation for Cisco IOS-XR (eXR).
 
         Args:
             host (str): The address of the network device.
             username (str): The username to authenticate with the device.
             password (str): The password to authenticate with the device.
-            secret (str): The password to escalate privilege on the device.
-            port (int): The port to use to establish the connection. Defaults to 22.
+            secret (str, optional): The password to escalate privilege on the device.
+            port (int, optional): The port to use to establish the connection. Defaults to 22.
+            read_timeout_override (int, optional): If supplied, overrides all timeouts for netmiko send_command calls.
+            ssh_connect_attempts (int, optional): Number of times to try to connect to the device before giving up. Defaults to 5.
+            ssh_connect_retry_delay (int, optional): Number of seconds to wait between retries when ssh_connect_attempts is >1. Defaults to 15.
             kwargs (dict): Additional arguments to pass to the Netmiko ConnectHandler.
         """
         super().__init__(host, username, password, device_type="cisco_iosxr_ssh")
@@ -75,9 +82,9 @@ class IOSXRDevice(BaseDevice):
         self.native = None
         self.secret = secret
         self.port = int(port) if port else 22
-        self.read_timeout_override = kwargs.get("read_timeout_override")
-        self._connect_attempts = int(kwargs.get("ssh_connect_attempts", DEFAULT_SSH_CONNECT_ATTEMPTS))
-        self._connect_retry_delay = int(kwargs.get("ssh_connect_retry_delay", DEFAULT_SSH_CONNECT_RETRY_DELAY))
+        self.read_timeout_override = read_timeout_override
+        self._connect_attempts = ssh_connect_attempts
+        self._connect_retry_delay = ssh_connect_retry_delay
         self._connected = False
         self.open()
         log.init(host=host)
@@ -90,12 +97,43 @@ class IOSXRDevice(BaseDevice):
 
         response = self.native.send_command(**command_args)
 
-        if "% " in response or "Error:" in response:
+        if re.search(r"^\s*%", response, flags=re.MULTILINE) or "Error:" in response:
             log.error("Host %s: Error in %s with response: %s", self.host, command, response)
             raise CommandError(command, response)
 
         log.info("Host %s: Command %s was executed successfully.", self.host, command)
         return response
+
+    def _get_file_system(self):
+        """Determine the default file system or directory for device.
+
+        Returns:
+            (str): The name of the default file system or directory for the device.
+
+        Raises:
+            FileSystemNotFound: When the module is unable to determine the default file system.
+        """
+        raw_data = self.show("show filesystem location all")
+
+        try:
+            found_filesystems = set()
+            fs_list = raw_data.split("File Systems:")[1].strip().split("\n")[1:]
+            for fs in fs_list:
+                size_bytes, free_bytes, fs_type, fs_flags, fs_name = fs.split()
+                if "disk" in fs_type:
+                    found_filesystems.add(fs_name)
+                    log.debug("Host %s: Found filesystem %s.", self.host, fs_name)
+
+            # Prefer harddisk: then disk0:
+            # TODO: Do we need to support more than these?
+            for fs in ["harddisk:", "disk0:"]:
+                if fs in found_filesystems:
+                    return fs
+        except (AttributeError, IndexError, ValueError):
+            pass
+
+        log.error("host %s: Unable to determine the device's default filesystem.")
+        raise FileSystemNotFoundError(hostname=self.hostname, command="show filesystem location all")
 
     def _uptime_components(self, uptime_full_string):
         match_weeks = re.search(r"(\d+) weeks?", uptime_full_string)
@@ -142,44 +180,47 @@ class IOSXRDevice(BaseDevice):
         command = f"install add source {source} {image_name}"
         response = self.native.send_command(command, read_timeout=120)
 
-        match = RE_INSTALL_OP.search(response)
+        # Parse the operation id from the response, e.g. "Install operation 17 started".
+        match = re.search(r"[Ii]nstall operation (\d+)", response)
         if match is None:
             log.error("Host %s: Unable to parse install operation id from response: %s", self.host, response)
             raise OSInstallError(hostname=self.host, desired_boot=image_name)
 
-        op_id = int(match.group(1))
-        log.info("Host %s: install add started operation %s.", self.host, op_id)
-        return op_id
+        operation_id = int(match.group(1))
+        log.info("Host %s: install add started operation %s.", self.host, operation_id)
+        return operation_id
 
-    def _wait_for_install_op(self, op_id, timeout=3600, interval=30):
+    def _wait_for_install_operation(self, operation_id, timeout=3600, interval=30):
         """Poll ``show install log <id>`` until the operation reaches a terminal state.
 
         Args:
-            op_id (int): The install operation id to track.
+            operation_id (int): The install operation id to track.
             timeout (int): Maximum seconds to wait for a terminal state. Defaults to 3600.
             interval (int): Seconds to wait between polls. Defaults to 30.
 
         Raises:
             OSInstallError: When the operation aborts/fails or the timeout is exceeded.
         """
-        success = re.compile(rf"operation\s+{op_id}\b.*(completed successfully|succeeded)", re.IGNORECASE | re.DOTALL)
-        failure = re.compile(rf"operation\s+{op_id}\b.*(aborted|failed)", re.IGNORECASE | re.DOTALL)
+        success = re.compile(
+            rf"operation\s+{operation_id}\b.*(completed successfully|succeeded)", re.IGNORECASE | re.DOTALL
+        )
+        failure = re.compile(rf"operation\s+{operation_id}\b.*(aborted|failed)", re.IGNORECASE | re.DOTALL)
 
         start = time.time()
         while time.time() - start < timeout:
-            output = self.native.send_command(f"show install log {op_id}", read_timeout=120)
+            output = self.native.send_command(f"show install log {operation_id}", read_timeout=120)
             if failure.search(output):
-                log.error("Host %s: install operation %s aborted/failed.", self.host, op_id)
-                raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
+                log.error("Host %s: install operation %s aborted/failed.", self.host, operation_id)
+                raise OSInstallError(hostname=self.host, desired_boot=f"operation {operation_id}")
             if success.search(output):
-                log.info("Host %s: install operation %s completed successfully.", self.host, op_id)
+                log.info("Host %s: install operation %s completed successfully.", self.host, operation_id)
                 return
             time.sleep(interval)
 
-        log.error("Host %s: install operation %s timed out after %s seconds.", self.host, op_id, timeout)
-        raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
+        log.error("Host %s: install operation %s timed out after %s seconds.", self.host, operation_id, timeout)
+        raise OSInstallError(hostname=self.host, desired_boot=f"operation {operation_id}")
 
-    def _install_activate(self, op_id, poll_interval=60, timeout=3600):
+    def _install_activate(self, operation_id, poll_interval=60, timeout=3600):
         """Activate a staged install operation and track it to completion.
 
         The activation is issued with ``noprompt`` (so eXR does not wait on the interactive
@@ -195,14 +236,14 @@ class IOSXRDevice(BaseDevice):
         marker or the session drops, and raises if the operation reports an abort/error.
 
         Args:
-            op_id (int): The staged ``install add`` operation id to activate.
+            operation_id (int): The staged ``install add`` operation id to activate.
             poll_interval (int): Seconds between status polls. Defaults to 60.
             timeout (int): Maximum seconds to wait for the activation to finish. Defaults to 3600.
 
         Raises:
             OSInstallError: When the activation operation aborts/fails or does not finish in time.
         """
-        command = f"install activate id {op_id} noprompt"
+        command = f"install activate id {operation_id} noprompt"
         log.info("Host %s: issuing activation: %s", self.host, command)
         try:
             self.native.send_command_timing(command, read_timeout=180)
@@ -220,16 +261,16 @@ class IOSXRDevice(BaseDevice):
                 return
             log.info("Host %s: polled activation status.", self.host)
             if re.search(r"abort|Error[:!]", request, re.IGNORECASE):
-                log.error("Host %s: activation of operation %s failed: %s", self.host, op_id, request)
-                raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
+                log.error("Host %s: activation of operation %s failed: %s", self.host, operation_id, request)
+                raise OSInstallError(hostname=self.host, desired_boot=f"operation {operation_id}")
             if re.search(
                 r"completed, pending reload|finished successfully|completed successfully", request, re.IGNORECASE
             ):
                 log.info("Host %s: activation completed; reload imminent.", self.host)
                 return
 
-        log.error("Host %s: activation of operation %s did not finish within %ss.", self.host, op_id, timeout)
-        raise OSInstallError(hostname=self.host, desired_boot=f"operation {op_id}")
+        log.error("Host %s: activation of operation %s did not finish within %ss.", self.host, operation_id, timeout)
+        raise OSInstallError(hostname=self.host, desired_boot=f"operation {operation_id}")
 
     def _install_commit(self, retries=3, retry_delay=30, read_timeout=120):
         """Persist the activated software so it survives future reloads.
@@ -330,7 +371,10 @@ class IOSXRDevice(BaseDevice):
                 both values are ``None`` when the output cannot be parsed.
         """
         show_install_active = self.show("show install active")
-        match = RE_XR_BOOT_IMAGE.search(show_install_active)
+
+        # Parse the active boot package and its version, e.g. "ncs5k-xr-7.11.2".
+        match = re.search(r"(?P<sys>\S*xr-(?P<version>\d+\.\d+\.\d+\w*))", show_install_active)
+
         # The regex's named groups are exactly "sys" and "version".
         boot_options = match.groupdict() if match else {"sys": None, "version": None}
 
@@ -370,13 +414,13 @@ class IOSXRDevice(BaseDevice):
 
         Args:
             filename (str): The filename to look for.
-            file_system (str, optional): Filesystem to inspect. Defaults to ``harddisk:``.
+            file_system (str, optional): Filesystem to inspect. Automatically retrieves the default filesystem if not provided.
 
         Returns:
             (bool): True if the file is present, False otherwise.
         """
         if file_system is None:
-            file_system = DEFAULT_FILE_SYSTEM
+            file_system = self._get_file_system()
 
         result = self.native.send_command(f"dir {file_system}/{filename}", read_timeout=30)
         if re.search(r"No such file|No files matched|not found|Path does not exist|Error", result, re.IGNORECASE):
@@ -393,15 +437,14 @@ class IOSXRDevice(BaseDevice):
         """Copy a file from a remote URL onto the device filesystem.
 
         Pulls the file specified by ``src`` from a remote server (FTP/TFTP/SCP/HTTP/HTTPS)
-        using the IOS-XR ``copy`` command and saves it to ``file_system`` (default
-        ``harddisk:``). The transfer is verified by confirming the file exists after
-        copy. **Checksum verification is not performed** on IOS-XR in this release; the
-        ``checksum`` on ``src`` is not validated.
+        using the IOS-XR ``copy`` command and saves it to ``file_system``. The transfer is
+        verified by confirming the file exists after copy. **Checksum verification is not performed**
+        on IOS-XR in this release; the ``checksum`` on ``src`` is not validated.
 
         Args:
             src (FileCopyModel): The source specification (URL, credentials, timeout).
             dest (str, optional): Destination filename. Defaults to ``src.file_name``.
-            file_system (str, optional): Target filesystem. Defaults to ``harddisk:``.
+            file_system (str, optional): Target filesystem. Automatically retrieves the default filesystem if not provided.
             kwargs (dict): Additional keyword arguments (unused).
 
         Raises:
@@ -412,7 +455,7 @@ class IOSXRDevice(BaseDevice):
             raise TypeError("src must be an instance of FileCopyModel")
 
         if file_system is None:
-            file_system = DEFAULT_FILE_SYSTEM
+            file_system = self._get_file_system()
         if dest is None:
             dest = src.file_name
 
@@ -445,10 +488,18 @@ class IOSXRDevice(BaseDevice):
         # so the post-copy existence check (below) is the authoritative success signal; this
         # loop only answers prompts and surfaces explicit error markers early.
         for _ in range(10):
-            if RE_COPY_SUCCESS.search(output):
+            if re.search(
+                r"Successfully copied|Copy operation success|bytes copied|copied in|\[OK\]|Download Complete|transfer successful",
+                output,
+                flags=re.IGNORECASE,
+            ):
                 log.info("Host %s: File %s transfer reported success.", self.host, dest)
                 break
-            if RE_COPY_ERROR.search(output):
+            if re.search(
+                r"%Error|Error opening|Invalid input|Failed|Aborted|denied|No such file|Connection refused|timed out|could not",
+                output,
+                flags=re.IGNORECASE,
+            ):
                 log.error("Host %s: File transfer error for %s: %s", self.host, dest, output)
                 raise FileTransferError
             for prompt, answer in prompt_answers.items():
@@ -516,7 +567,7 @@ class IOSXRDevice(BaseDevice):
         """Return free bytes on ``file_system`` as reported by ``dir`` output.
 
         Args:
-            file_system (str, optional): Target filesystem. Defaults to ``harddisk:``.
+            file_system (str, optional): Target filesystem. Automatically retrieves the default filesystem if not provided.
 
         Returns:
             (int): Free bytes available on ``file_system``.
@@ -525,7 +576,7 @@ class IOSXRDevice(BaseDevice):
             CommandError: When the free space cannot be parsed from ``dir`` output.
         """
         if file_system is None:
-            file_system = DEFAULT_FILE_SYSTEM
+            file_system = self._get_file_system()
 
         raw_data = self.show(f"dir {file_system}")
         # eXR reports the trailer in kbytes (e.g. "9948012 kbytes total (9396256 kbytes free)");
@@ -556,7 +607,7 @@ class IOSXRDevice(BaseDevice):
         single file. Installing a base ISO plus separate feature RPMs is not supported.
 
         Args:
-            image_name (str): The golden ISO filename already staged on ``harddisk:``.
+            image_name (str): The golden ISO filename already staged on the device.
             reboot (bool): Must be ``True``; activation reloads the device automatically.
             vendor_specifics (dict, optional): Supports ``timeout`` (default 3600) for the
                 install-operation and reboot waits.
@@ -582,8 +633,8 @@ class IOSXRDevice(BaseDevice):
                 "the reboot argument cannot be set to False."
             )
 
-        add_id = self._install_add(f"{DEFAULT_FILE_SYSTEM}/", image_name)
-        self._wait_for_install_op(add_id, timeout=timeout)
+        add_id = self._install_add(f"{self._get_file_system()}/", image_name)
+        self._wait_for_install_operation(add_id, timeout=timeout)
         self._install_activate(add_id, timeout=timeout)
         self._wait_for_device_reboot(timeout=timeout)
         self._install_commit()

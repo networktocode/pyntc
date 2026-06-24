@@ -70,6 +70,22 @@ INSTALL_ADD_RESPONSE = (
 
 INSTALL_ADD_NO_OP_ID = "Mon Jun 15 12:00:00.000 UTC\n% Unexpected output without an operation id\n"
 
+SHOW_FILESYSTEM_LOCATION_ALL = """
+Tue Jun 23 21:22:51.023 UTC
+
+ node:  node0_RP0_CPU0
+------------------------------------------------------------------
+File Systems:
+
+      Size(b)      Free(b)        Type  Flags  Prefixes
+   2358312960   2347773952  flash-disk     rw  disk0:
+    480907264    479154176       flash     rw  /misc/config
+  10186764288   7176835072    harddisk     rw  harddisk:
+            0            0     network     rw  ftp:
+            0            0     network     rw  tftp:
+   3962216448   3926454272  flash-disk     rw  apphost:
+"""
+
 SHOW_INSTALL_LOG_INPROGRESS = (
     "Install operation 17: 'install add source harddisk:/ ...' started\nAction 17 in progress\n"
 )
@@ -239,20 +255,18 @@ class TestIOSXRDevice(unittest.TestCase):
 
     # --- _get_free_space ---
 
-    def test_get_free_space(self):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_free_space(self, *_mocks):
         self.device.native.send_command.return_value = DIR_HARDDISK
         self.assertEqual(self.device._get_free_space(), 2000000000)
 
-    def test_get_free_space_default_file_system_is_harddisk(self):
-        self.device.native.send_command.return_value = DIR_HARDDISK
-        self.device._get_free_space()
-        self.device.native.send_command.assert_any_call(command_string="dir harddisk:")
-
-    def test_get_free_space_kbytes_units(self):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_free_space_kbytes_units(self, *_mocks):
         self.device.native.send_command.return_value = DIR_HARDDISK_KBYTES
         self.assertEqual(self.device._get_free_space(), 9396256 * 1024)
 
-    def test_get_free_space_unparsable_raises(self):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_free_space_unparsable_raises(self, *_mocks):
         self.device.native.send_command.return_value = "garbage output"
         with self.assertRaises(iosxr_module.CommandError):
             self.device._get_free_space()
@@ -269,27 +283,27 @@ class TestIOSXRDevice(unittest.TestCase):
             self.device._install_add("harddisk:/", ISO)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
-    def test_wait_for_install_op_success(self, mock_sleep):
+    def test_wait_for_install_operation_success(self, mock_sleep):
         self.device.native.send_command.side_effect = [
             SHOW_INSTALL_LOG_INPROGRESS,
             SHOW_INSTALL_LOG_INPROGRESS,
             SHOW_INSTALL_LOG_SUCCESS,
         ]
-        self.device._wait_for_install_op(17)
+        self.device._wait_for_install_operation(17)
         self.assertEqual(self.device.native.send_command.call_count, 3)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
-    def test_wait_for_install_op_abort_raises(self, mock_sleep):
+    def test_wait_for_install_operation_abort_raises(self, mock_sleep):
         self.device.native.send_command.return_value = SHOW_INSTALL_LOG_ABORT
         with self.assertRaises(iosxr_module.OSInstallError):
-            self.device._wait_for_install_op(17)
+            self.device._wait_for_install_operation(17)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     @mock.patch("pyntc.devices.iosxr_device.time.time", side_effect=_fake_clock([0, 0]))
-    def test_wait_for_install_op_timeout_raises(self, mock_time, mock_sleep):
+    def test_wait_for_install_operation_timeout_raises(self, mock_time, mock_sleep):
         self.device.native.send_command.return_value = SHOW_INSTALL_LOG_INPROGRESS
         with self.assertRaises(iosxr_module.OSInstallError):
-            self.device._wait_for_install_op(17, timeout=3600)
+            self.device._wait_for_install_operation(17, timeout=3600)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     def test_install_activate_issues_async_and_returns_on_pending_reload(self, mock_sleep):
@@ -406,16 +420,15 @@ class TestIOSXRDevice(unittest.TestCase):
 
     # --- install_os orchestration ---
 
+    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=1000)
+    @mock.patch.object(IOSXRDevice, "_image_booted", side_effect=[False, True])
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     @mock.patch.object(IOSXRDevice, "_install_commit")
     @mock.patch.object(IOSXRDevice, "_wait_for_device_reboot")
     @mock.patch.object(IOSXRDevice, "_install_activate", return_value=18)
-    @mock.patch.object(IOSXRDevice, "_wait_for_install_op")
+    @mock.patch.object(IOSXRDevice, "_wait_for_install_operation")
     @mock.patch.object(IOSXRDevice, "_install_add", return_value=17)
-    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=1000)
-    @mock.patch.object(IOSXRDevice, "_image_booted", side_effect=[False, True])
-    def test_install_os(
-        self, mock_booted, mock_uptime, mock_add, mock_wait_op, mock_activate, mock_wait_reboot, mock_commit
-    ):
+    def test_install_os(self, mock_add, mock_wait_op, mock_activate, mock_wait_reboot, mock_commit, *_mocks):
         result = self.device.install_os(ISO)
         self.assertTrue(result)
         mock_add.assert_called_once_with("harddisk:/", ISO)
@@ -439,23 +452,24 @@ class TestIOSXRDevice(unittest.TestCase):
     @mock.patch.object(IOSXRDevice, "_install_commit")
     @mock.patch.object(IOSXRDevice, "_wait_for_device_reboot")
     @mock.patch.object(IOSXRDevice, "_install_activate", return_value=18)
-    @mock.patch.object(IOSXRDevice, "_wait_for_install_op")
+    @mock.patch.object(IOSXRDevice, "_wait_for_install_operation")
     @mock.patch.object(IOSXRDevice, "_install_add", return_value=17)
     @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=1000)
     @mock.patch.object(IOSXRDevice, "_image_booted", side_effect=[False, False])
-    def test_install_os_verify_failure_raises(
-        self, mock_booted, mock_uptime, mock_add, mock_wait_op, mock_activate, mock_wait_reboot, mock_commit
-    ):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_install_os_verify_failure_raises(self, *_mocks):
         with self.assertRaises(iosxr_module.OSInstallError):
             self.device.install_os(ISO)
 
     # --- check_file_exists ---
 
-    def test_check_file_exists_true(self):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_check_file_exists_true(self, *_mocks):
         self.device.native.send_command.return_value = DIR_FILE_PRESENT
         self.assertTrue(self.device.check_file_exists(ISO))
 
-    def test_check_file_exists_false(self):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_check_file_exists_false(self, *_mocks):
         self.device.native.send_command.return_value = DIR_FILE_ABSENT
         self.assertFalse(self.device.check_file_exists(ISO))
 
@@ -466,7 +480,8 @@ class TestIOSXRDevice(unittest.TestCase):
             self.device.remote_file_copy(ISO_URL)
 
     @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False, True])
-    def test_remote_file_copy_success(self, mock_exists):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_remote_file_copy_success(self, *_mocks):
         self.device.native.find_prompt.return_value = PROMPT
         self.device.native.send_command.return_value = COPY_SUCCESS
         src = FileCopyModel(download_url=ISO_URL, checksum="", file_name=ISO)
@@ -481,8 +496,9 @@ class TestIOSXRDevice(unittest.TestCase):
         self.assertTrue(copy_calls)
         self.assertEqual(copy_calls[0].args[0], f"copy {ISO_URL} harddisk:/{ISO}")
 
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     @mock.patch.object(IOSXRDevice, "check_file_exists", return_value=True)
-    def test_remote_file_copy_idempotent_when_present(self, mock_exists):
+    def test_remote_file_copy_idempotent_when_present(self, *_mocks):
         self.device.native.find_prompt.return_value = PROMPT
         src = FileCopyModel(download_url=ISO_URL, checksum="", file_name=ISO)
 
@@ -495,8 +511,9 @@ class TestIOSXRDevice(unittest.TestCase):
         ]
         self.assertEqual(copy_calls, [])
 
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False, True])
-    def test_remote_file_copy_success_exr_output(self, mock_exists):
+    def test_remote_file_copy_success_exr_output(self, mock_exists, *_mocks):
         # Real eXR success output (no trailing prompt, "Successfully copied"/"Copy operation success").
         self.device.native.find_prompt.return_value = PROMPT
         self.device.native.send_command.return_value = COPY_SUCCESS_EXR
@@ -507,7 +524,8 @@ class TestIOSXRDevice(unittest.TestCase):
         self.assertEqual(mock_exists.call_count, 2)  # idempotency check + post-copy verify
 
     @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False])
-    def test_remote_file_copy_error_raises(self, mock_exists):
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_remote_file_copy_error_raises(self, *_mocks):
         self.device.native.find_prompt.return_value = PROMPT
         self.device.native.send_command.return_value = COPY_ERROR
         src = FileCopyModel(download_url=ISO_URL, checksum="", file_name=ISO)
