@@ -167,7 +167,7 @@ python_paths = "./"
 testpaths = [
     "tests/"
 ]
-addopts = "-vv --doctest-modules -p no:warnings --ignore-glob='*mock*'"
+addopts = "-vv --doctest-modules -p no:warnings -p no:f5sdk_fixtures --ignore-glob='*mock*'"
 
 [tool.towncrier]
 package = "pyntc"
