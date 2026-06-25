@@ -409,6 +409,55 @@ class IOSXRDevice(BaseDevice):
         """
         log.debug("Host %s: enable() is a no-op on IOS-XR.", self.host)
 
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
+        """Get the checksum of a remote file.
+
+        Args:
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use. Valid choices are "md5", "sha1", "sha256" and "sha512" (default: "md5").
+            file_system (str): The file system for the remote file.
+                If no file_system is provided, then the ``get_file_system``
+                method is used to determine the correct file system to use.
+
+        Returns:
+            (str): The checksum of the remote file.
+
+        Raises:
+            ValueError: If an unsupported hashing algorithm is provided.
+            CommandError: If there is an error in executing the command to get the remote checksum.
+        """
+        if hashing_algorithm not in {"md5", "sha1", "sha256", "sha512"}:
+            raise ValueError(
+                "hashing_algorithm must be either 'md5', 'sha1', 'sha256' or 'sha512' for Cisco IOS-XR devices."
+            )
+        if file_system is None:
+            file_system = self._get_file_system()
+        if not file_system.startswith("/"):
+            file_system = "/" + file_system
+        cmd = f"run {hashing_algorithm}sum {file_system}/{filename}"
+        result = self.native.send_command_timing(cmd, read_timeout=300)
+
+        match = re.search(r"^([a-fA-F0-9]+)\s", result, flags=re.MULTILINE)
+        if match:
+            log.debug(
+                "Host %s: Remote checksum for file %s with hashing algorithm %s is %s.",
+                self.host,
+                filename,
+                hashing_algorithm,
+                match[1],
+            )
+            return match[1]
+
+        log.error(
+            "Host %s: Unable to get remote checksum for file %s with hashing algorithm %s",
+            self.host,
+            filename,
+            hashing_algorithm,
+        )
+        raise CommandError(
+            cmd, f"Unable to get remote checksum for file {filename} with hashing algorithm {hashing_algorithm}"
+        )
+
     def check_file_exists(self, filename, file_system=None):
         """Check whether a file exists on the device filesystem.
 

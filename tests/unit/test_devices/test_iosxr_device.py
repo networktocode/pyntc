@@ -10,32 +10,25 @@ from pyntc.utils.models import FileCopyModel
 
 ISO = "ncs5k-golden-x-7.11.2-NTC7112.iso"
 ACTIVE_VERSION = "7.11.2"
-ISO_URL = "http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso"
+ISO_URL = "http://10.1.100.220/IOS-XR/7.11.2/{ISO}"
 PROMPT = "RP/0/RP0/CPU0:ncs#"
 
-DIR_FILE_PRESENT = (
-    "Mon Jun 15 12:00:00.000 UTC\n\n"
-    "Directory of harddisk:\n"
-    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-golden-x-7.11.2-NTC7112.iso\n"
-)
-DIR_FILE_ABSENT = (
-    "Mon Jun 15 12:00:00.000 UTC\n%Error: dir: '/harddisk:/ncs5k-golden-x-7.11.2-NTC7112.iso': No such file\n"
-)
+DIR_FILE_PRESENT = f"Mon Jun 15 12:00:00.000 UTC\n\nDirectory of harddisk:\n15  -rw-  1500000000  Jun 15 12:00  {ISO}\n"
+DIR_FILE_ABSENT = f"Mon Jun 15 12:00:00.000 UTC\n%Error: dir: '/harddisk:/{ISO}': No such file\n"
 COPY_SUCCESS = (
     "Mon Jun 15 12:00:00.000 UTC\n"
-    "Destination filename [/harddisk:/ncs5k-golden-x-7.11.2-NTC7112.iso]?\n"
-    "Accessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso\n"
+    f"Destination filename [/harddisk:/{ISO}]?\n"
+    f"Accessing http://10.1.100.220/IOS-XR/7.11.2/{ISO}\n"
     "1500000000 bytes copied in 42 secs (35714285 bytes/sec)\n"
     "RP/0/RP0/CPU0:ncs#"
 )
 COPY_ERROR = (
-    "Mon Jun 15 12:00:00.000 UTC\n"
-    "%Error opening http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso: Connection refused\n"
+    f"Mon Jun 15 12:00:00.000 UTC\n%Error opening http://10.1.100.220/IOS-XR/7.11.2/{ISO}: Connection refused\n"
 )
 # Real eXR (NCS5011) copy output: netmiko strips the trailing prompt, and the
 # success markers are "Successfully copied ... Bytes" / "Copy operation success".
 COPY_SUCCESS_EXR = (
-    "\nAccessing http://10.1.100.220/IOS-XR/7.11.2/ncs5k-golden-x-7.11.2-NTC7112.iso\n"
+    f"\nAccessing http://10.1.100.220/IOS-XR/7.11.2/{ISO}\n"
     + ("!" * 60)
     + "\nSuccessfully copied 1432756224 Bytes\n\n\nCopy operation success\n"
 )
@@ -63,7 +56,7 @@ SHOW_INSTALL_ACTIVE_MULTI = (
 INSTALL_ADD_RESPONSE = (
     "Mon Jun 15 12:00:00.000 UTC\n"
     "Install operation 17 started by admin:\n"
-    "  install add source harddisk:/ ncs5k-golden-x-7.11.2-NTC7112.iso\n"
+    f"  install add source harddisk:/ {ISO}\n"
     "This operation will continue asynchronously.\n"
     "Install add operation 17 will continue in the background.\n"
 )
@@ -108,7 +101,7 @@ SHOW_VERSION = (
 DIR_HARDDISK = (
     "Mon Jun 15 12:00:00.000 UTC\n\n"
     "Directory of harddisk:\n"
-    "15  -rw-  1500000000  Jun 15 12:00  ncs5k-golden-x-7.11.2-NTC7112.iso\n\n"
+    f"15  -rw-  1500000000  Jun 15 12:00  {ISO}\n\n"
     "3000000000 bytes total (2000000000 bytes free)\n"
 )
 
@@ -137,6 +130,34 @@ SHOW_INSTALL_REQUEST_ACTIVATE_FAILURE = (
     "Error: An exception is hit while executing the install operation.\n"
     "Install operation 26 aborted\n"
 )
+
+# RP/0/RP0/CPU0:NCS5011-LAB#run sha512sum /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+SHA512SUM = "30221afa665814ab68cb4dd2f114a9da2b2285b8d7b2b2854b63db7bd0a5ea7980e3d4295b8cb6bfaa3d7c4f4d8d8f635562541d727e1dd66566c4895780c47b"
+RUN_SHA512SUM = f"""
+Wed Jun 24 22:17:02.779 UTC
+{SHA512SUM}  /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+"""
+
+# RP/0/RP0/CPU0:NCS5011-LAB#run sha256sum /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+SHA256SUM = "71e68c6b7ff7eac595f09d34d184adf31181b16bf7d986a474277119493df8bb"
+RUN_SHA256SUM = f"""
+Wed Jun 24 22:17:28.194 UTC
+{SHA256SUM}  /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+"""
+
+# RP/0/RP0/CPU0:NCS5011-LAB#run sha1sum /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+SHA1SUM = "6c62c6322c796036b18fbbb819f25e6558467c51"
+RUN_SHA1SUM = f"""
+Wed Jun 24 22:17:47.916 UTC
+{SHA1SUM}  /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+"""
+
+# RP/0/RP0/CPU0:NCS5011-LAB#run md5sum /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+MD5SUM = "c12d35ae63203202304f0c4d5a49f0e6"
+RUN_MD5SUM = f"""
+Wed Jun 24 22:18:00.782 UTC
+{MD5SUM}  /harddisk:/ncs5k-golden-x-7.11.1-NTC711.iso
+"""
 
 
 def _fake_clock(values):
@@ -532,3 +553,23 @@ class TestIOSXRDevice(unittest.TestCase):
 
         with self.assertRaises(FileTransferError):
             self.device.remote_file_copy(src)
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_remote_checksum_md5(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_MD5SUM
+        self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="md5"), MD5SUM)
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_remote_checksum_sha1(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_SHA1SUM
+        self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha1"), SHA1SUM)
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_remote_checksum_sha256(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_SHA256SUM
+        self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha256"), SHA256SUM)
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_get_remote_checksum_sha512(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_SHA512SUM
+        self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha512"), SHA512SUM)
