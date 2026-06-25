@@ -384,20 +384,32 @@ class TestIOSXRDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     @mock.patch.object(IOSXRDevice, "show")
+    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, side_effect=[3600, 30])
     @mock.patch.object(IOSXRDevice, "open", side_effect=[None, OSError("down"), None])
     @mock.patch.object(IOSXRDevice, "close")
-    def test_wait_for_device_reboot(self, mock_close, mock_open, mock_show, mock_sleep):
+    def test_wait_for_device_reboot(self, mock_close, mock_open, mock_uptime, mock_show, mock_sleep):
         # Reachable -> disconnect (reload) -> back up: requires the drop-then-recover transition.
-        self.device._wait_for_device_reboot(timeout=600)
+        self.device._wait_for_device_reboot(timeout=10, previous_uptime=3500)
+        self.assertEqual(mock_open.call_count, 3)
+
+    @mock.patch("pyntc.devices.iosxr_device.time.sleep")
+    @mock.patch.object(IOSXRDevice, "show")
+    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=30)
+    @mock.patch.object(IOSXRDevice, "open", side_effect=[OSError("down"), OSError("down"), None])
+    @mock.patch.object(IOSXRDevice, "close")
+    def test_wait_for_device_reboot_no_previous_uptime(self, mock_close, mock_open, mock_uptime, mock_show, mock_sleep):
+        # Reachable -> disconnect (reload) -> back up: requires the drop-then-recover transition.
+        self.device._wait_for_device_reboot(timeout=10, previous_uptime=3500)
         self.assertEqual(mock_open.call_count, 3)
 
     @mock.patch("pyntc.devices.iosxr_device.time.sleep")
     @mock.patch("pyntc.devices.iosxr_device.time.time", side_effect=_fake_clock([0, 0]))
+    @mock.patch.object(IOSXRDevice, "uptime", new_callable=mock.PropertyMock, return_value=3601)
     @mock.patch.object(IOSXRDevice, "open", side_effect=OSError("down"))
     @mock.patch.object(IOSXRDevice, "close")
-    def test_wait_for_device_reboot_timeout(self, mock_close, mock_open, mock_time, mock_sleep):
+    def test_wait_for_device_reboot_timeout(self, mock_close, mock_open, mock_uptime, mock_time, mock_sleep):
         with self.assertRaises(iosxr_module.RebootTimeoutError):
-            self.device._wait_for_device_reboot(timeout=3600)
+            self.device._wait_for_device_reboot(timeout=10, previous_uptime=3600)
 
     # --- connection retry (eXR SSH rate-limit / banner race) ---
 
@@ -455,7 +467,7 @@ class TestIOSXRDevice(unittest.TestCase):
         mock_add.assert_called_once_with("harddisk:/", ISO)
         mock_wait_op.assert_called_once_with(17, timeout=3600)  # add op only
         mock_activate.assert_called_once_with(17, timeout=3600)
-        mock_wait_reboot.assert_called_once_with(timeout=3600)
+        mock_wait_reboot.assert_called_once_with(timeout=3600, previous_uptime=1000)
         mock_commit.assert_called_once()
 
     @mock.patch.object(IOSXRDevice, "_install_add")
@@ -500,7 +512,7 @@ class TestIOSXRDevice(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.device.remote_file_copy(ISO_URL)
 
-    @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False, True])
+    @mock.patch.object(IOSXRDevice, "verify_file", side_effect=[False, True])
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_remote_file_copy_success(self, *_mocks):
         self.device.native.find_prompt.return_value = PROMPT
@@ -518,7 +530,7 @@ class TestIOSXRDevice(unittest.TestCase):
         self.assertEqual(copy_calls[0].args[0], f"copy {ISO_URL} harddisk:/{ISO}")
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
-    @mock.patch.object(IOSXRDevice, "check_file_exists", return_value=True)
+    @mock.patch.object(IOSXRDevice, "verify_file", return_value=True)
     def test_remote_file_copy_idempotent_when_present(self, *_mocks):
         self.device.native.find_prompt.return_value = PROMPT
         src = FileCopyModel(download_url=ISO_URL, checksum="", file_name=ISO)
@@ -533,7 +545,7 @@ class TestIOSXRDevice(unittest.TestCase):
         self.assertEqual(copy_calls, [])
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
-    @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False, True])
+    @mock.patch.object(IOSXRDevice, "verify_file", side_effect=[False, True])
     def test_remote_file_copy_success_exr_output(self, mock_exists, *_mocks):
         # Real eXR success output (no trailing prompt, "Successfully copied"/"Copy operation success").
         self.device.native.find_prompt.return_value = PROMPT
@@ -573,3 +585,20 @@ class TestIOSXRDevice(unittest.TestCase):
     def test_get_remote_checksum_sha512(self, *_mocks):
         self.device.native.send_command_timing.return_value = RUN_SHA512SUM
         self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha512"), SHA512SUM)
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_verify_file_checksum_matches(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_SHA512SUM
+        self.device.native.send_command.return_value = DIR_FILE_PRESENT
+        self.assertTrue(self.device.verify_file(filename=ISO, checksum=SHA512SUM))
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_verify_file_checksum_failure(self, *_mocks):
+        self.device.native.send_command_timing.return_value = RUN_MD5SUM
+        self.device.native.send_command.return_value = DIR_FILE_PRESENT
+        self.assertFalse(self.device.verify_file(filename=ISO, checksum=SHA512SUM))
+
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_verify_file_file_not_found(self, *_mocks):
+        self.device.native.send_command.return_value = DIR_FILE_ABSENT
+        self.assertFalse(self.device.verify_file(filename=ISO, checksum=SHA512SUM))

@@ -312,19 +312,20 @@ class IOSXRDevice(BaseDevice):
         log.error("Host %s: install commit did not complete after %s attempts.", self.host, retries)
         raise OSInstallError(hostname=self.host, desired_boot="install commit")
 
-    def _wait_for_device_reboot(self, timeout=3600, interval=60):
-        """Wait for the activation reload: watch the session drop, then poll until it returns.
+    def _wait_for_device_reboot(self, timeout=3600, interval=60, previous_uptime=1200):
+        """Wait for the activation reload by watching for the device uptime to drop.
 
-        After a successful activation the device reloads. This probes the device once per
-        ``interval`` — logging each poll — and requires a *drop-then-recover* transition: it
-        first waits for the session to drop (reload in progress), then keeps polling on fresh
-        connections until one succeeds. Requiring the drop avoids mistaking the brief still-up
-        window before the reload for a completed reboot, and using fresh short-lived
-        connections avoids the half-open-socket hang a long-lived read would hit.
+        After a successful activation the device reloads. This method probes the device once per
+        ``interval`` — logging each poll — on fresh short-lived connections, which avoids the
+        half-open-socket hang a long-lived read would hit. On each successful probe it reads the
+        device uptime: once the reported uptime drops below ``previous_uptime`` the reload is
+        treated as complete and the method returns.
 
         Args:
             timeout (int): Maximum seconds to wait for the device to return. Defaults to 3600.
             interval (int): Seconds between probes. Defaults to 60.
+            previous_uptime (int, optional): Device will be considered rebooted if the current
+                uptime (in seconds) is less than this value. Defaults to 1200.
 
         Raises:
             RebootTimeoutError: When the device does not return within ``timeout``.
@@ -338,25 +339,23 @@ class IOSXRDevice(BaseDevice):
         self._connected = False
 
         start = time.time()
-        seen_down = False
         while time.time() - start < timeout:
             try:
                 # This loop is itself the retry mechanism, so each probe fails fast
                 # (retry=False) rather than paying the connect backoff on every poll.
                 self.open(retry=False)
-                self.show("show version")
-                if seen_down:
+                self._uptime = None
+                uptime = self.uptime
+                if uptime is not None and uptime < previous_uptime:
                     log.info("Host %s: device is back up after reload.", self.host)
                     return
+                if uptime is not None:
+                    previous_uptime = uptime
                 log.info("Host %s: device still reachable; waiting for the reload to drop the session...", self.host)
             except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 self.native = None
                 self._connected = False
-                if not seen_down:
-                    log.info("Host %s: device disconnected; reload in progress (%s).", self.host, exc)
-                    seen_down = True
-                else:
-                    log.info("Host %s: device still down (%s); polling again in %ss.", self.host, exc, interval)
+                log.info("Host %s: device is down (%s); polling again in %ss.", self.host, exc, interval)
             time.sleep(interval)
 
         log.error("Host %s: device did not return within %ss while rebooting.", self.host, timeout)
@@ -482,13 +481,30 @@ class IOSXRDevice(BaseDevice):
         log.debug("Host %s: File %s not found in 'dir' output on %s.", self.host, filename, file_system)
         return False
 
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+        """Verify a file on the remote device exists and its checksum matches.
+
+        Args:
+            checksum (str): The expected checksum of the file.
+            filename (str): The name of the file to check for on the remote device.
+            hashing_algorithm (str): The hashing algorithm to use (default: "md5").
+            file_system (str): The file system for the remote file. If no file_system
+                is provided, then the ``_get_file_system`` method is used to determine
+                the correct file system to use.
+
+        Returns:
+            (bool): True if the file is verified successfully, False otherwise.
+        """
+        return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
+            checksum, filename, hashing_algorithm, file_system=file_system
+        )
+
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
         """Copy a file from a remote URL onto the device filesystem.
 
         Pulls the file specified by ``src`` from a remote server (FTP/TFTP/SCP/HTTP/HTTPS)
         using the IOS-XR ``copy`` command and saves it to ``file_system``. The transfer is
-        verified by confirming the file exists after copy. **Checksum verification is not performed**
-        on IOS-XR in this release; the ``checksum`` on ``src`` is not validated.
+        verified by confirming the file exists and matches the ``checksum`` after copy.
 
         Args:
             src (FileCopyModel): The source specification (URL, credentials, timeout).
@@ -498,17 +514,16 @@ class IOSXRDevice(BaseDevice):
 
         Raises:
             TypeError: When ``src`` is not a ``FileCopyModel``.
-            FileTransferError: When the transfer fails or the file is absent afterward.
+            FileTransferError: When the transfer fails or the file does not match the checksum afterward.
         """
         if not isinstance(src, FileCopyModel):
             raise TypeError("src must be an instance of FileCopyModel")
-
         if file_system is None:
             file_system = self._get_file_system()
         if dest is None:
             dest = src.file_name
 
-        if self.check_file_exists(dest, file_system=file_system):
+        if self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
             log.info("Host %s: File %s already present on %s; skipping copy.", self.host, dest, file_system)
             return
 
@@ -562,11 +577,16 @@ class IOSXRDevice(BaseDevice):
                 # No recognised prompt and no explicit marker; defer to the existence check.
                 break
 
-        if not self.check_file_exists(dest, file_system=file_system):
-            log.error("Host %s: File %s not found after transfer.", self.host, dest)
+        if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
+            log.error(
+                "Host %s: File %s could not be verified after transfer (missing or checksum mismatch). %s",
+                self.host,
+                dest,
+                FileTransferError.default_message,
+            )
             raise FileTransferError
 
-        log.info("Host %s: File %s copied to %s and verified present.", self.host, dest, file_system)
+        log.info("Host %s: File %s copied to %s and checksum verified.", self.host, dest, file_system)
 
     @property
     def hostname(self):
@@ -682,10 +702,12 @@ class IOSXRDevice(BaseDevice):
                 "the reboot argument cannot be set to False."
             )
 
+        self._uptime = None
+        uptime = self.uptime
         add_id = self._install_add(f"{self._get_file_system()}/", image_name)
         self._wait_for_install_operation(add_id, timeout=timeout)
         self._install_activate(add_id, timeout=timeout)
-        self._wait_for_device_reboot(timeout=timeout)
+        self._wait_for_device_reboot(timeout=timeout, previous_uptime=uptime)
         self._install_commit()
 
         if not self._image_booted(image_name):
