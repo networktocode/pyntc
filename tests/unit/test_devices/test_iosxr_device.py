@@ -15,6 +15,13 @@ PROMPT = "RP/0/RP0/CPU0:ncs#"
 
 DIR_FILE_PRESENT = f"Mon Jun 15 12:00:00.000 UTC\n\nDirectory of harddisk:\n15  -rw-  1500000000  Jun 15 12:00  {ISO}\n"
 DIR_FILE_ABSENT = f"Mon Jun 15 12:00:00.000 UTC\n%Error: dir: '/harddisk:/{ISO}': No such file\n"
+COPY_FTP_PROMPTS = [
+    "Source username: [anonymous]?",
+    "Source password:",
+    "Destination filename [%s]?",
+    "Accessing %s",
+]
+
 COPY_SUCCESS = (
     "Mon Jun 15 12:00:00.000 UTC\n"
     f"Destination filename [/harddisk:/{ISO}]?\n"

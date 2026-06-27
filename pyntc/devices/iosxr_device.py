@@ -434,7 +434,7 @@ class IOSXRDevice(BaseDevice):
         if not file_system.startswith("/"):
             file_system = "/" + file_system
         cmd = f"run {hashing_algorithm}sum {file_system}/{filename}"
-        result = self.native.send_command_timing(cmd, read_timeout=300)
+        result = self._send_command(cmd, read_timeout=300)
 
         match = re.search(r"^([a-fA-F0-9]+)\s", result, flags=re.MULTILINE)
         if match:
@@ -534,8 +534,8 @@ class IOSXRDevice(BaseDevice):
         prompt_answers = {
             r"Destination filename": "",
             r"Host name or IP address": "",
-            r"Source username|Username": src.username or "",
-            r"Password": src.token or "",
+            r"Source username|[Uu]sername": src.username or "",
+            r"[Pp]assword": src.token or "",
             r"yes/no|\[confirm\]|Are you sure": "",
         }
         keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
@@ -546,7 +546,7 @@ class IOSXRDevice(BaseDevice):
             command = f"{command} vrf {src.vrf}"
 
         # Bypass _send_command: a copy may emit benign "%" lines that are not failures.
-        output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
+        output = self.native.send_command(command, expect_string=expect_regex, read_timeout=60)
 
         # Walk any interactive prompts. Netmiko strips the trailing prompt from the output,
         # so the post-copy existence check (below) is the authoritative success signal; this
@@ -568,7 +568,7 @@ class IOSXRDevice(BaseDevice):
                 raise FileTransferError
             for prompt, answer in prompt_answers.items():
                 if re.search(prompt, output, re.IGNORECASE):
-                    is_password = prompt == r"Password"
+                    is_password = "password" in output.lower()
                     output = self.native.send_command(
                         answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
                     )
