@@ -1,3 +1,4 @@
+import sys
 from unittest import mock
 
 import pytest
@@ -5,6 +6,11 @@ import pytest
 # from .device_mocks.f5 import send_command, send_command_expect
 from pyntc.devices.f5_device import F5Device, FileTransferError
 from pyntc.errors import NTCFileNotFoundError
+
+pytestmark = pytest.mark.skipif(
+    sys.version_info >= (3, 12),
+    reason="The F5 SDK is only compatible with Python 3.11 or lower",
+)
 
 BOOT_IMAGE = "BIGIP-11.3.0.2806.0.iso"
 VOLUME = "HD1.1"
