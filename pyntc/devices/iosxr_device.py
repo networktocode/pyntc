@@ -546,7 +546,7 @@ class IOSXRDevice(BaseDevice):
             command = f"{command} vrf {src.vrf}"
 
         # Bypass _send_command: a copy may emit benign "%" lines that are not failures.
-        output = self.native.send_command(command, expect_string=expect_regex, read_timeout=60)
+        output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
 
         # Walk any interactive prompts. Netmiko strips the trailing prompt from the output,
         # so the post-copy existence check (below) is the authoritative success signal; this
