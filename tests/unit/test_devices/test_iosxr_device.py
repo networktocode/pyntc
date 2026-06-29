@@ -553,7 +553,7 @@ class TestIOSXRDevice(unittest.TestCase):
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     @mock.patch.object(IOSXRDevice, "verify_file", side_effect=[False, True])
-    def test_remote_file_copy_success_exr_output(self, mock_exists, *_mocks):
+    def test_remote_file_copy_success_exr_output(self, mock_verify_file, *_mocks):
         # Real eXR success output (no trailing prompt, "Successfully copied"/"Copy operation success").
         self.device.native.find_prompt.return_value = PROMPT
         self.device.native.send_command.return_value = COPY_SUCCESS_EXR
@@ -561,7 +561,7 @@ class TestIOSXRDevice(unittest.TestCase):
 
         self.device.remote_file_copy(src)  # must not raise
 
-        self.assertEqual(mock_exists.call_count, 2)  # idempotency check + post-copy verify
+        self.assertEqual(mock_verify_file.call_count, 2)  # idempotency check + post-copy verify
 
     @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False])
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
@@ -575,37 +575,38 @@ class TestIOSXRDevice(unittest.TestCase):
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_get_remote_checksum_md5(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_MD5SUM
+        self.device.native.send_command.return_value = RUN_MD5SUM
         self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="md5"), MD5SUM)
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_get_remote_checksum_sha1(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_SHA1SUM
+        self.device.native.send_command.return_value = RUN_SHA1SUM
         self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha1"), SHA1SUM)
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_get_remote_checksum_sha256(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_SHA256SUM
+        self.device.native.send_command.return_value = RUN_SHA256SUM
         self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha256"), SHA256SUM)
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_get_remote_checksum_sha512(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_SHA512SUM
+        self.device.native.send_command.return_value = RUN_SHA512SUM
         self.assertEqual(self.device.get_remote_checksum(ISO, hashing_algorithm="sha512"), SHA512SUM)
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    @mock.patch.object(IOSXRDevice, "get_remote_checksum", return_value=SHA512SUM)
     def test_verify_file_checksum_matches(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_SHA512SUM
         self.device.native.send_command.return_value = DIR_FILE_PRESENT
-        self.assertTrue(self.device.verify_file(filename=ISO, checksum=SHA512SUM))
+        self.assertTrue(self.device.verify_file(filename=ISO, checksum=SHA512SUM, hashing_algorithm="sha512"))
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
-    def test_verify_file_checksum_failure(self, *_mocks):
-        self.device.native.send_command_timing.return_value = RUN_MD5SUM
+    @mock.patch.object(IOSXRDevice, "get_remote_checksum", return_value=MD5SUM)
+    def test_verify_file_checksum_failure(self, mock_get_remote_checksum, *_mocks):
         self.device.native.send_command.return_value = DIR_FILE_PRESENT
-        self.assertFalse(self.device.verify_file(filename=ISO, checksum=SHA512SUM))
+        self.assertFalse(self.device.verify_file(filename=ISO, checksum=SHA512SUM, hashing_algorithm="md5"))
+        mock_get_remote_checksum.assert_called()
 
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_verify_file_file_not_found(self, *_mocks):
         self.device.native.send_command.return_value = DIR_FILE_ABSENT
-        self.assertFalse(self.device.verify_file(filename=ISO, checksum=SHA512SUM))
+        self.assertFalse(self.device.verify_file(filename=ISO, checksum=MD5SUM))
