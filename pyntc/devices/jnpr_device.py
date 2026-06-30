@@ -507,7 +507,7 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5"):
+    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5", issu=False, nssu=False):
         """Install OS on device and reboot.
 
         Args:
@@ -515,7 +515,8 @@ class JunosDevice(BaseDevice):
             reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             checksum (str): The checksum of the file.
             hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
-
+            issu (bool): Whether to perform an In-Service Software Upgrade (ISSU). Defaults to false.
+            nssu (bool): Whether to perform a Non-Stop Software Upgrade (NSSU). Defaults to false.
         """
         install_ok = self.sw.install(
             package=image_name,
@@ -524,6 +525,8 @@ class JunosDevice(BaseDevice):
             progress=True,
             validate=True,
             no_copy=True,
+            issu=issu,
+            nssu=nssu,
             timeout=3600,
         )
 
