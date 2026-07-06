@@ -896,10 +896,16 @@ class NXOSDevice(BaseDevice):
                 reboot_arg = " no-reload"
             try:
                 if kickstart is None:
-                    self.show_netmiko(f"install all nxos {image_name}{reboot_arg}", raw_text=True)
+                    self.show_netmiko(
+                        f"install all nxos {image_name}{reboot_arg}",
+                        read_timeout=3600,
+                        raw_text=True,
+                    )
                 else:
                     self.show_netmiko(
-                        f"install all system {image_name} kickstart {kickstart}{reboot_arg}", raw_text=True
+                        f"install all system {image_name} kickstart {kickstart}{reboot_arg}",
+                        read_timeout=3600,
+                        raw_text=True,
                     )
             except (NetmikoBaseException, NetmikoTimeoutException):
                 pass

@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from pyntc.devices import AIREOSDevice, ASADevice, EOSDevice, IOSDevice, IOSXEWLCDevice, supported_devices
+from pyntc.devices import AIREOSDevice, ASADevice, EOSDevice, IOSDevice, IOSXEWLCDevice
 
 
 def get_side_effects(mock_path, side_effects):
@@ -57,15 +57,6 @@ def eos_send_command_timing(eos_device, eos_mock_path):
         return device
 
     return _mock
-
-
-def pytest_generate_tests(metafunc):
-    if metafunc.function.__name__ == "test_device_creation":
-        metafunc.parametrize(
-            "device_type,expected",
-            ((device_type, device_class) for device_type, device_class in supported_devices.items()),
-            ids=(device_type for device_type in supported_devices),
-        )
 
 
 @pytest.fixture

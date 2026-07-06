@@ -132,6 +132,7 @@ nav:
       - Uninstall: "admin/uninstall.md"
       - Release Notes:
           - "admin/release_notes/index.md"
+          - v3.1: "admin/release_notes/version_3.1.md"
           - v3.0: "admin/release_notes/version_3.0.md"
           - v2.4: "admin/release_notes/version_2.4.md"
           - v2.3: "admin/release_notes/version_2.3.md"
@@ -163,6 +164,7 @@ nav:
           - pyntc.devices.f5_device: "code-reference/pyntc/devices/f5_device.md"
           - pyntc.devices.ios_device: "code-reference/pyntc/devices/ios_device.md"
           - pyntc.devices.iosxewlc_device: "code-reference/pyntc/devices/iosxewlc_device.md"
+          - pyntc.devices.iosxr_device: "code-reference/pyntc/devices/iosxr_device.md"
           - pyntc.devices.jnpr_device: "code-reference/pyntc/devices/jnpr_device.md"
           - pyntc.devices.nxos_device: "code-reference/pyntc/devices/nxos_device.md"
           - pyntc.devices.system_features: "code-reference/pyntc/devices/system_features/__init__.md"
