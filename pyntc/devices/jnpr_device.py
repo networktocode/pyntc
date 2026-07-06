@@ -9,12 +9,13 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 from jnpr.junos import Device as JunosNativeDevice
-from jnpr.junos.exception import ConfigLoadError
+from jnpr.junos.exception import ConfigLoadError, ConnectClosedError, RpcError, RpcTimeoutError
 from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
 from jnpr.junos.utils.sw import SW as JunosNativeSW
+from lxml import etree
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
@@ -73,7 +74,7 @@ class JunosDevice(BaseDevice):
     """Juniper JunOS Device Implementation."""
 
     vendor = "juniper"
-    DEFAULT_TIMEOUT = 120
+    DEFAULT_TIMEOUT = 180
 
     def __init__(self, host, username, password, *args, **kwargs):  # noqa: D403
         """PyNTC device implementation for Juniper JunOS.
@@ -279,6 +280,57 @@ class JunosDevice(BaseDevice):
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
+    def _wait_for_system_snapshot(self, timeout=1800, interval=180):
+        """Poll device to verify system snapshot completion.
+
+        Periodically checks ``show system snapshot media internal`` to verify the snapshot
+        was successfully taken. Used when the ``request system snapshot`` RPC times out.
+        Attempts XML parsing for structured verification; falls back to string matching.
+
+        Args:
+            timeout (int, optional): Max seconds to wait for snapshot verification. Defaults to 1800 (30 minutes).
+            interval (int, optional): Seconds between verification polls. Defaults to 180 (3 minutes).
+
+        Raises:
+            OSInstallError: When the snapshot verification indicates a failure.
+        """
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                # Try structured XML approach first
+                try:
+                    xml_output = self.native.rpc.request_shell_execute(
+                        command="show system snapshot media internal | display xml"
+                    )
+                    if xml_output:
+                        root = etree.fromstring(xml_output.encode())
+                        # Check if any snapshot-medium elements exist (indicates snapshots present)
+                        snapshots = root.findall(".//snapshot-medium")
+                        if snapshots:
+                            log.info("Host %s: System snapshot verified via XML parsing.", self.host)
+                            return
+                        log.debug(
+                            "Host %s: Snapshot verification in progress (no snapshots found yet); will retry.",
+                            self.host,
+                        )
+                except Exception as xml_exc:  # pylint: disable=broad-exception-caught
+                    # XML parsing failed, try fallback text matching
+                    log.debug("Host %s: XML parsing failed (%s); trying text fallback.", self.host, xml_exc)
+                    output = self.native.cli("show system snapshot media internal")
+                    if "snapshot" in output.lower():
+                        log.info("Host %s: System snapshot verified via text output.", self.host)
+                        return
+                    log.debug("Host %s: Snapshot verification in progress; will retry.", self.host)
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                log.debug("Host %s: Snapshot verification poll failed (%s); will retry.", self.host, exc)
+
+            time.sleep(interval)
+
+        log.error("Host %s: System snapshot did not complete within %s seconds.", self.host, timeout)
+        raise OSInstallError(hostname=self.hostname, desired_boot="system snapshot")
+
     def backup_running_config(self, filename):
         """Backup current running configuration.
 
@@ -287,6 +339,45 @@ class JunosDevice(BaseDevice):
         """
         with open(filename, "w", encoding="utf-8") as file_name:
             file_name.write(self.running_config)
+
+    def request_system_snapshot(self, parameters=None):
+        """Request a system snapshot and verify completion.
+
+        Issues the snapshot RPC call and polls device to verify completion.
+        Handles RPC timeouts by switching to polling mode.
+
+        Parameters include:
+         - all-members
+         - local
+         - media
+         - member
+         - partition
+         - slice
+
+        Args:
+            parameters (str, optional): Parameters to pass to the RPC call. Defaults to None.
+
+        Raises:
+            OSInstallError: If snapshot verification fails or times out.
+        """
+        command = "request system snapshot"
+        if parameters is not None:
+            command = f"{command} {parameters}"
+
+        try:
+            log.debug("Host %s: Issuing RPC: %s", self.host, command)
+            response = self.native.rpc.cli(command)
+            log.debug("Host %s: snapshot RPC completed successfully.", self.host)
+
+        except RpcTimeoutError:
+            log.debug("Host %s: snapshot RPC timed out; polling device to verify.", self.host)
+
+        except Exception as rpc_error:
+            log.error("Host %s: Failed to request system snapshot (%s).", self.host, rpc_error)
+            raise
+
+        # Verify snapshot completed on device (handles both RPC timeout and normal completion)
+        self._wait_for_system_snapshot()
 
     @property
     def boot_options(self):
@@ -512,23 +603,120 @@ class JunosDevice(BaseDevice):
 
         Args:
             image_name (str): Name of image.
-            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true. Ignored if nssu is true.
             checksum (str): The checksum of the file.
             hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
             issu (bool): Whether to perform an In-Service Software Upgrade (ISSU). Defaults to false.
-            nssu (bool): Whether to perform a Non-Stop Software Upgrade (NSSU). Defaults to false.
+            nssu (bool): Whether to perform a Non-Stop Software Upgrade (NSSU). Defaults to false. When true, reboot is performed automatically.
         """
-        install_ok = self.sw.install(
-            package=image_name,
-            checksum=checksum,
-            checksum_algorithm=hashing_algorithm,
-            progress=True,
-            validate=True,
-            no_copy=True,
-            issu=issu,
-            nssu=nssu,
-            timeout=3600,
-        )
+        # Capture pre-install state for validation after reboot
+        self._uptime = None
+        pre_install_uptime = self.uptime
+        pre_install_version = self.os_version
+
+        log.info("Host %s: Pre-install state - OS: %s, uptime: %ss", self.host, pre_install_version, pre_install_uptime)
+
+        try:
+            install_ok = self.sw.install(
+                package=image_name,
+                checksum=checksum,
+                checksum_algorithm=hashing_algorithm,
+                progress=True,
+                validate=True,
+                no_copy=True,
+                issu=issu,
+                nssu=nssu,
+                timeout=3600,
+            )
+        except RpcError as rpc_error:
+            # Check if error is due to pending reboot state from previous incomplete operation
+            if "reboot pending for software rollback" in str(rpc_error).lower():
+                log.warning(
+                    "Host %s: Device has pending reboot state; clearing with reboot.",
+                    self.host,
+                )
+                # Capture uptime before reboot for verification
+                self._uptime = None
+                pre_reboot_uptime = self.uptime
+
+                try:
+                    # Clear pending reboot state
+                    self.native.rpc.request_reboot()
+                    log.info("Host %s: Reboot issued to clear pending state.", self.host)
+
+                    # Wait for device to come back up
+                    self._wait_for_device_reboot(pre_reboot_uptime)
+                    log.info("Host %s: Device rebooted and reconnected.", self.host)
+
+                    # Verify image file still exists
+                    if not self.check_file_exists(image_name):
+                        raise FileTransferError(message=f"Image file {image_name} missing after reboot")
+                    log.info("Host %s: Image file verified after reboot.", self.host)
+
+                    # Retry install after clearing pending state
+                    log.info("Host %s: Retrying install after clearing pending reboot state.", self.host)
+                    install_ok = self.sw.install(
+                        package=image_name,
+                        checksum=checksum,
+                        checksum_algorithm=hashing_algorithm,
+                        progress=True,
+                        validate=True,
+                        no_copy=True,
+                        issu=issu,
+                        nssu=nssu,
+                        timeout=3600,
+                    )
+                except Exception as retry_error:
+                    log.error(
+                        "Host %s: Failed to clear pending reboot state: %s",
+                        self.host,
+                        retry_error,
+                    )
+                    raise
+            else:
+                # Re-raise if it's a different RPC error
+                raise
+        except ConnectClosedError:
+            # Connection loss during install is expected (device reboots)
+            log.info(
+                "Host %s: Connection closed during install (expected for device reboot). "
+                "Waiting for device to come back online.",
+                self.host,
+            )
+
+            try:
+                # Wait for device to come back up
+                self._wait_for_device_reboot(pre_install_uptime)
+                log.info("Host %s: Device reconnected after reboot.", self.host)
+
+                # Validate OS version changed
+                self._uptime = None  # Force refresh
+                post_install_version = self.os_version
+
+                if post_install_version == pre_install_version:
+                    log.error(
+                        "Host %s: Device rebooted but OS version unchanged. Expected change from %s, still running %s",
+                        self.host,
+                        pre_install_version,
+                        post_install_version,
+                    )
+                    raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+                log.info(
+                    "Host %s: OS upgrade verified. Previous version: %s. Current version: %s",
+                    self.host,
+                    pre_install_version,
+                    post_install_version,
+                )
+                install_ok = True
+
+            except Exception as reboot_error:
+                log.error(
+                    "Host %s: Failed during post-reboot verification: %s",
+                    self.host,
+                    reboot_error,
+                )
+                raise
 
         # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
         if isinstance(install_ok, tuple):
@@ -537,11 +725,15 @@ class JunosDevice(BaseDevice):
         if not install_ok:
             raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
+        if nssu:
+            self.request_system_snapshot("slice alternate all-members")
+
         if not reboot:
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
-        self.reboot(wait_for_reload=True)
+        if not nssu:
+            self.reboot(wait_for_reload=True)
 
     def open(self):
         """Open connection to device."""
@@ -718,6 +910,76 @@ class JunosDevice(BaseDevice):
             (bool): True if the checksums match, False otherwise.
         """
         return checksum == self.get_remote_checksum(filename, hashing_algorithm)
+
+    @staticmethod
+    def _netloc(src: FileCopyModel) -> str:
+        """Return host:port or just host from a FileCopyModel."""
+        return f"{src.hostname}:{src.port}" if src.port else src.hostname
+
+    @staticmethod
+    def _source_path(src: FileCopyModel) -> str:
+        """Return the file path from URL, using file_name if path is empty."""
+        return src.path if src.path and src.path != "/" else f"/{src.file_name}"
+
+    def remote_file_copy_rpc(self, src: FileCopyModel, dest, timeout=900):
+        """Copy file via raw RPC call for detailed error messages.
+
+        Uses native.rpc.file_copy() instead of fs.cp() to capture device error details.
+        Embeds credentials in URL if username/token provided. Verifies file with retries.
+
+        Args:
+            src (FileCopyModel): Source file model with URL and credentials.
+            dest (str): Destination path on device.
+            timeout (int): RPC timeout in seconds. Defaults to 900.
+
+        Raises:
+            FileTransferError: If RPC call fails or file verification fails.
+
+        Returns:
+            bool: True if file copied and verified successfully.
+        """
+        # Build URL with embedded credentials if provided
+        netloc = self._netloc(src)
+        path = self._source_path(src)
+
+        if src.username and src.token:
+            source_url = f"{src.scheme}://{src.username}:{src.token}@{netloc}{path}"
+        else:
+            source_url = f"{src.scheme}://{netloc}{path}"
+
+        log.debug("Host %s: Attempting RPC file copy from %s to %s", self.host, source_url, dest)
+
+        try:
+            # Issue the RPC file-copy command
+            response = self.native.rpc.file_copy(
+                source=source_url,
+                destination=dest,
+                dev_timeout=timeout,
+            )
+            log.debug("Host %s: file_copy RPC response: %s", self.host, response)
+
+        except Exception as rpc_error:
+            log.error("Host %s: File copy RPC failed: %s", self.host, rpc_error)
+            raise FileTransferError(message=f"File copy RPC failed: {str(rpc_error)}")
+
+        # Verify file exists and matches checksum (with retries)
+        for attempt in range(1, 6):
+            try:
+                if self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm):
+                    log.info("Host %s: File copy verified on attempt %d", self.host, attempt)
+                    return True
+
+                if attempt < 5:
+                    log.debug("Host %s: File verification failed on attempt %d; retrying in 30s", self.host, attempt)
+                    time.sleep(30)
+
+            except Exception as verify_error:
+                log.debug("Host %s: File verification check failed (%s); retry %d/5", self.host, verify_error, attempt)
+                if attempt < 5:
+                    time.sleep(30)
+
+        log.error("Host %s: File copy verification failed after 5 attempts", self.host)
+        raise FileTransferError(message="File copy verification failed after 5 attempts")
 
     def remote_file_copy(self, src: FileCopyModel = None, dest=None, file_system: str | None = None, **kwargs):
         """Copy a file to a remote device.
