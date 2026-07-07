@@ -9,8 +9,10 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 from jnpr.junos import Device as JunosNativeDevice
-from jnpr.junos.exception import ConfigLoadError, ConnectClosedError, RpcError, RpcTimeoutError
-from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,no-name-in-module
+from jnpr.junos.exception import (ConfigLoadError, ConnectClosedError,
+                                  RpcError, RpcTimeoutError)
+from jnpr.junos.op.ethport import \
+    EthPortTable  # pylint: disable=import-error,no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
@@ -18,15 +20,11 @@ from jnpr.junos.utils.sw import SW as JunosNativeSW
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
-from pyntc.devices.tables.jnpr.loopback import LoopbackTable  # pylint: disable=no-name-in-module
-from pyntc.errors import (
-    CommandError,
-    CommandListError,
-    FileSystemNotFoundError,
-    FileTransferError,
-    OSInstallError,
-    RebootTimeoutError,
-)
+from pyntc.devices.tables.jnpr.loopback import \
+    LoopbackTable  # pylint: disable=no-name-in-module
+from pyntc.errors import (CommandError, CommandListError,
+                          FileSystemNotFoundError, FileTransferError,
+                          OSInstallError, RebootTimeoutError)
 from pyntc.utils.models import FileCopyModel
 
 # Multipliers for Junos ``df``-style size suffixes. Junos formats available
@@ -94,6 +92,7 @@ class JunosDevice(BaseDevice):
         self.cu = JunosNativeConfig(self.native)  # pylint: disable=invalid-name
         self.fs = JunosNativeFS(self.native)  # pylint: disable=invalid-name
         self.sw = JunosNativeSW(self.native)  # pylint: disable=invalid-name
+        self._is_virtual_chassis = None
 
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
@@ -540,6 +539,14 @@ class JunosDevice(BaseDevice):
 
         return self._serial_number
 
+    @property
+    def is_virtual_chassis(self) -> bool:
+        """Check if device is in virtual-chassis mode."""
+        if self._is_virtual_chassis is None:
+            self._is_virtual_chassis = self.native.facts.get("vc_capable", False)
+
+        return self._is_virtual_chassis
+
     def file_copy(self, src, dest=None, **kwargs):
         """Copy file to device via SCP.
 
@@ -588,178 +595,147 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(  # pylint: disable=too-many-positional-arguments,too-many-branches,too-many-statements
-        self, image_name, checksum, reboot=True, hashing_algorithm="md5", issu=False, nssu=False
-    ):
-        """Install OS on device and reboot.
+    def _validate_member_status(self):
+        """Validate and log virtual-chassis member status.
 
-        Args:
-            image_name (str): Name of image.
-            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true. Ignored if nssu is true.
-            checksum (str): The checksum of the file.
-            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
-            issu (bool): Whether to perform an In-Service Software Upgrade (ISSU). Defaults to false.
-            nssu (bool): Whether to perform a Non-Stop Software Upgrade (NSSU). Defaults to false. When true, reboot is performed automatically.
-        """
-        # Capture pre-install state for validation after reboot
-        self._uptime = None
-        pre_install_uptime = self.uptime
-        pre_install_version = self.os_version
-
-        log.info("Host %s: Pre-install state - OS: %s, uptime: %ss", self.host, pre_install_version, pre_install_uptime)
-
-        try:
-            install_ok = self.sw.install(
-                package=image_name,
-                checksum=checksum,
-                checksum_algorithm=hashing_algorithm,
-                progress=True,
-                validate=True,
-                no_copy=True,
-                issu=issu,
-                nssu=nssu,
-                timeout=3600,
-            )
-        except RpcError as rpc_error:
-            # Check if error is due to pending reboot state from previous incomplete operation
-            if "reboot pending for software rollback" in str(rpc_error).lower():
-                log.warning(
-                    "Host %s: Device has pending reboot state; clearing with reboot.",
-                    self.host,
-                )
-                # Capture uptime before reboot for verification
-                self._uptime = None
-                pre_reboot_uptime = self.uptime
-
-                try:
-                    # Clear pending reboot state
-                    self.native.rpc.request_reboot()
-                    log.info("Host %s: Reboot issued to clear pending state.", self.host)
-
-                    # Wait for device to come back up
-                    self._wait_for_device_reboot(pre_reboot_uptime)
-                    log.info("Host %s: Device rebooted and reconnected.", self.host)
-
-                    # Verify image file still exists
-                    if not self.check_file_exists(image_name):
-                        raise FileTransferError(message=f"Image file {image_name} missing after reboot")
-                    log.info("Host %s: Image file verified after reboot.", self.host)
-
-                    # Retry install after clearing pending state
-                    log.info("Host %s: Retrying install after clearing pending reboot state.", self.host)
-                    install_ok = self.sw.install(
-                        package=image_name,
-                        checksum=checksum,
-                        checksum_algorithm=hashing_algorithm,
-                        progress=True,
-                        validate=True,
-                        no_copy=True,
-                        issu=issu,
-                        nssu=nssu,
-                        timeout=3600,
-                    )
-                except Exception as retry_error:
-                    log.error(
-                        "Host %s: Failed to clear pending reboot state: %s",
-                        self.host,
-                        retry_error,
-                    )
-                    raise
-            else:
-                # Re-raise if it's a different RPC error
-                raise
-        except ConnectClosedError:
-            # Connection loss during install is expected (device reboots)
-            log.info(
-                "Host %s: Connection closed during install (expected for device reboot). "
-                "Waiting for device to come back online.",
-                self.host,
-            )
-
-            try:
-                # Wait for device to come back up
-                self._wait_for_device_reboot(pre_install_uptime)
-                log.info("Host %s: Device reconnected after reboot.", self.host)
-
-                # Validate OS version changed
-                self._uptime = None  # Force refresh
-                post_install_version = self.os_version
-
-                if post_install_version == pre_install_version:
-                    log.error(
-                        "Host %s: Device rebooted but OS version unchanged. Expected change from %s, still running %s",
-                        self.host,
-                        pre_install_version,
-                        post_install_version,
-                    )
-                    raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-
-                log.info(
-                    "Host %s: OS upgrade verified. Previous version: %s. Current version: %s",
-                    self.host,
-                    pre_install_version,
-                    post_install_version,
-                )
-                install_ok = True
-
-            except Exception as reboot_error:
-                log.error(
-                    "Host %s: Failed during post-reboot verification: %s",
-                    self.host,
-                    reboot_error,
-                )
-                raise
-
-        # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
-        if isinstance(install_ok, tuple):
-            install_ok = install_ok[0]
-
-        if not install_ok:
-            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-
-        if nssu:
-            self.request_system_snapshot("slice alternate all-members")
-
-        if not reboot:
-            log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
-            return True
-
-        if not nssu:
-            self.reboot(wait_for_reload=True)
-
-    def install_os_multi(  # pylint: disable=too-many-branches,too-many-statements
-        self,
-        image_name: str,
-        checksum: str,
-        hashing_algorithm: str = "md5",
-        reboot=True,
-    ) -> bool:
-        """Install OS on Juniper virtual-chassis devices.
-
-        Uses sw.install(reboot=True) which applies to all members simultaneously,
-        followed by explicit reboot of all members and snapshot of alternate partitions.
-
-        Flow:
-        1. Install all members (sw.install with reboot) and wait for reconnection with version verification
-        2. Explicit reboot of all members and wait for reconnection
-        3. Snapshot alternate partitions on all members
-
-        Args:
-            image_name (str): Path to OS image file on device (/var/tmp/image.tgz).
-            checksum (str): Checksum of the image file.
-            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256'). Defaults to 'md5'.
-            reboot (bool): Whether to perform the upgrade sequence. Defaults to True.
+        Checks re_info for:
+        - Member count
+        - Each member's status (should be 'OK')
+        - Mastership state (master/backup)
+        - Last reboot reason
 
         Returns:
-            bool: True if upgrade successful.
+            dict: Member status info indexed by member ID.
+
+        Raises:
+            OSInstallError: If any member status is not 'OK'.
+        """
+        re_info = self.native.facts.get("re_info", {}).get("default", {})
+        if not re_info:
+            log.warning("Host %s: No re_info available; cannot validate member status", self.host)
+            return {}
+
+        member_status = {}
+        for member_id, member_info in re_info.items():
+            if member_id == "default":
+                continue
+
+            status = member_info.get("status", "UNKNOWN")
+            mastership = member_info.get("mastership_state", "UNKNOWN")
+            reboot_reason = member_info.get("last_reboot_reason", "UNKNOWN")
+            model = member_info.get("model", "UNKNOWN")
+
+            member_status[member_id] = {
+                "status": status,
+                "mastership": mastership,
+                "reboot_reason": reboot_reason,
+                "model": model,
+            }
+
+            log.info(
+                "Host %s: Member %s - Status: %s, Mastership: %s, Model: %s",
+                self.host,
+                member_id,
+                status,
+                mastership,
+                model,
+            )
+            log.debug("Host %s: Member %s reboot reason: %s", self.host, member_id, reboot_reason)
+
+            if status != "OK":
+                log.error("Host %s: Member %s status is %s (expected OK)", self.host, member_id, status)
+                raise OSInstallError(hostname=self.hostname, desired_boot="N/A")
+
+        return member_status
+
+    def _validate_post_install_state(self, expected_version):
+        """Validate post-install state via re_info.
+
+        Checks re_info for:
+        - All members in 'OK' status
+        - All members running expected version
+        - Reboot reasons don't indicate failures
+
+        Args:
+            expected_version (str): Expected OS version after install.
+
+        Raises:
+            OSInstallError: If any member is not in expected state.
+        """
+        re_info = self.native.facts.get("re_info", {}).get("default", {})
+        if not re_info:
+            log.warning("Host %s: No re_info available for post-install validation", self.host)
+            return
+
+        for member_id, member_info in re_info.items():
+            if member_id == "default":
+                continue
+
+            status = member_info.get("status", "UNKNOWN")
+            reboot_reason = member_info.get("last_reboot_reason", "UNKNOWN")
+            model = member_info.get("model", "UNKNOWN")
+
+            if status != "OK":
+                log.error(
+                    "Host %s: Member %s status is %s (expected OK) after install",
+                    self.host,
+                    member_id,
+                    status,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=expected_version)
+
+            log.info(
+                "Host %s: Member %s post-install state validated - Status: OK, Model: %s, Reboot reason: %s",
+                self.host,
+                member_id,
+                model,
+                reboot_reason,
+            )
+
+    def _is_multiple_device_setup(self) -> bool:
+        """Check if device is in a multiple-device setup (virtual-chassis or chassis-cluster).
+
+        Validates that:
+        - Device is vc_capable
+        - Multiple routing engines exist in re_info
+        - All members have status 'OK'
+
+        Returns:
+            bool: True if device is part of a multiple-device setup, False otherwise.
+
+        Raises:
+            OSInstallError: If any member status is not 'OK'.
+        """
+        if not self.is_virtual_chassis:
+            return False
+
+        re_info = self.native.facts.get("re_info", {}).get("default", {})
+        members = {k: v for k, v in re_info.items() if k != "default"}
+
+        if len(members) <= 1:
+            log.debug(
+                "Host %s: vc_capable=True but only %d members; treating as single device", self.host, len(members)
+            )
+            return False
+
+        log.info("Host %s: Detected multiple-device setup with %d members", self.host, len(members))
+        self._validate_member_status()
+        return True
+
+    def _validate_and_capture_preinstall_state(self, image_name, checksum, hashing_algorithm):
+        """Validate image and capture pre-install state.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256').
+
+        Returns:
+            tuple: (pre_uptime, pre_version)
 
         Raises:
             FileTransferError: If image file not found or checksum mismatch.
-            OSInstallError: If upgrade fails.
         """
-        # Pre-install checks
-        log.info("Host %s: Starting virtual-chassis OS upgrade", self.host)
-
         if not self.check_file_exists(image_name):
             raise FileTransferError(message=f"Image {image_name} not found")
 
@@ -768,16 +744,159 @@ class JunosDevice(BaseDevice):
 
         log.info("Host %s: Image verified - %s", self.host, image_name)
 
-        # Capture pre-install state
         self._uptime = None
-        pre_install_uptime = self.uptime
-        pre_install_version = self.os_version
+        pre_uptime = self.uptime
+        pre_version = self.os_version
 
-        log.info("Host %s: Pre-install state - OS: %s, uptime: %ss", self.host, pre_install_version, pre_install_uptime)
+        log.info("Host %s: Pre-install state - OS: %s, uptime: %ss", self.host, pre_version, pre_uptime)
 
-        # 1: Install with automatic first reboot
+        return pre_uptime, pre_version
+
+    def _wait_and_verify_upgrade(self, pre_uptime, pre_version, image_name):
+        """Wait for device reboot and verify OS version changed.
+
+        Args:
+            pre_uptime (int): Uptime before upgrade.
+            pre_version (str): OS version before upgrade.
+            image_name (str): Name of image being installed.
+
+        Raises:
+            OSInstallError: If OS version did not change after reboot.
+        """
+        self._wait_for_device_reboot(pre_uptime)
+        log.info("Host %s: Device reconnected after reboot.", self.host)
+
+        self._uptime = None
+        post_version = self.os_version
+
+        if post_version == pre_version:
+            log.error(
+                "Host %s: Device rebooted but OS version unchanged. Expected change from %s, still running %s",
+                self.host,
+                pre_version,
+                post_version,
+            )
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+        log.info(
+            "Host %s: OS upgrade verified. Previous version: %s. Current version: %s",
+            self.host,
+            pre_version,
+            post_version,
+        )
+
+    def _reboot_all_members_and_wait(self, pre_reboot_uptime):
+        """Issue explicit reboot of all members and wait for reconnection.
+
+        Args:
+            pre_reboot_uptime (int): Uptime before reboot.
+
+        Raises:
+            ConnectClosedError or Exception: If reboot command fails or device doesn't reconnect.
+        """
+        log.info("Host %s: Issuing explicit reboot of all members", self.host)
         try:
-            log.info("Host %s: Calling sw.install(reboot=True) for all members", self.host)
+            self.native.rpc.cli(command="request system reboot all-members", format="text")
+            log.info("Host %s: Reboot all-members command issued", self.host)
+        except ConnectClosedError:
+            log.debug("Host %s: Connection closed during reboot command (expected)", self.host)
+        except Exception as reboot_error:
+            log.error("Host %s: Failed to issue reboot command: %s", self.host, reboot_error)
+            raise
+
+        try:
+            self._wait_for_device_reboot(pre_reboot_uptime)
+            log.info("Host %s: Device reconnected after all-members reboot", self.host)
+        except Exception as wait_error:
+            log.error("Host %s: Failed waiting for device after reboot: %s", self.host, wait_error)
+            raise
+
+    def _disruptive_install_single(self, image_name, checksum, hashing_algorithm, pre_uptime, pre_version):
+        """Perform a disruptive OS installation on a single device.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256').
+            pre_uptime (int): Uptime before upgrade.
+            pre_version (str): OS version before upgrade.
+        """
+        log.info("Host %s: Installing software update with disruptive reboot (single device).", self.host)
+        install_ok = self.sw.install(
+            package=image_name,
+            checksum=checksum,
+            checksum_algorithm=hashing_algorithm,
+            progress=True,
+            validate=True,
+            no_copy=True,
+            reboot=True,
+            timeout=3600,
+        )
+
+        self._wait_and_verify_upgrade(pre_uptime, pre_version, image_name)
+        self._validate_post_install_state(self.os_version)
+
+        if isinstance(install_ok, tuple):
+            install_ok = install_ok[0]
+
+        if not install_ok:
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+    def _disruptive_install_multiple(self, image_name, checksum, hashing_algorithm, pre_uptime, pre_version):
+        """Perform a disruptive OS installation on multiple-device virtual-chassis.
+
+        Includes explicit reboot of all members and snapshot of alternate partitions.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256').
+            pre_uptime (int): Uptime before upgrade.
+            pre_version (str): OS version before upgrade.
+        """
+        log.info("Host %s: Installing software update with disruptive reboot (multiple-device).", self.host)
+        install_ok = self.sw.install(
+            package=image_name,
+            checksum=checksum,
+            checksum_algorithm=hashing_algorithm,
+            progress=True,
+            validate=True,
+            no_copy=True,
+            reboot=True,
+            timeout=3600,
+        )
+
+        self._wait_and_verify_upgrade(pre_uptime, pre_version, image_name)
+        self._validate_post_install_state(self.os_version)
+
+        if isinstance(install_ok, tuple):
+            install_ok = install_ok[0]
+
+        if not install_ok:
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+        self._uptime = None
+        pre_reboot_uptime = self.uptime
+        self._reboot_all_members_and_wait(pre_reboot_uptime)
+        self.request_system_snapshot("slice alternate all-members")
+        self._validate_post_install_state(self.os_version)
+
+    def _non_disruptive_install_single(
+        self, image_name, checksum, hashing_algorithm, issu, nssu, pre_uptime, pre_version
+    ):
+        """Perform a non-disruptive OS installation on a single device.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256').
+            issu (bool): Whether to perform ISSU.
+            nssu (bool): Whether to perform NSSU.
+            pre_uptime (int): Uptime before upgrade.
+            pre_version (str): OS version before upgrade.
+        """
+        log.info("Host %s: Installing software update using ISSU or NSSU (single device).", self.host)
+        try:
             install_ok = self.sw.install(
                 package=image_name,
                 checksum=checksum,
@@ -785,7 +904,62 @@ class JunosDevice(BaseDevice):
                 progress=True,
                 validate=True,
                 no_copy=True,
-                reboot=reboot,
+                reboot=False,
+                issu=issu,
+                nssu=nssu,
+                timeout=3600,
+            )
+        except RpcError as rpc_error:
+            if "reboot pending for software rollback" in str(rpc_error).lower():
+                log.warning(
+                    "Host %s: Device has pending reboot state; A manual reboot will be required to continue.",
+                    self.host,
+                )
+                raise
+        except ConnectClosedError:
+            log.info(
+                "Host %s: Connection closed during install (expected for device reboot). "
+                "Waiting for device to come back online.",
+                self.host,
+            )
+
+        self._wait_and_verify_upgrade(pre_uptime, pre_version, image_name)
+        self._validate_post_install_state(self.os_version)
+
+        if isinstance(install_ok, tuple):
+            install_ok = install_ok[0]
+
+        if not install_ok:
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+
+    def _non_disruptive_install_multiple(
+        self, image_name, checksum, hashing_algorithm, issu, nssu, pre_uptime, pre_version
+    ):
+        """Perform a non-disruptive OS installation on multiple-device virtual-chassis.
+
+        Includes explicit reboot of all members and snapshot of alternate partitions.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256').
+            issu (bool): Whether to perform ISSU.
+            nssu (bool): Whether to perform NSSU.
+            pre_uptime (int): Uptime before upgrade.
+            pre_version (str): OS version before upgrade.
+        """
+        log.info("Host %s: Installing software update using ISSU or NSSU (multiple-device).", self.host)
+        try:
+            install_ok = self.sw.install(
+                package=image_name,
+                checksum=checksum,
+                checksum_algorithm=hashing_algorithm,
+                progress=True,
+                validate=True,
+                no_copy=True,
+                reboot=False,
+                issu=issu,
+                nssu=nssu,
                 timeout=3600,
             )
         except RpcError as rpc_error:
@@ -811,7 +985,9 @@ class JunosDevice(BaseDevice):
                         progress=True,
                         validate=True,
                         no_copy=True,
-                        reboot=reboot,
+                        reboot=False,
+                        issu=issu,
+                        nssu=nssu,
                         timeout=3600,
                     )
                 except Exception as retry_error:
@@ -826,33 +1002,8 @@ class JunosDevice(BaseDevice):
                 self.host,
             )
 
-            try:
-                self._wait_for_device_reboot(pre_install_uptime)
-                log.info("Host %s: Device reconnected after reboot.", self.host)
-
-                self._uptime = None
-                post_install_version = self.os_version
-
-                if post_install_version == pre_install_version:
-                    log.error(
-                        "Host %s: Device rebooted but OS version unchanged. Expected change from %s, still running %s",
-                        self.host,
-                        pre_install_version,
-                        post_install_version,
-                    )
-                    raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-
-                log.info(
-                    "Host %s: OS upgrade verified. Previous version: %s. Current version: %s",
-                    self.host,
-                    pre_install_version,
-                    post_install_version,
-                )
-                install_ok = True
-
-            except Exception as reboot_error:
-                log.error("Host %s: Failed during post-reboot verification: %s", self.host, reboot_error)
-                raise
+        self._wait_and_verify_upgrade(pre_uptime, pre_version, image_name)
+        self._validate_post_install_state(self.os_version)
 
         if isinstance(install_ok, tuple):
             install_ok = install_ok[0]
@@ -860,42 +1011,63 @@ class JunosDevice(BaseDevice):
         if not install_ok:
             raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
+        self._uptime = None
+        pre_reboot_uptime = self.uptime
+        self._reboot_all_members_and_wait(pre_reboot_uptime)
+        self.request_system_snapshot("slice alternate all-members")
+        self._validate_post_install_state(self.os_version)
+
+    def _disruptive_install(self, image_name, checksum, hashing_algorithm, reboot):
+        """Perform a disruptive OS installation."""
+
+    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5", issu=False, nssu=False) -> bool:
+        """Install OS on device.
+
+        Supports both disruptive and non-disruptive upgrades on single and multiple-device setups.
+        Automatically detects virtual-chassis and applies all-members operations when needed.
+
+        Args:
+            image_name (str): Path to OS image file on device.
+            checksum (str): Checksum of the image file.
+            reboot (bool): Whether to reboot the device. Defaults to True. Ignored if nssu is True.
+            hashing_algorithm (str): Hash algorithm ('md5', 'sha1', 'sha256'). Defaults to 'md5'.
+            issu (bool): Whether to perform ISSU. Defaults to False.
+            nssu (bool): Whether to perform NSSU. Defaults to False. When True, reboot is automatic.
+
+        Returns:
+            bool: True if upgrade successful.
+
+        Raises:
+            FileTransferError: If image file not found or checksum mismatch.
+            OSInstallError: If upgrade fails.
+        """
+        pre_uptime, pre_version = self._validate_and_capture_preinstall_state(image_name, checksum, hashing_algorithm)
+
+        is_multiple_device = self._is_multiple_device_setup()
+        is_disruptive = not (issu or nssu or not reboot)
+
+        if is_disruptive:
+            if is_multiple_device:
+                self._disruptive_install_multiple(image_name, checksum, hashing_algorithm, pre_uptime, pre_version)
+            else:
+                self._disruptive_install_single(image_name, checksum, hashing_algorithm, pre_uptime, pre_version)
+        else:
+            if is_multiple_device:
+                self._non_disruptive_install_multiple(
+                    image_name, checksum, hashing_algorithm, issu, nssu, pre_uptime, pre_version
+                )
+            else:
+                self._non_disruptive_install_single(
+                    image_name, checksum, hashing_algorithm, issu, nssu, pre_uptime, pre_version
+                )
+
         if not reboot:
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
-        # 2: Issue explicit reboot of all members
-        log.info("Host %s: Issuing explicit reboot of all members", self.host)
-        self._uptime = None
-        pre_reboot_uptime = self.uptime
+        if not nssu:
+            self.reboot(wait_for_reload=True)
 
-        try:
-            self.native.rpc.cli(command="request system reboot all-members", format="text")
-            log.info("Host %s: Reboot all-members command issued", self.host)
-        except ConnectClosedError:
-            log.debug("Host %s: Connection closed during reboot command (expected)", self.host)
-        except Exception as reboot_error:
-            log.error("Host %s: Failed to issue reboot command: %s", self.host, reboot_error)
-            raise
-
-        # Wait for device to come back after second reboot
-        try:
-            self._wait_for_device_reboot(pre_reboot_uptime)
-            log.info("Host %s: Device reconnected after all-members reboot", self.host)
-        except Exception as wait_error:
-            log.error("Host %s: Failed waiting for device after reboot: %s", self.host, wait_error)
-            raise
-
-        # 3: Snapshot alternate partitions on all members
-        log.info("Host %s: Taking snapshot of alternate partitions on all members", self.host)
-        try:
-            self.request_system_snapshot("slice alternate all-members")
-            log.info("Host %s: Snapshot completed successfully", self.host)
-        except Exception as snap_error:
-            log.error("Host %s: Snapshot failed: %s", self.host, snap_error)
-            raise
-
-        log.info("Host %s: Virtual-chassis OS upgrade completed successfully", self.host)
         return True
 
     def open(self):

@@ -427,17 +427,27 @@ class TestJnprDevice(unittest.TestCase):
                 result = self.device._file_copy_local_md5(fp.name)
                 self.assertEqual(result, checksum)
 
-    def test_install_os(self):
+    @mock.patch.object(JunosDevice, "_validate_post_install_state")
+    @mock.patch.object(JunosDevice, "_validate_and_capture_preinstall_state")
+    @mock.patch.object(JunosDevice, "_is_multiple_device_setup")
+    def test_install_os(self, mock_is_multi, mock_validate_preinstall, mock_validate_postinstall):
+        mock_validate_preinstall.return_value = (1000, "15.1F4.15")
+        mock_is_multi.return_value = False
+
         with mock.patch.object(self.device, "reboot") as mock_reboot:
             with self.subTest("sw.install returns a bool"):
                 self.device.sw.install.return_value = True
-                self.device.install_os(image_name="image.bin", checksum="c0ffee")
-                mock_reboot.assert_called_once_with(wait_for_reload=True)
+                with mock.patch.object(JunosDevice, "_wait_and_verify_upgrade"):
+                    self.device.install_os(image_name="image.bin", checksum="c0ffee")
+                    mock_reboot.assert_called_once_with(wait_for_reload=True)
+                    mock_validate_postinstall.assert_called()
 
             with self.subTest("sw.install returns a tuple and fails"):
                 self.device.sw.install.return_value = (False, "install failure")
-                with self.assertRaises(OSInstallError):
-                    self.device.install_os(image_name="image.bin", checksum="c0ffee")
+                mock_reboot.reset_mock()
+                with mock.patch.object(JunosDevice, "_wait_and_verify_upgrade"):
+                    with self.assertRaises(OSInstallError):
+                        self.device.install_os(image_name="image.bin", checksum="c0ffee")
 
     def test_check_file_exists(self):
         self.device.check_file_exists("foo.txt")
@@ -562,6 +572,221 @@ class TestJnprDevice(unittest.TestCase):
             self.device.get_remote_checksum("file.bin", hashing_algorithm="sha512")
         assert "sha512" in str(ctx.exception)
         self.device.fs.checksum.assert_not_called()
+
+    def test_is_virtual_chassis_true(self):
+        """Test is_virtual_chassis returns True when vc_capable is set."""
+        self.device.native.facts["vc_capable"] = True
+        self.assertTrue(self.device.is_virtual_chassis)
+
+    def test_is_virtual_chassis_false(self):
+        """Test is_virtual_chassis returns False when vc_capable is False."""
+        self.device.native.facts["vc_capable"] = False
+        self.assertFalse(self.device.is_virtual_chassis)
+
+    def test_is_virtual_chassis_caches_value(self):
+        """Test is_virtual_chassis caches the value after first access."""
+        self.device.native.facts["vc_capable"] = True
+        first_call = self.device.is_virtual_chassis
+        self.device.native.facts["vc_capable"] = False
+        second_call = self.device.is_virtual_chassis
+        self.assertEqual(first_call, second_call)
+        self.assertTrue(second_call)
+
+    def test_validate_member_status_ok(self):
+        """Test _validate_member_status with all members OK."""
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+                "member1": {
+                    "status": "OK",
+                    "mastership_state": "backup",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+            }
+        }
+        result = self.device._validate_member_status()
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result["member0"]["status"], "OK")
+        self.assertEqual(result["member1"]["status"], "OK")
+
+    def test_validate_member_status_raises_on_bad_status(self):
+        """Test _validate_member_status raises OSInstallError if member status is not OK."""
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+                "member1": {
+                    "status": "DOWN",
+                    "mastership_state": "unknown",
+                    "last_reboot_reason": "unknown",
+                    "model": "EX3300",
+                },
+            }
+        }
+        with pytest.raises(OSInstallError):
+            self.device._validate_member_status()
+
+    def test_is_multiple_device_setup_single_device(self):
+        """Test _is_multiple_device_setup returns False for single device."""
+        self.device.native.facts["vc_capable"] = False
+        self.assertFalse(self.device._is_multiple_device_setup())
+
+    def test_is_multiple_device_setup_vc_capable_one_member(self):
+        """Test _is_multiple_device_setup returns False for vc_capable with only 1 member."""
+        self.device._is_virtual_chassis = None
+        self.device.native.facts["vc_capable"] = True
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                }
+            }
+        }
+        self.assertFalse(self.device._is_multiple_device_setup())
+
+    def test_is_multiple_device_setup_multiple_members(self):
+        """Test _is_multiple_device_setup returns True for multiple members."""
+        self.device._is_virtual_chassis = None
+        self.device.native.facts["vc_capable"] = True
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+                "member1": {
+                    "status": "OK",
+                    "mastership_state": "backup",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+            }
+        }
+        self.assertTrue(self.device._is_multiple_device_setup())
+
+    @mock.patch.object(JunosDevice, "check_file_exists")
+    @mock.patch.object(JunosDevice, "compare_file_checksum")
+    @mock.patch.object(JunosDevice, "uptime", new_callable=mock.PropertyMock)
+    @mock.patch.object(JunosDevice, "os_version", new_callable=mock.PropertyMock)
+    def test_validate_and_capture_preinstall_state(self, mock_version, mock_uptime, mock_checksum, mock_exists):
+        """Test _validate_and_capture_preinstall_state returns pre-install state."""
+        mock_exists.return_value = True
+        mock_checksum.return_value = True
+        mock_uptime.return_value = 1000
+        mock_version.return_value = "15.1F4.15"
+
+        pre_uptime, pre_version = self.device._validate_and_capture_preinstall_state(
+            "/var/tmp/image.bin", "abc123", "md5"
+        )
+        self.assertEqual(pre_uptime, 1000)
+        self.assertEqual(pre_version, "15.1F4.15")
+
+    @mock.patch.object(JunosDevice, "check_file_exists")
+    def test_validate_and_capture_preinstall_state_missing_image(self, mock_exists):
+        """Test _validate_and_capture_preinstall_state raises if image missing."""
+        mock_exists.return_value = False
+        with pytest.raises(FileTransferError):
+            self.device._validate_and_capture_preinstall_state("/var/tmp/image.bin", "abc123", "md5")
+
+    @mock.patch.object(JunosDevice, "check_file_exists")
+    @mock.patch.object(JunosDevice, "compare_file_checksum")
+    def test_validate_and_capture_preinstall_state_checksum_mismatch(self, mock_checksum, mock_exists):
+        """Test _validate_and_capture_preinstall_state raises on checksum mismatch."""
+        mock_exists.return_value = True
+        mock_checksum.return_value = False
+        with pytest.raises(FileTransferError):
+            self.device._validate_and_capture_preinstall_state("/var/tmp/image.bin", "abc123", "md5")
+
+    @mock.patch.object(JunosDevice, "_wait_for_device_reboot")
+    def test_wait_and_verify_upgrade_success(self, mock_wait):
+        """Test _wait_and_verify_upgrade succeeds when version changes."""
+        with mock.patch.object(JunosDevice, "os_version", new_callable=mock.PropertyMock) as mock_version:
+            mock_version.side_effect = ["15.1F5.15"]
+            self.device._wait_and_verify_upgrade(1000, "15.1F4.15", "/var/tmp/image.bin")
+            mock_wait.assert_called_once_with(1000)
+
+    @mock.patch.object(JunosDevice, "_wait_for_device_reboot")
+    def test_wait_and_verify_upgrade_fails_on_unchanged_version(self, mock_wait):
+        """Test _wait_and_verify_upgrade raises if version unchanged."""
+        with mock.patch.object(JunosDevice, "os_version", new_callable=mock.PropertyMock) as mock_version:
+            mock_version.return_value = "15.1F4.15"
+            with pytest.raises(OSInstallError):
+                self.device._wait_and_verify_upgrade(1000, "15.1F4.15", "/var/tmp/image.bin")
+
+    def test_validate_post_install_state_single_device(self):
+        """Test _validate_post_install_state succeeds with single device OK status."""
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                }
+            }
+        }
+        self.device._validate_post_install_state("15.1F5.15")
+
+    def test_validate_post_install_state_multiple_devices(self):
+        """Test _validate_post_install_state succeeds with multiple devices all OK."""
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+                "member1": {
+                    "status": "OK",
+                    "mastership_state": "backup",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+            }
+        }
+        self.device._validate_post_install_state("15.1F5.15")
+
+    def test_validate_post_install_state_raises_on_bad_status(self):
+        """Test _validate_post_install_state raises OSInstallError if member status is not OK."""
+        self.device.native.facts["re_info"] = {
+            "default": {
+                "member0": {
+                    "status": "OK",
+                    "mastership_state": "master",
+                    "last_reboot_reason": "normal",
+                    "model": "EX3300",
+                },
+                "member1": {
+                    "status": "DOWN",
+                    "mastership_state": "unknown",
+                    "last_reboot_reason": "crash",
+                    "model": "EX3300",
+                },
+            }
+        }
+        with pytest.raises(OSInstallError):
+            self.device._validate_post_install_state("15.1F5.15")
+
+    def test_validate_post_install_state_no_re_info(self):
+        """Test _validate_post_install_state handles missing re_info gracefully."""
+        self.device.native.facts["re_info"] = {}
+        self.device._validate_post_install_state("15.1F5.15")
 
 
 class TestJnprFreeSpace(unittest.TestCase):
