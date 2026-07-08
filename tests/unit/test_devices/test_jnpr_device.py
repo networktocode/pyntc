@@ -4,7 +4,7 @@ from tempfile import NamedTemporaryFile
 
 import mock
 import pytest
-from jnpr.junos.exception import ConfigLoadError
+from jnpr.junos.exception import ConfigLoadError, RpcTimeoutError
 
 from pyntc.devices import JunosDevice
 from pyntc.errors import (
@@ -75,6 +75,9 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device = JunosDevice("host", "user", "pass")
         self.device.native.facts = DEVICE_FACTS
+        # ``rpc`` is created in Device.__init__ so the autospec mock lacks it.
+        self.device.native.rpc = mock.MagicMock()
+        self.device.native.rpc.file_copy.return_value = True
 
     def tearDown(self):
         self.mock_sw.stop()
@@ -625,7 +628,9 @@ class TestJnprDevice(unittest.TestCase):
             file_size=330656851,
         )
 
-        self.device.fs.cp.return_value = True
+        self.device.native.rpc = mock.MagicMock()
+        # PyEZ returns the bool True (not an XML element) for an empty success reply.
+        self.device.native.rpc.file_copy.return_value = True
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
 
         with mock.patch.object(self.device, "verify_file") as mock_verify_file:
@@ -636,7 +641,7 @@ class TestJnprDevice(unittest.TestCase):
             with self.subTest("file already exists"):
                 mock_verify_file.return_value = True
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_not_called()
+                self.device.native.rpc.file_copy.assert_not_called()
                 self.assertIsNone(result)
 
             with self.subTest("copy successful"):
@@ -644,9 +649,9 @@ class TestJnprDevice(unittest.TestCase):
                 mock_verify_file.side_effect = [False, False, True]
                 mock_verify_file.reset_mock()
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=src_file.download_url,
+                    destination=dest_file,
                     dev_timeout=src_file.timeout,
                 )
                 verify_file_calls = [
@@ -657,15 +662,15 @@ class TestJnprDevice(unittest.TestCase):
                 self.assertIsNone(result)
 
             with self.subTest("copy succeeded but checksum failed"):
-                self.device.fs.cp.reset_mock()
+                self.device.native.rpc.file_copy.reset_mock()
                 mock_verify_file.reset_mock()
                 mock_verify_file.side_effect = None
                 mock_verify_file.return_value = False
                 with self.assertRaises(FileTransferError):
                     result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=src_file.download_url,
+                    destination=dest_file,
                     dev_timeout=src_file.timeout,
                 )
                 verify_file_calls = [
@@ -674,16 +679,17 @@ class TestJnprDevice(unittest.TestCase):
 
                 mock_verify_file.assert_has_calls(verify_file_calls * 6)
 
-            with self.subTest("copy failed"):
-                self.device.fs.cp.reset_mock()
-                self.device.fs.cp.return_value = False
-                with self.assertRaises(FileTransferError):
+            with self.subTest("copy failed surfaces the device's RPC error"):
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                rpc_exc = RpcTimeoutError(self.device.native, "file-copy-rpc", 900)
+                self.device.native.rpc.file_copy.side_effect = rpc_exc
+                with self.assertRaises(FileTransferError) as ctx:
                     result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
-                    dev_timeout=src_file.timeout,
-                )
+                # The FileTransferError must carry the underlying RpcError, not discard it.
+                self.assertIn("file-copy-rpc", str(ctx.exception))
+                self.assertIs(ctx.exception.__cause__, rpc_exc)
 
     def test_verify_file(self):
         checksum = "c0ffee"
@@ -794,6 +800,9 @@ class TestJnprFreeSpace(unittest.TestCase):
 
         self.device = JunosDevice("host", "user", "pass")
         self.device.native.facts = DEVICE_FACTS
+        # ``rpc`` is created in Device.__init__ so the autospec mock lacks it.
+        self.device.native.rpc = mock.MagicMock()
+        self.device.native.rpc.file_copy.return_value = True
 
     def tearDown(self):
         self.mock_sw.stop()
@@ -856,6 +865,37 @@ class TestJnprFreeSpace(unittest.TestCase):
         with self.assertRaises(CommandError):
             self.device._get_free_space()
 
+    def test_get_free_space_virtual_chassis_returns_minimum_across_members(self):
+        """On VC/multi-RE devices storage_usage nests per member; return the smallest member's free space."""
+        self.device.fs.storage_usage.return_value = {
+            "fpc0": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "225M"}},
+            "fpc1": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "323M"}},
+        }
+        self.assertEqual(self.device._get_free_space(), 225 * 1024**2)
+
+    def test_get_free_space_cluster_longest_prefix_match_per_member(self):
+        """Mount resolution (longest prefix) applies within each cluster member independently."""
+        self.device.fs.storage_usage.return_value = {
+            "node0": {
+                "/dev/ad0s1a": {"mount": "/", "avail": "500M"},
+                "/dev/ad0s1f": {"mount": "/var", "avail": "2.0G"},
+            },
+            "node1": {
+                "/dev/ad0s1a": {"mount": "/", "avail": "3.0G"},
+            },
+        }
+        # node0 resolves /var/tmp to /var (2G); node1 falls back to / (3G). Minimum is 2G.
+        self.assertEqual(self.device._get_free_space(), 2 * 1024**3)
+
+    def test_get_free_space_raises_when_a_member_has_no_matching_mount(self):
+        """A member with no mount enclosing the path raises rather than overstating free space."""
+        self.device.fs.storage_usage.return_value = {
+            "fpc0": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "1.0G"}},
+            "fpc1": {"cgroups": {"mount": "/sys/fs/cgroup", "avail": "0B"}},
+        }
+        with self.assertRaises(FileSystemNotFoundError):
+            self.device._get_free_space()
+
     @mock.patch("pyntc.devices.jnpr_device.os.path.getsize", return_value=10**12)
     @mock.patch("pyntc.devices.jnpr_device.SCP")
     def test_file_copy_raises_not_enough_free_space(self, mock_scp, _getsize):
@@ -869,7 +909,7 @@ class TestJnprFreeSpace(unittest.TestCase):
         mock_scp.assert_not_called()
 
     def test_remote_file_copy_raises_not_enough_free_space(self):
-        """remote_file_copy raises NotEnoughFreeSpaceError and never invokes fs.cp."""
+        """remote_file_copy raises NotEnoughFreeSpaceError and never invokes the file-copy RPC."""
         self.device.fs.storage_usage.return_value = {
             "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "10M"},
         }
@@ -883,11 +923,10 @@ class TestJnprFreeSpace(unittest.TestCase):
         with mock.patch.object(self.device, "verify_file", return_value=False):
             with self.assertRaises(NotEnoughFreeSpaceError):
                 self.device.remote_file_copy(oversized, dest="/var/tmp/file.bin")
-        self.device.fs.cp.assert_not_called()
+        self.device.native.rpc.file_copy.assert_not_called()
 
     def test_remote_file_copy_skips_space_check_when_file_size_omitted(self):
         """When FileCopyModel has no file_size, _check_free_space is NOT called."""
-        self.device.fs.cp.return_value = True
         model = FileCopyModel(
             download_url="ftp://example.com/file.bin",
             checksum="c0ffee",
@@ -900,11 +939,10 @@ class TestJnprFreeSpace(unittest.TestCase):
         ):
             self.device.remote_file_copy(model, dest="/var/tmp/file.bin")
         mock_check.assert_not_called()
-        self.device.fs.cp.assert_called_once()
+        self.device.native.rpc.file_copy.assert_called_once()
 
     def test_remote_file_copy_appends_filename_when_url_has_no_path(self):
-        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before ``fs.cp``."""
-        self.device.fs.cp.return_value = True
+        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before the file-copy RPC."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220",  # no path
@@ -915,15 +953,14 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.fs.cp.assert_called_once_with(
-            from_path="ftp://ntc:pw@10.1.100.220/image.bin",
-            to_path="/var/tmp/image.bin",
+        self.device.native.rpc.file_copy.assert_called_once_with(
+            source="ftp://ntc:pw@10.1.100.220/image.bin",
+            destination="/var/tmp/image.bin",
             dev_timeout=mock.ANY,
         )
 
     def test_remote_file_copy_keeps_url_intact_when_path_is_present(self):
-        """When the URL already contains a path, ``fs.cp`` receives it unchanged."""
-        self.device.fs.cp.return_value = True
+        """When the URL already contains a path, the file-copy RPC receives it unchanged."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
@@ -934,9 +971,9 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.fs.cp.assert_called_once_with(
-            from_path="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
-            to_path="/var/tmp/image.bin",
+        self.device.native.rpc.file_copy.assert_called_once_with(
+            source="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
+            destination="/var/tmp/image.bin",
             dev_timeout=mock.ANY,
         )
 

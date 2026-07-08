@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 from jnpr.junos import Device as JunosNativeDevice
-from jnpr.junos.exception import ConfigLoadError, RpcTimeoutError
+from jnpr.junos.exception import ConfigLoadError, RpcError, RpcTimeoutError
 from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
@@ -124,6 +124,12 @@ class JunosDevice(BaseDevice):
         back the correct filesystem's free space. ``/`` is always a fallback
         when nothing more specific matches.
 
+        On virtual-chassis, multi-RE, and cluster platforms, PyEZ returns a
+        nested ``{member: {filesystem: info}}`` dict instead of the flat
+        ``{filesystem: info}`` shape. The mount is resolved per member and the
+        **minimum** free space across members is returned — an install needs
+        room on every member.
+
         Args:
             file_system (str, optional): Target path. When ``None`` (the
                 default), the probe uses ``_JUNOS_DEFAULT_FILE_SYSTEM``
@@ -131,21 +137,43 @@ class JunosDevice(BaseDevice):
                 on Junos).
 
         Returns:
-            int: Free bytes available on the resolved filesystem.
+            int: Free bytes available on the resolved filesystem (the smallest
+                member's value on multi-member platforms).
 
         Raises:
             FileSystemNotFoundError: When no mount point encloses ``file_system``
-                (i.e., not even ``/`` is present in ``storage_usage``).
-            CommandError: When the ``avail`` format string cannot be parsed.
+                on any member (i.e., not even ``/`` is present in
+                ``storage_usage`` for that member).
+            CommandError: When an ``avail`` format string cannot be parsed.
         """
         if file_system is None:
             file_system = _JUNOS_DEFAULT_FILE_SYSTEM
 
         usage = self.fs.storage_usage()
+        # Flat entries always carry a "mount" key; on multi-member platforms
+        # the top-level values are per-member {filesystem: info} dicts instead.
+        is_nested = bool(usage) and all(isinstance(info, dict) and "mount" not in info for info in usage.values())
+        member_groups = usage if is_nested else {"": usage}
+
+        free_bytes = min(
+            self._free_bytes_for_mount(filesystems, file_system, member=member)
+            for member, filesystems in member_groups.items()
+        )
+        log.debug(
+            "Host %s: %s bytes free (resolved from %s across %d member(s)).",
+            self.host,
+            free_bytes,
+            file_system,
+            len(member_groups),
+        )
+        return free_bytes
+
+    def _free_bytes_for_mount(self, filesystems, file_system, member=""):
+        """Resolve ``file_system`` within one member's storage output and return its free bytes."""
         best_info = None
         best_mount = None
         best_len = -1
-        for _dev, info in usage.items():
+        for _dev, info in filesystems.items():
             mount = info.get("mount")
             if not mount or not _mount_encloses_path(mount, file_system):
                 continue
@@ -156,9 +184,10 @@ class JunosDevice(BaseDevice):
 
         if best_info is None:
             log.error(
-                "Host %s: no mount encloses %s in storage_usage output.",
+                "Host %s: no mount encloses %s in storage_usage output%s.",
                 self.host,
                 file_system,
+                f" for member {member}" if member else "",
             )
             raise FileSystemNotFoundError(hostname=self.host, command="show system storage")
 
@@ -166,10 +195,11 @@ class JunosDevice(BaseDevice):
         match = _JUNOS_AVAIL_FORMAT_RE.match(str(avail))
         if match is None:
             log.error(
-                "Host %s: could not parse avail %r for mount %s.",
+                "Host %s: could not parse avail %r for mount %s%s.",
                 self.host,
                 avail,
                 best_mount,
+                f" on member {member}" if member else "",
             )
             raise CommandError(
                 command="show system storage",
@@ -177,15 +207,7 @@ class JunosDevice(BaseDevice):
             )
         size = float(match.group(1))
         multiplier = _JUNOS_SIZE_UNIT_MULTIPLIERS[match.group(2).upper()]
-        free_bytes = int(size * multiplier)
-        log.debug(
-            "Host %s: %s bytes free on %s (resolved from %s).",
-            self.host,
-            free_bytes,
-            best_mount,
-            file_system,
-        )
-        return free_bytes
+        return int(size * multiplier)
 
     def _get_interfaces(self):
         eth_ifaces = EthPortTable(self.native)
@@ -1146,8 +1168,15 @@ class JunosDevice(BaseDevice):
         if not urlparse(source_url).path.strip("/"):
             source_url = f"{source_url.rstrip('/')}/{src.file_name}"
 
-        if not self.fs.cp(from_path=source_url, to_path=dest, dev_timeout=src.timeout):
-            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}")
+        # Issue the file-copy RPC directly rather than through PyEZ ``fs.cp``,
+        # which wraps it in a bare ``except`` and returns False — discarding the
+        # device's actual error message. A successful reply may be the bool True
+        # (empty rpc-reply) or an XML element; only an exception means failure.
+        try:
+            self.native.rpc.file_copy(source=source_url, destination=dest, dev_timeout=src.timeout)
+        except RpcError as exc:
+            log.error("Host %s: file copy from %s failed: %s", self.host, src.clean_url, exc)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
 
         # Some devices take a while to sync the filesystem after a copy but netconf returns before the sync completes
         for _ in range(5):

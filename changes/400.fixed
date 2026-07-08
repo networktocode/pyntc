@@ -1,0 +1,2 @@
+Fixed `JunosDevice._get_free_space` raising `FileSystemNotFoundError` on virtual-chassis, multi-RE, and cluster devices by handling the nested per-member storage output and returning the smallest member's free space.
+Fixed `JunosDevice.remote_file_copy` discarding the device's actual error message on a failed copy; the underlying RPC error is now logged and included in the raised `FileTransferError`.
