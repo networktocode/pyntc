@@ -613,8 +613,9 @@ class TestJnprDevice(unittest.TestCase):
                 mock_get_remote_checksum.assert_called_once_with("foo.txt", "sha1")
                 self.assertFalse(result)
 
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
     @mock.patch("pyntc.devices.jnpr_device.time.sleep")
-    def test_remote_file_copy(self, mock_sleep):
+    def test_remote_file_copy(self, mock_sleep, mock_start_shell):
         ftp_url = "ftp://example.com/file.bin"
         md5_checksum = "c0ffee"
         filename = "file.bin"
@@ -627,11 +628,12 @@ class TestJnprDevice(unittest.TestCase):
             timeout=1200,
             file_size=330656851,
         )
+        fetch_cmd = f"setenv FTP_PASSIVE_MODE yes; fetch -q -o {dest_file} {ftp_url}"
 
         self.device.native.rpc = mock.MagicMock()
-        # PyEZ returns the bool True (not an XML element) for an empty success reply.
-        self.device.native.rpc.file_copy.return_value = True
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
 
         with mock.patch.object(self.device, "verify_file") as mock_verify_file:
             with self.subTest("invalid src argument"):
@@ -641,19 +643,17 @@ class TestJnprDevice(unittest.TestCase):
             with self.subTest("file already exists"):
                 mock_verify_file.return_value = True
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
+                mock_start_shell.assert_not_called()
                 self.device.native.rpc.file_copy.assert_not_called()
                 self.assertIsNone(result)
 
-            with self.subTest("copy successful"):
+            with self.subTest("copy successful via shell fetch"):
                 # First False because file does not already exist, then emulate device returning the wrong checksum while the file syncs
                 mock_verify_file.side_effect = [False, False, True]
                 mock_verify_file.reset_mock()
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.native.rpc.file_copy.assert_called_once_with(
-                    source=src_file.download_url,
-                    destination=dest_file,
-                    dev_timeout=src_file.timeout,
-                )
+                mock_shell.run.assert_called_once_with(fetch_cmd, timeout=src_file.timeout)
+                self.device.native.rpc.file_copy.assert_not_called()
                 verify_file_calls = [
                     mock.call(src_file.checksum, dest_file, hashing_algorithm=src_file.hashing_algorithm)
                 ]
@@ -662,31 +662,98 @@ class TestJnprDevice(unittest.TestCase):
                 self.assertIsNone(result)
 
             with self.subTest("copy succeeded but checksum failed"):
-                self.device.native.rpc.file_copy.reset_mock()
+                mock_shell.run.reset_mock()
                 mock_verify_file.reset_mock()
                 mock_verify_file.side_effect = None
                 mock_verify_file.return_value = False
                 with self.assertRaises(FileTransferError):
                     result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.native.rpc.file_copy.assert_called_once_with(
-                    source=src_file.download_url,
-                    destination=dest_file,
-                    dev_timeout=src_file.timeout,
-                )
+                mock_shell.run.assert_called_once_with(fetch_cmd, timeout=src_file.timeout)
                 verify_file_calls = [
                     mock.call(src_file.checksum, dest_file, hashing_algorithm=src_file.hashing_algorithm)
                 ]
 
                 mock_verify_file.assert_has_calls(verify_file_calls * 6)
 
-            with self.subTest("copy failed surfaces the device's RPC error"):
+            with self.subTest("fetch failure surfaces the device's error and removes the partial file"):
+                mock_shell.run.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                mock_shell.run.side_effect = [
+                    (False, "fetch: /var/tmp/file.bin: No space left on device"),
+                    (True, ""),  # rm -f cleanup of the partial file
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(src_file, dest=dest_file)
+                self.assertIn("No space left on device", str(ctx.exception))
+                mock_shell.run.assert_called_with(f"rm -f {dest_file}")
+
+            with self.subTest("fetch failure masks the URL credential"):
+                mock_shell.run.reset_mock()
+                src_with_creds = FileCopyModel(
+                    download_url="ftp://ntc:s3cret@example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
+                mock_shell.run.side_effect = [
+                    (False, "fetch -q -o /var/tmp/file.bin ftp://ntc:s3cret@example.com/file.bin\nfetch: failed"),
+                    (True, ""),
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(src_with_creds, dest=dest_file)
+                self.assertNotIn("s3cret", str(ctx.exception))
+                self.assertIn("*****", str(ctx.exception))
+
+            with self.subTest("missing fetch binary falls back to the file-copy RPC"):
+                mock_shell.run.reset_mock()
+                mock_verify_file.side_effect = [False, True]
+                mock_shell.run.side_effect = [(False, "fetch: Command not found.")]
+                # PyEZ returns the bool True (not an XML element) for an empty success reply.
+                self.device.native.rpc.file_copy.return_value = True
+                result = self.device.remote_file_copy(src_file, dest=dest_file)
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=src_file.download_url,
+                    destination=dest_file,
+                    dev_timeout=src_file.timeout,
+                )
+                self.assertIsNone(result)
+
+            with self.subTest("non-fetch scheme uses the file-copy RPC"):
+                mock_start_shell.reset_mock()
+                mock_shell.run.reset_mock()
+                mock_shell.run.side_effect = None
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = [False, True]
+                scp_src = FileCopyModel(
+                    download_url="scp://example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
+                result = self.device.remote_file_copy(scp_src, dest=dest_file)
+                mock_start_shell.assert_not_called()
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=scp_src.download_url,
+                    destination=dest_file,
+                    dev_timeout=scp_src.timeout,
+                )
+                self.assertIsNone(result)
+
+            with self.subTest("RPC copy failure surfaces the device's RPC error"):
                 self.device.native.rpc.file_copy.reset_mock()
                 mock_verify_file.side_effect = None
                 mock_verify_file.return_value = False
                 rpc_exc = RpcTimeoutError(self.device.native, "file-copy-rpc", 900)
                 self.device.native.rpc.file_copy.side_effect = rpc_exc
+                scp_src = FileCopyModel(
+                    download_url="scp://example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
                 with self.assertRaises(FileTransferError) as ctx:
-                    result = self.device.remote_file_copy(src_file, dest=dest_file)
+                    result = self.device.remote_file_copy(scp_src, dest=dest_file)
                 # The FileTransferError must carry the underlying RpcError, not discard it.
                 self.assertIn("file-copy-rpc", str(ctx.exception))
                 self.assertIs(ctx.exception.__cause__, rpc_exc)
@@ -925,8 +992,11 @@ class TestJnprFreeSpace(unittest.TestCase):
                 self.device.remote_file_copy(oversized, dest="/var/tmp/file.bin")
         self.device.native.rpc.file_copy.assert_not_called()
 
-    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self):
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self, mock_start_shell):
         """When FileCopyModel has no file_size, _check_free_space is NOT called."""
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://example.com/file.bin",
             checksum="c0ffee",
@@ -939,11 +1009,14 @@ class TestJnprFreeSpace(unittest.TestCase):
         ):
             self.device.remote_file_copy(model, dest="/var/tmp/file.bin")
         mock_check.assert_not_called()
-        self.device.native.rpc.file_copy.assert_called_once()
+        mock_shell.run.assert_called_once()
 
-    def test_remote_file_copy_appends_filename_when_url_has_no_path(self):
-        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before the file-copy RPC."""
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_appends_filename_when_url_has_no_path(self, mock_start_shell):
+        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before the transfer."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220",  # no path
             checksum="c0ffee",
@@ -953,15 +1026,17 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.native.rpc.file_copy.assert_called_once_with(
-            source="ftp://ntc:pw@10.1.100.220/image.bin",
-            destination="/var/tmp/image.bin",
-            dev_timeout=mock.ANY,
+        mock_shell.run.assert_called_once_with(
+            "setenv FTP_PASSIVE_MODE yes; fetch -q -o /var/tmp/image.bin ftp://ntc:pw@10.1.100.220/image.bin",
+            timeout=mock.ANY,
         )
 
-    def test_remote_file_copy_keeps_url_intact_when_path_is_present(self):
-        """When the URL already contains a path, the file-copy RPC receives it unchanged."""
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_keeps_url_intact_when_path_is_present(self, mock_start_shell):
+        """When the URL already contains a path, the transfer receives it unchanged."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
             checksum="c0ffee",
@@ -971,10 +1046,9 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.native.rpc.file_copy.assert_called_once_with(
-            source="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
-            destination="/var/tmp/image.bin",
-            dev_timeout=mock.ANY,
+        mock_shell.run.assert_called_once_with(
+            "setenv FTP_PASSIVE_MODE yes; fetch -q -o /var/tmp/image.bin ftp://ntc:pw@10.1.100.220/subdir/image.bin",
+            timeout=mock.ANY,
         )
 
 

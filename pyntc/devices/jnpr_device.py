@@ -3,6 +3,7 @@
 import hashlib
 import os
 import re
+import shlex
 import time
 import warnings
 from tempfile import NamedTemporaryFile
@@ -14,6 +15,7 @@ from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,n
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
+from jnpr.junos.utils.start_shell import StartShell
 from jnpr.junos.utils.sw import SW as JunosNativeSW
 
 from pyntc import log
@@ -46,6 +48,10 @@ _JUNOS_AVAIL_FORMAT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([BKMGTP]?)\s*$", re
 # the standard destination for ``fs.cp`` transfers on Junos (remote device
 # mount point, not a local temp directory).
 _JUNOS_DEFAULT_FILE_SYSTEM = "/var/tmp"  # noqa: S108
+
+# URL schemes the FreeBSD ``fetch`` binary on Junos can download. Other
+# schemes (e.g., scp) go through the ``file copy`` RPC instead.
+_JUNOS_FETCH_SCHEMES = {"ftp", "http", "https"}
 
 # Hashing algorithms that Junos implements for the ``file checksum`` RPC.
 # Junos does NOT implement sha512; callers passing it will be rejected at the
@@ -1134,8 +1140,78 @@ class JunosDevice(BaseDevice):
         """
         return checksum == self.get_remote_checksum(filename, hashing_algorithm)
 
+    def _remote_file_copy_shell_fetch(self, src, source_url, dest):
+        r"""Download ``source_url`` straight to ``dest`` with the shell ``fetch`` binary.
+
+        The ``file copy`` RPC stages remote fetches under the calling user's
+        home directory (``/var/home/<user>`` on the ``/var`` partition) and
+        only moves the file to the destination afterwards, so it fails with
+        "filesystem is full" whenever the image is larger than the free space
+        on ``/var`` — even when the destination filesystem has plenty of room.
+        ``fetch -o`` writes directly to the destination path with no staging
+        copy. ``-q`` is required, not cosmetic: fetch's progress lines
+        (``89% of 119 MB``) can match PyEZ's shell-prompt pattern
+        ``(%|#|$)\s`` and would end the prompt wait mid-transfer.
+
+        Returns:
+            bool: True when the file was downloaded; False when the platform
+                has no ``fetch`` binary (e.g., Junos Evolved) and the caller
+                should fall back to the ``file copy`` RPC.
+
+        Raises:
+            FileTransferError: When ``fetch`` ran and failed, or the shell
+                session itself could not be established.
+        """
+        fetch_cmd = f"fetch -q -o {shlex.quote(dest)} {shlex.quote(source_url)}"
+        if src.scheme == "ftp":
+            fetch_cmd = f"setenv FTP_PASSIVE_MODE {'yes' if src.ftp_passive else 'no'}; {fetch_cmd}"
+
+        exit_ok, output = False, ""
+        try:
+            with StartShell(self.native) as shell:
+                exit_ok, output = shell.run(fetch_cmd, timeout=src.timeout)
+                if not exit_ok:
+                    if "not found" in output.lower():
+                        log.warning(
+                            "Host %s: no fetch binary on this platform; falling back to the file-copy RPC.",
+                            self.host,
+                        )
+                        return False
+                    # Remove the partial file so it does not consume the space a retry needs.
+                    shell.run(f"rm -f {shlex.quote(dest)}")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: shell fetch from %s failed: %s", self.host, src.clean_url, exc)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
+
+        if not exit_ok:
+            # The echoed fetch command carries the URL credential; mask it.
+            error = output.replace(src.token, "*****").strip() if src.token else output.strip()
+            log.error("Host %s: shell fetch from %s failed: %s", self.host, src.clean_url, error)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {error}")
+        return True
+
+    def _remote_file_copy_rpc(self, src, source_url, dest):
+        """Copy ``source_url`` to ``dest`` with the ``file copy`` RPC.
+
+        Issued directly rather than through PyEZ ``fs.cp``, which wraps the RPC
+        in a bare ``except`` and returns False — discarding the device's actual
+        error message. A successful reply may be the bool True (empty rpc-reply)
+        or an XML element; only an exception means failure.
+        """
+        try:
+            self.native.rpc.file_copy(source=source_url, destination=dest, dev_timeout=src.timeout)
+        except RpcError as exc:
+            log.error("Host %s: file copy from %s failed: %s", self.host, src.clean_url, exc)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
+
     def remote_file_copy(self, src: FileCopyModel = None, dest=None, file_system: str | None = None, **kwargs):
         """Copy a file to a remote device.
+
+        For ``ftp``/``http``/``https`` URLs the transfer runs as a shell
+        ``fetch`` writing directly to ``dest``, avoiding the ``file copy``
+        RPC's staging copy in the user's home directory on ``/var`` (which
+        fails on small-flash platforms). Other schemes, and platforms without
+        a ``fetch`` binary, use the ``file copy`` RPC.
 
         Args:
             src (FileCopyModel): The source file model.
@@ -1162,21 +1238,23 @@ class JunosDevice(BaseDevice):
 
         self._pre_transfer_space_check(src, file_system=file_system)
 
-        # Junos ``fs.cp`` requires the filename in the URL; append ``src.file_name``
+        # The download URL requires the filename; append ``src.file_name``
         # when the URL carries no path so callers can point at a bare host.
         source_url = src.download_url
         if not urlparse(source_url).path.strip("/"):
             source_url = f"{source_url.rstrip('/')}/{src.file_name}"
 
-        # Issue the file-copy RPC directly rather than through PyEZ ``fs.cp``,
-        # which wraps it in a bare ``except`` and returns False — discarding the
-        # device's actual error message. A successful reply may be the bool True
-        # (empty rpc-reply) or an XML element; only an exception means failure.
-        try:
-            self.native.rpc.file_copy(source=source_url, destination=dest, dev_timeout=src.timeout)
-        except RpcError as exc:
-            log.error("Host %s: file copy from %s failed: %s", self.host, src.clean_url, exc)
-            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
+        # The ``file copy`` RPC stages remote fetches in the calling user's home
+        # directory (on the small ``/var`` partition) before moving them to the
+        # destination, so it fails with "filesystem is full" on small-flash
+        # platforms even when the destination filesystem has room. Prefer a
+        # shell ``fetch`` which writes straight to ``dest``; fall back to the
+        # RPC for schemes ``fetch`` cannot handle or platforms without the binary.
+        copied = False
+        if src.scheme in _JUNOS_FETCH_SCHEMES:
+            copied = self._remote_file_copy_shell_fetch(src, source_url, dest)
+        if not copied:
+            self._remote_file_copy_rpc(src, source_url, dest)
 
         # Some devices take a while to sync the filesystem after a copy but netconf returns before the sync completes
         for _ in range(5):
