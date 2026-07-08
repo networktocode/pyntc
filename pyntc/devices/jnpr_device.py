@@ -515,7 +515,7 @@ class JunosDevice(BaseDevice):
             log.warning("Host %s: Could not validate multiple devices: %s", self.host, exc)
             return False
 
-    def _wait_for_system_snapshot(self, timeout=900, interval=30):
+    def _wait_for_system_snapshot(self, timeout=1800, interval=30):
         """Poll device to verify system snapshot completion.
 
         Periodically checks ``show system snapshot media internal`` to verify the snapshot
