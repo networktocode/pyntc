@@ -548,7 +548,7 @@ class JunosDevice(BaseDevice):
             parameters (str, optional): Parameters to pass to the RPC call. Defaults to None.
 
         Raises:
-            OSInstallError: If snapshot verification fails or times out.
+            TimeoutError: When the snapshot verification does not complete within the timeout.
         """
         command = "request system snapshot"
         if parameters is not None:
@@ -849,28 +849,45 @@ class JunosDevice(BaseDevice):
                 install_kwargs["issu"] = True
                 log.info("Host %s: ISSU enabled for multi-device upgrade", self.host)
 
-        install_ok = self.sw.install(**install_kwargs)
+        install_result = self.sw.install(**install_kwargs)
 
         # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
-        if isinstance(install_ok, tuple):
-            install_ok = install_ok[0]
+        install_msg = None
+        if isinstance(install_result, tuple):
+            install_ok, install_msg = install_result[0], install_result[1]
+        else:
+            install_ok = install_result
 
-        log.info("Host %s: install_ok result: %s (type: %s)", self.host, install_ok, type(install_ok).__name__)
+        log.info("Host %s: install_ok result: %s (type: %s)", self.host, install_ok, type(install_result).__name__)
+        if install_msg:
+            log.debug("Host %s: install message: %s", self.host, install_msg)
 
-        # If install_ok is False, it may mean a reboot is pending (not necessarily a failure).
-        # We'll proceed with the reboot and verify the install was successful afterward.
-        if not install_ok:
-            log.warning(
-                "Host %s: install_ok returned False; a reboot may be pending. Proceeding with reboot and post-reboot verification.",
+        # Check if reboot is required (indicated by specific message in output)
+        reboot_required = install_msg and "A reboot is required" in str(install_msg)
+
+        if not install_ok and not reboot_required:
+            log.error(
+                "Host %s: SW install failed for image %s. Device is in undefined state.",
                 self.host,
+                image_name,
             )
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
         if not reboot:
+            if reboot_required:
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
         log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
+        self._uptime = None
         original_uptime = self.uptime
+
+        if original_uptime is None:
+            raise CommandError(
+                command="install_os",
+                message="Could not determine pre-reboot uptime; refusing to reboot.",
+            )
 
         # Issue reboot command based on device configuration
         if is_multiple:
@@ -882,7 +899,7 @@ class JunosDevice(BaseDevice):
 
         # Extract target version from image name for verification
         # Matches formats: 15.1R7-S2, 20.4R3, 21.4X38-D10, 18.4R2.7, etc.
-        match = re.search(r"(\d+\.\d+[A-Z]+[\d\.]+(?:[-][A-Z]+\d+)*)", image_name)
+        match = re.search(r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)", image_name)
         target_version = match.group(1) if match else None
 
         # For NSSU/ISSU on multi-device, wait for all members to reach target version before snapshot

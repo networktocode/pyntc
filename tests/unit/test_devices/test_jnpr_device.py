@@ -466,21 +466,18 @@ class TestJnprDevice(unittest.TestCase):
                                 self.device.sw.reboot.assert_called_once_with(in_min=0)
                                 mock_wait_reboot.assert_called_once()
 
-                        with self.subTest("install fails"):
+                        with self.subTest("install fails immediately"):
                             self.device.sw.install.reset_mock()
+                            self.device.sw.reboot.reset_mock()
                             self.device.sw.install.return_value = False
-                            # When install_ok is False, version check will fail and raise error
-                            # Use an image name with a version so _verify_install_version is called
-                            with mock.patch.object(
-                                self.device,
-                                "_verify_install_version",
-                                side_effect=OSInstallError(hostname="test_host", desired_boot="15.1R7-S2"),
-                            ):
-                                with self.assertRaises(OSInstallError):
-                                    self.device.install_os(
-                                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
-                                        checksum="c0ffee",
-                                    )
+                            with self.assertRaises(OSInstallError):
+                                self.device.install_os(
+                                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                                    checksum="c0ffee",
+                                    reboot=True,
+                                )
+                            # Should not have called reboot after install failure
+                            self.device.sw.reboot.assert_not_called()
 
                         with self.subTest("reboot=False"):
                             with mock.patch.object(self.device, "_verify_install_version"):
@@ -717,6 +714,68 @@ class TestJnprDevice(unittest.TestCase):
             self.device.get_remote_checksum("file.bin", hashing_algorithm="sha512")
         assert "sha512" in str(ctx.exception)
         self.device.fs.checksum.assert_not_called()
+
+    def test_install_os_version_extraction(self):
+        """Test version regex extraction from various image name formats."""
+        import re
+
+        # Pattern from jnpr_device.py line 906
+        pattern = r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)"
+
+        test_cases = [
+            ("/var/tmp/jinstall-15.1R7-S2-signed.tgz", "15.1R7-S2"),
+            ("/var/tmp/image-20.4R3-signed.tgz", "20.4R3"),
+            ("/var/tmp/junos-21.4X38-D10.tgz", "21.4X38-D10"),
+            ("/var/tmp/image-18.4R2.7-signed.tgz", "18.4R2.7"),
+            ("vmhost-21.4R3.15-20230801.11", "21.4R3.15"),
+        ]
+
+        for image_name, expected_version in test_cases:
+            with self.subTest(image_name=image_name):
+                match = re.search(pattern, image_name)
+                extracted = match.group(1) if match else None
+                self.assertEqual(extracted, expected_version, f"Failed to extract version from {image_name}")
+
+    def test_install_os_uptime_none_raises_error(self):
+        """Test that install_os raises error when uptime cannot be determined."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = None
+                self.device.sw.install.return_value = True
+                with self.assertRaises(CommandError) as ctx:
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                self.assertIn("uptime", str(ctx.exception).lower())
+
+    def test_install_os_reboot_required_with_reboot_false_raises_error(self):
+        """Test that install_os raises error when reboot is required but reboot=False."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = 1000
+                reboot_msg = "WARNING: A reboot is required to install the software"
+                self.device.sw.install.return_value = (False, reboot_msg)
+                with self.assertRaises(OSInstallError):
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
+
+    def test_install_os_install_failure_reboot_false_raises_error(self):
+        """Test that install_os raises error immediately when install fails with reboot=False."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = 1000
+                self.device.sw.install.return_value = False
+                with self.assertRaises(OSInstallError):
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
 
 
 class TestJnprFreeSpace(unittest.TestCase):
