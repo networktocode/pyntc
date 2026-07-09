@@ -281,11 +281,10 @@ class JunosDevice(BaseDevice):
 
         Args:
             original_uptime (int): Device uptime in seconds captured before the reboot.
-            timeout (int, optional): Max seconds to wait for the device to return. Defaults to 2 hours.
+            timeout (int, optional): Max seconds to poll for the device to return,
+                counted after the initial warm-up delay. Defaults to 2 hours.
             is_multiple (bool, optional): Whether device is in multi-device configuration. Defaults to False.
         """
-        start = time.time()
-
         # Drop the pre-reboot NETCONF session so subsequent probes can't read from
         # a stale connection PyEZ still reports as connected.
         try:
@@ -300,6 +299,9 @@ class JunosDevice(BaseDevice):
             _JUNOS_POLL_WARMUP_SECONDS,
         )
         time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
+
+        # Start the clock after the warm-up so ``timeout`` is the real polling window.
+        start = time.time()
 
         while time.time() - start < timeout:
             try:
@@ -354,7 +356,11 @@ class JunosDevice(BaseDevice):
         ]
 
     def _vc_member_count(self):
-        """Count VC members from the currently cached re_info facts (no refresh)."""
+        """Count VC members from the currently cached re_info facts (no refresh).
+
+        Only the virtual-chassis ``re_info['default']`` structure is recognized;
+        other layouts (e.g., SRX chassis-cluster) yield 0.
+        """
         members = self.native.facts.get("re_info", {}).get("default", {})
         return len([name for name in members if name != "default"])
 
@@ -540,9 +546,11 @@ class JunosDevice(BaseDevice):
             raise
 
     def _validate_multiple_device(self):
-        """Check if device is in virtual-chassis or chassis-cluster configuration.
+        """Check if device is in a multi-member configuration.
 
         Inspects re_info from PyEZ facts to determine if multiple members are present.
+        Currently only the virtual-chassis ``re_info['default']`` structure is
+        recognized; chassis-cluster (SRX) layouts are not yet detected.
 
         Returns:
             bool: True if multiple members are present, False otherwise.
@@ -572,7 +580,8 @@ class JunosDevice(BaseDevice):
         was successfully taken. Used when the ``request system snapshot`` RPC times out.
 
         Args:
-            timeout (int, optional): Max seconds to wait for snapshot verification. Defaults to 900 (15 minutes).
+            timeout (int, optional): Max seconds to poll for snapshot verification,
+                counted after the initial warm-up delay. Defaults to 1800 (30 minutes).
             interval (int, optional): Seconds between verification polls. Defaults to 30 seconds.
 
         Raises:
@@ -584,8 +593,6 @@ class JunosDevice(BaseDevice):
             timeout,
             interval,
         )
-        start = time.time()
-
         # Give the snapshot time to complete before polling
         log.info(
             "Host %s: Waiting %s seconds for snapshot to complete before polling...",
@@ -593,6 +600,9 @@ class JunosDevice(BaseDevice):
             _JUNOS_POLL_WARMUP_SECONDS,
         )
         time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
+
+        # Start the clock after the warm-up so ``timeout`` is the real polling window.
+        start = time.time()
 
         while time.time() - start < timeout:
             try:
@@ -887,7 +897,7 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False):  # pylint: disable=too-many-positional-arguments,too-many-branches
+    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False):  # pylint: disable=too-many-positional-arguments
         """Install OS on device and reboot.
 
         For multi-device setups (virtual-chassis, chassis-cluster), supports NSSU/ISSU
@@ -999,10 +1009,41 @@ class JunosDevice(BaseDevice):
             else:
                 self.reboot(wait_for_reload=True)
 
-        # Extract target version from image name for verification
+        self._post_install_checks(image_name, is_multiple, in_service, nssu, verification_required=not install_ok)
+
+        log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
+        return True
+
+    def _post_install_checks(self, image_name, is_multiple, in_service, nssu, verification_required=False):  # pylint: disable=too-many-positional-arguments
+        """Wait for in-service completion, snapshot, and verify the running version.
+
+        Args:
+            image_name (str): Name of the installed image; the target version is
+                extracted from it. When no version can be extracted, the completion
+                wait and version verification are skipped with a warning.
+            is_multiple (bool): Whether device is in multi-device configuration.
+            in_service (bool): Whether the install ran as NSSU/ISSU.
+            nssu (bool): True for NSSU, False for ISSU; only used for log labels.
+            verification_required (bool): True when the install only proceeded on the
+                "A reboot is required" heuristic (PyEZ reported failure); post-reboot
+                version verification is then the only proof the install worked, so an
+                unverifiable image name raises instead of warning.
+
+        Raises:
+            OSInstallError: When ``verification_required`` is True and no version can
+                be extracted from ``image_name`` to verify against.
+        """
         match = _JUNOS_VERSION_RE.search(image_name)
         target_version = match.group(1) if match else None
         if target_version is None:
+            if verification_required:
+                log.error(
+                    "Host %s: Install of %s reported failure and its result cannot be verified "
+                    "(no parseable version in the image name); treating as failed.",
+                    self.host,
+                    image_name,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
             log.warning(
                 "Host %s: Could not extract version from image name %s; skipping post-install version checks",
                 self.host,
@@ -1030,9 +1071,6 @@ class JunosDevice(BaseDevice):
         # Verify the install was successful by checking the running version
         if target_version and not verified_by_completion_wait:
             self._verify_install_version(target_version, is_multiple)
-
-        log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
-        return True
 
     def open(self):
         """Open connection to device."""
@@ -1241,7 +1279,10 @@ class JunosDevice(BaseDevice):
             with StartShell(self.native) as shell:
                 exit_ok, output = shell.run(fetch_cmd, timeout=src.timeout)
                 if not exit_ok:
-                    if "not found" in output.lower():
+                    # csh reports "fetch: Command not found."; sh reports "fetch: not
+                    # found". A bare "not found" check would also match fetch's own
+                    # HTTP 404 error text and misroute a real transfer failure.
+                    if "command not found" in output.lower() or "fetch: not found" in output.lower():
                         log.warning(
                             "Host %s: no fetch binary on this platform; falling back to the file-copy RPC.",
                             self.host,

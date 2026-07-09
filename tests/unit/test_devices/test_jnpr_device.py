@@ -672,8 +672,12 @@ class TestJnprDevice(unittest.TestCase):
         with self.subTest("snapshot times out"):
             mock_sleep.reset_mock()
             self.device.native.cli.return_value = "No snapshots found"
-            with self.assertRaises(TimeoutError) as ctx:
-                self.device._wait_for_system_snapshot(timeout=10)
+            # time.sleep is mocked, so a real clock would busy-spin for the full
+            # timeout; a fake monotonic clock keeps the test fast and deterministic.
+            fake_clock = itertools.count(start=0, step=3)
+            with mock.patch("pyntc.devices.jnpr_device.time.time", side_effect=lambda: next(fake_clock)):
+                with self.assertRaises(TimeoutError) as ctx:
+                    self.device._wait_for_system_snapshot(timeout=10)
             self.assertIn("did not complete", str(ctx.exception))
 
     def test_get_all_members_version(self):
@@ -892,6 +896,21 @@ class TestJnprDevice(unittest.TestCase):
                 )
                 self.assertIsNone(result)
 
+            with self.subTest("HTTP 404 is a transfer failure, not a missing fetch binary"):
+                mock_shell.run.reset_mock()
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                mock_shell.run.side_effect = [
+                    (False, "fetch: ftp://example.com/file.bin: Not Found"),
+                    (True, ""),  # rm -f cleanup of the partial file
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(src_file, dest=dest_file)
+                self.assertIn("Not Found", str(ctx.exception))
+                # A 404 must not be misrouted to the doomed RPC fallback.
+                self.device.native.rpc.file_copy.assert_not_called()
+
             with self.subTest("non-fetch scheme uses the file-copy RPC"):
                 mock_start_shell.reset_mock()
                 mock_shell.run.reset_mock()
@@ -976,6 +995,23 @@ class TestJnprDevice(unittest.TestCase):
                 match = jnpr_device._JUNOS_VERSION_RE.search(image_name)
                 extracted = match.group(1) if match else None
                 self.assertEqual(extracted, expected_version, f"Failed to extract version from {image_name}")
+
+    def test_install_os_ambiguous_install_without_version_raises(self):
+        """An install that only proceeded on the reboot-required heuristic must not report success unverified."""
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=False),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = (False, "WARNING: A reboot is required to install the software")
+            with self.assertRaises(OSInstallError):
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-noversion.tgz",  # no parseable version
+                    checksum="c0ffee",
+                    reboot=True,
+                )
 
     def test_install_os_uptime_none_raises_error(self):
         """Test that install_os raises error when uptime cannot be determined."""
