@@ -899,14 +899,16 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False):  # pylint: disable=too-many-positional-arguments
+    def install_os(
+        self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False, snapshot=False
+    ):  # pylint: disable=too-many-positional-arguments
         """Install OS on device and reboot.
 
         For multi-device setups (virtual-chassis, chassis-cluster), supports NSSU/ISSU
-        upgrades and system snapshots after reboot. NSSU/ISSU performs its own rolling
-        reboot member-by-member during the install, so no separate reboot is issued on
-        that path; completion is verified by polling until every member reports the
-        target version.
+        upgrades and optional system snapshots after reboot. NSSU/ISSU performs its own
+        rolling reboot member-by-member during the install, so no separate reboot is
+        issued on that path; completion is verified by polling until every member
+        reports the target version.
 
         Args:
             image_name (str): Name of image.
@@ -915,6 +917,12 @@ class JunosDevice(BaseDevice):
             hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
             nssu (bool): Enable Nonstop Software Upgrade. Defaults to False.
             issu (bool): Enable In-Service Software Upgrade. Defaults to False.
+            snapshot (bool): Take a post-upgrade ``request system snapshot slice alternate``
+                to sync the alternate root with the new version. Junos does not require a
+                snapshot to complete an upgrade, but on dual-root platforms an unsynced
+                alternate slice boots the OLD version if the device ever falls back to it.
+                Snapshots can take 25+ minutes per member on small-flash platforms.
+                Defaults to False.
 
         Raises:
             ValueError: When both nssu and issu are True (mutually exclusive), or when
@@ -986,7 +994,14 @@ class JunosDevice(BaseDevice):
 
         self._reboot_to_apply(image_name, is_multiple, in_service, nssu)
 
-        self._post_install_checks(image_name, is_multiple, in_service, nssu, verification_required=not install_ok)
+        self._post_install_checks(
+            image_name,
+            is_multiple,
+            in_service,
+            nssu,
+            verification_required=not install_ok,
+            snapshot=snapshot,
+        )
 
         log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
         return True
@@ -1032,8 +1047,10 @@ class JunosDevice(BaseDevice):
         else:
             self.reboot(wait_for_reload=True)
 
-    def _post_install_checks(self, image_name, is_multiple, in_service, nssu, verification_required=False):  # pylint: disable=too-many-positional-arguments
-        """Wait for in-service completion, snapshot, and verify the running version.
+    def _post_install_checks(
+        self, image_name, is_multiple, in_service, nssu, verification_required=False, snapshot=False
+    ):  # pylint: disable=too-many-positional-arguments
+        """Wait for in-service completion, optionally snapshot, and verify the running version.
 
         Args:
             image_name (str): Name of the installed image; the target version is
@@ -1046,6 +1063,8 @@ class JunosDevice(BaseDevice):
                 "A reboot is required" heuristic (PyEZ reported failure); post-reboot
                 version verification is then the only proof the install worked, so an
                 unverifiable image name raises instead of warning.
+            snapshot (bool): Take a post-upgrade system snapshot and wait for it to
+                complete. Defaults to False.
 
         Raises:
             OSInstallError: When ``verification_required`` is True and no version can
@@ -1083,8 +1102,9 @@ class JunosDevice(BaseDevice):
             # ``show version all-members`` while it reboots must not count as done.
             self._wait_for_nssu_completion(target_version, expected_members=self._vc_member_count() or None)
 
-        # Perform system snapshot after reboot/upgrade
-        self.request_system_snapshot(parameters="slice alternate all-members" if is_multiple else "slice alternate")
+        # Optionally sync the alternate root with the new version after reboot/upgrade
+        if snapshot:
+            self.request_system_snapshot(parameters="slice alternate all-members" if is_multiple else "slice alternate")
 
         # Verify the install was successful by checking the running version
         if target_version and not verified_by_completion_wait:

@@ -555,6 +555,45 @@ class TestJnprDevice(unittest.TestCase):
             # the separate post-snapshot verification must not repeat it.
             mock_verify.assert_not_called()
 
+    def test_install_os_snapshot_option(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members"),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot") as mock_snapshot,
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+
+            with self.subTest("snapshot is skipped by default"):
+                mock_validate.return_value = False
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                )
+                mock_snapshot.assert_not_called()
+
+            with self.subTest("snapshot=True on a single device"):
+                mock_validate.return_value = False
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                    snapshot=True,
+                )
+                mock_snapshot.assert_called_once_with(parameters="slice alternate")
+
+            with self.subTest("snapshot=True on a virtual chassis"):
+                mock_snapshot.reset_mock()
+                mock_validate.return_value = True
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                    snapshot=True,
+                )
+                mock_snapshot.assert_called_once_with(parameters="slice alternate all-members")
+
     def test_install_os_nssu_with_reboot_false_raises_value_error(self):
         with mock.patch.object(self.device, "_validate_multiple_device", return_value=True):
             with self.assertRaises(ValueError):
