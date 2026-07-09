@@ -53,6 +53,14 @@ _JUNOS_DEFAULT_FILE_SYSTEM = "/var/tmp"  # noqa: S108
 # schemes (e.g., scp) go through the ``file copy`` RPC instead.
 _JUNOS_FETCH_SCHEMES = {"ftp", "http", "https"}
 
+# Head start given to reboots and snapshots before the first status poll —
+# probing earlier burns round-trips against a device that cannot be ready yet.
+_JUNOS_POLL_WARMUP_SECONDS = 180
+
+# Extracts a Junos version from an install image filename.
+# Matches formats: 15.1R7-S2, 20.4R3, 21.4X38-D10, 18.4R2.7, etc.
+_JUNOS_VERSION_RE = re.compile(r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)")
+
 # Hashing algorithms that Junos implements for the ``file checksum`` RPC.
 # Junos does NOT implement sha512; callers passing it will be rejected at the
 # driver boundary rather than surfacing PyEZ's raw ValueError deeper in the
@@ -286,8 +294,12 @@ class JunosDevice(BaseDevice):
             log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
 
         # Give the device time to boot before polling (avoid hammering a device that's still starting up)
-        log.info("Host %s: Waiting 180 seconds for device to boot before polling...", self.host)
-        time.sleep(180)
+        log.info(
+            "Host %s: Waiting %s seconds for device to boot before polling...",
+            self.host,
+            _JUNOS_POLL_WARMUP_SECONDS,
+        )
+        time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
 
         while time.time() - start < timeout:
             try:
@@ -295,40 +307,21 @@ class JunosDevice(BaseDevice):
                 self._uptime = None
                 current_uptime = self.uptime
 
-                if is_multiple:
-                    # For multi-device, check that no members are in pending state
-                    self.native.facts_refresh()
-                    re_info = self.native.facts.get("re_info", {})
-                    # Virtual-chassis structure: members are under re_info['default']
-                    members = re_info.get("default", {})
-                    pending_members = [
-                        name
-                        for name, info in members.items()
-                        if name != "default" and isinstance(info, dict) and info.get("status") == "pending"
-                    ]
-                    if pending_members:
-                        log.debug(
-                            "Host %s: Members still pending reboot: %s; still waiting.",
-                            self.host,
-                            pending_members,
-                        )
-                    elif current_uptime is not None and current_uptime < original_uptime:
-                        log.info(
-                            "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
-                            self.host,
-                            current_uptime,
-                            original_uptime,
-                        )
-                        return
+                if is_multiple and (pending_members := self._pending_reboot_members()):
+                    log.debug(
+                        "Host %s: Members still pending reboot: %s; still waiting.",
+                        self.host,
+                        pending_members,
+                    )
+                elif current_uptime is not None and current_uptime < original_uptime:
+                    log.info(
+                        "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
+                        self.host,
+                        current_uptime,
+                        original_uptime,
+                    )
+                    return
                 else:
-                    if current_uptime is not None and current_uptime < original_uptime:
-                        log.info(
-                            "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
-                            self.host,
-                            current_uptime,
-                            original_uptime,
-                        )
-                        return
                     log.debug(
                         "Host %s: Reachable but uptime %ss >= pre-reboot %ss; still waiting.",
                         self.host,
@@ -342,51 +335,92 @@ class JunosDevice(BaseDevice):
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
-    def _wait_for_nssu_completion(self, target_version, timeout=3600, interval=60):
-        """Wait for all members to complete NSSU and run target version.
+    def _pending_reboot_members(self):
+        """Return VC member names whose re_info status is still "pending"."""
+        # Scoped refresh: a full facts_refresh() re-collects every fact (many RPCs)
+        # when only re_info is needed here.
+        try:
+            self.native.facts_refresh(keys="re_info")
+        except RuntimeError:
+            # PyEZ only supports scoped refreshes with fact_style="new" (its default);
+            # "old"/"both" raise RuntimeError, so fall back to a full refresh.
+            self.native.facts_refresh()
+        # Virtual-chassis structure: members are under re_info['default']
+        members = self.native.facts.get("re_info", {}).get("default", {})
+        return [
+            name
+            for name, info in members.items()
+            if name != "default" and isinstance(info, dict) and info.get("status") == "pending"
+        ]
+
+    def _vc_member_count(self):
+        """Count VC members from the currently cached re_info facts (no refresh)."""
+        members = self.native.facts.get("re_info", {}).get("default", {})
+        return len([name for name in members if name != "default"])
+
+    def _wait_for_nssu_completion(self, target_version, timeout=3600, interval=60, expected_members=None):
+        """Wait for all members to complete NSSU/ISSU and run target version.
 
         Polls device to verify all members are running the same (target) software version.
-        Used to ensure NSSU/ISSU has fully completed before proceeding.
+        The in-service upgrade reboots each member itself (the old master goes down right
+        as the install RPC returns), so each poll reconnects if the session dropped.
 
         Args:
             target_version (str): Target software version (e.g., "15.1R7-S2").
             timeout (int, optional): Max seconds to wait. Defaults to 1 hour.
             interval (int, optional): Seconds between version checks. Defaults to 60.
+            expected_members (int, optional): Number of members that must report a
+                version before the result is trusted. Guards against declaring
+                success while a member is mid-reboot and absent from
+                ``show version all-members``. When ``None``, any non-empty result
+                is compared as-is.
 
         Raises:
             OSInstallError: When all members don't match target version within timeout.
         """
         start = time.time()
 
+        # Drop the pre-install NETCONF session first: the old master's reboot kills the
+        # transport, but PyEZ can still report it as connected — the same quirk
+        # _wait_for_device_reboot guards against. Closing forces a fresh connection.
+        try:
+            self.close()
+        except Exception as close_exc:  # pylint: disable=broad-exception-caught
+            log.debug("Host %s: Pre-poll disconnect raised %s (ignored).", self.host, close_exc)
+
         while time.time() - start < timeout:
             try:
+                self.open()
                 members_versions = self._get_all_members_version()
-                if not members_versions:
-                    log.debug("Host %s: Could not retrieve member versions; will retry.", self.host)
-                    time.sleep(interval)
-                    continue
-
-                # Check if all members are running the target version
-                all_match = all(v == target_version for v in members_versions.values())
                 mismatched = {m: v for m, v in members_versions.items() if v != target_version}
 
-                if all_match:
+                if not members_versions:
+                    log.debug("Host %s: Could not retrieve member versions; will retry.", self.host)
+                elif expected_members is not None and len(members_versions) < expected_members:
+                    log.debug(
+                        "Host %s: Only %s of %s members reporting a version; still waiting.",
+                        self.host,
+                        len(members_versions),
+                        expected_members,
+                    )
+                elif not mismatched:
                     log.info(
                         "Host %s: All members running target version %s.",
                         self.host,
                         target_version,
                     )
                     return
-
-                log.debug(
-                    "Host %s: Members not all on target version %s. Still waiting on: %s",
-                    self.host,
-                    target_version,
-                    mismatched,
-                )
+                else:
+                    log.debug(
+                        "Host %s: Members not all on target version %s. Still waiting on: %s",
+                        self.host,
+                        target_version,
+                        mismatched,
+                    )
 
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 log.debug("Host %s: Version check failed (%s); will retry.", self.host, exc)
+                self.native.connected = False
 
             time.sleep(interval)
 
@@ -412,7 +446,10 @@ class JunosDevice(BaseDevice):
             members_versions = {}
             current_member = None
 
-            for line in version_output.split("\n"):
+            # splitlines() + strip() normalize CRLF endings and stray indentation
+            # from the CLI transport, which would otherwise silently defeat the
+            # startswith/endswith checks below.
+            for line in (raw_line.strip() for raw_line in version_output.splitlines()):
                 # Detect member header (fpc0:, fpc1:, etc.)
                 if line.startswith("fpc") and line.endswith(":"):
                     current_member = line.split("fpc")[1].rstrip(":")
@@ -422,12 +459,17 @@ class JunosDevice(BaseDevice):
                 if current_member is None or members_versions[current_member] is not None:
                     continue
 
-                # Junos 13.2+ prints a dedicated "Junos: <version>" line. Older
+                # Junos 13.2+ prints a dedicated "Junos: <version>" line, which
+                # always precedes the package list when both exist. Older
                 # releases only list packages, and the package names vary by
                 # platform (EX 15.1 has no "JUNOS Base OS Software Suite" line),
                 # so fall back to the first "JUNOS <package> [<version>]" line.
                 if line.startswith("Junos:"):
-                    members_versions[current_member] = line.split(":", 1)[1].strip()
+                    # First token only: drops qualifiers like "15.1R7-S2 Limited"
+                    # that would break exact-match comparison to target_version.
+                    tokens = line.split(":", 1)[1].split()
+                    if tokens:
+                        members_versions[current_member] = tokens[0]
                 elif line.startswith("JUNOS"):
                     match = re.search(r"\[([^\]]+)\]", line)
                     if match:
@@ -545,8 +587,12 @@ class JunosDevice(BaseDevice):
         start = time.time()
 
         # Give the snapshot time to complete before polling
-        log.info("Host %s: Waiting 180 seconds for snapshot to complete before polling...", self.host)
-        time.sleep(180)
+        log.info(
+            "Host %s: Waiting %s seconds for snapshot to complete before polling...",
+            self.host,
+            _JUNOS_POLL_WARMUP_SECONDS,
+        )
+        time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
 
         while time.time() - start < timeout:
             try:
@@ -591,7 +637,6 @@ class JunosDevice(BaseDevice):
             command = f"{command} {parameters}"
 
         response = None
-        rpc_timed_out = False
 
         try:
             log.info("Host %s: Issuing snapshot RPC: %s", self.host, command)
@@ -600,7 +645,6 @@ class JunosDevice(BaseDevice):
 
         except RpcTimeoutError:
             log.debug("Host %s: snapshot RPC timed out; will poll device to verify.", self.host)
-            rpc_timed_out = True
 
         except Exception as rpc_error:
             log.error("Host %s: Failed to request system snapshot (%s).", self.host, rpc_error)
@@ -611,9 +655,8 @@ class JunosDevice(BaseDevice):
             log.info("Host %s: Snapshot completed successfully (fast path).", self.host)
             return
 
-        # If RPC timed out or response didn't indicate completion, poll to verify (slow path)
-        if rpc_timed_out or response is None:
-            log.debug("Host %s: Snapshot response unclear or timed out; polling device to verify.", self.host)
+        # Response unclear or RPC timed out; poll to verify (slow path)
+        log.debug("Host %s: Snapshot response unclear or timed out; polling device to verify.", self.host)
         self._wait_for_system_snapshot()
 
     def backup_running_config(self, filename):
@@ -848,7 +891,10 @@ class JunosDevice(BaseDevice):
         """Install OS on device and reboot.
 
         For multi-device setups (virtual-chassis, chassis-cluster), supports NSSU/ISSU
-        upgrades and system snapshots after reboot.
+        upgrades and system snapshots after reboot. NSSU/ISSU performs its own rolling
+        reboot member-by-member during the install, so no separate reboot is issued on
+        that path; completion is verified by polling until every member reports the
+        target version.
 
         Args:
             image_name (str): Name of image.
@@ -859,12 +905,24 @@ class JunosDevice(BaseDevice):
             issu (bool): Enable In-Service Software Upgrade. Defaults to False.
 
         Raises:
-            ValueError: When both nssu and issu are True (mutually exclusive).
+            ValueError: When both nssu and issu are True (mutually exclusive), or when
+                ``reboot=False`` is combined with an in-service (NSSU/ISSU) upgrade on a
+                multi-device setup — the in-service install reboots the members itself,
+                so there is no reboot left to defer.
         """
         if nssu and issu:
             raise ValueError("nssu and issu are mutually exclusive; only one can be True")
 
         is_multiple = self._validate_multiple_device()
+
+        # In-service upgrades only apply to multi-device setups; on a standalone
+        # device the nssu/issu flags are ignored and a standard install runs.
+        in_service = (nssu or issu) and is_multiple
+        if in_service and not reboot:
+            raise ValueError(
+                "reboot=False cannot be combined with nssu/issu on a multi-device setup; "
+                "the in-service upgrade reboots the members as part of the install"
+            )
 
         install_kwargs = {
             "package": image_name,
@@ -876,30 +934,29 @@ class JunosDevice(BaseDevice):
             "timeout": 3600,
         }
 
-        # Add NSSU/ISSU parameters for multi-device setups
-        if is_multiple:
-            if nssu:
-                install_kwargs["nssu"] = True
-                log.info("Host %s: NSSU enabled for multi-device upgrade", self.host)
-            elif issu:
-                install_kwargs["issu"] = True
-                log.info("Host %s: ISSU enabled for multi-device upgrade", self.host)
-
-        install_result = self.sw.install(**install_kwargs)
+        if in_service:
+            install_kwargs["nssu" if nssu else "issu"] = True
+            log.info(
+                "Host %s: %s enabled for multi-device upgrade",
+                self.host,
+                "NSSU" if nssu else "ISSU",
+            )
 
         # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
+        install_ok = self.sw.install(**install_kwargs)
         install_msg = None
-        if isinstance(install_result, tuple):
-            install_ok, install_msg = install_result[0], install_result[1]
-        else:
-            install_ok = install_result
+        if isinstance(install_ok, tuple):
+            install_ok, install_msg = install_ok[0], install_ok[1]
 
-        log.info("Host %s: install_ok result: %s (type: %s)", self.host, install_ok, type(install_result).__name__)
+        log.info("Host %s: install_ok result: %s", self.host, install_ok)
         if install_msg:
             log.debug("Host %s: install message: %s", self.host, install_msg)
 
-        # Check if reboot is required (indicated by specific message in output)
-        reboot_required = install_msg and "A reboot is required" in str(install_msg)
+        # Check if reboot is required (indicated by specific message in output).
+        # NSSU/ISSU per-member output contains "A reboot is required" as informational
+        # text, but the rolling reboot already happens inside the install — don't
+        # treat it as an outstanding manual reboot on that path.
+        reboot_required = bool(install_msg) and "A reboot is required" in str(install_msg) and not in_service
 
         if not install_ok and not reboot_required:
             log.error(
@@ -915,59 +972,64 @@ class JunosDevice(BaseDevice):
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
-        log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
-        self._uptime = None
-        original_uptime = self.uptime
-
-        if original_uptime is None:
-            raise CommandError(
-                command="install_os",
-                message="Could not determine pre-reboot uptime; refusing to reboot.",
+        if in_service:
+            # The in-service upgrade already rolled through the members and rebooted
+            # each one inside ``sw.install()`` — the old master is typically still
+            # rebooting when the install RPC returns. Issuing another reboot here
+            # would take the whole chassis down and race that in-progress reboot.
+            log.info(
+                "Host %s: %s performed its rolling reboot during install; skipping manual reboot",
+                self.host,
+                "NSSU" if nssu else "ISSU",
             )
-
-        # Issue reboot command based on device configuration
-        if is_multiple:
-            self._request_system_reboot_all_members()
         else:
-            self.sw.reboot(in_min=0)
+            log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
+            if is_multiple:
+                self._uptime = None
+                original_uptime = self.uptime
 
-        self._wait_for_device_reboot(original_uptime, is_multiple=is_multiple)
+                if original_uptime is None:
+                    raise CommandError(
+                        command="install_os",
+                        message="Could not determine pre-reboot uptime; refusing to reboot.",
+                    )
+
+                self._request_system_reboot_all_members()
+                self._wait_for_device_reboot(original_uptime, is_multiple=True)
+            else:
+                self.reboot(wait_for_reload=True)
 
         # Extract target version from image name for verification
-        # Matches formats: 15.1R7-S2, 20.4R3, 21.4X38-D10, 18.4R2.7, etc.
-        match = re.search(r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)", image_name)
+        match = _JUNOS_VERSION_RE.search(image_name)
         target_version = match.group(1) if match else None
-
-        # For NSSU/ISSU on multi-device, wait for all members to reach target version before snapshot
-        if (nssu or issu) and is_multiple:
-            if target_version:
-                log.info(
-                    "Host %s: Waiting for all members to complete %s upgrade to version %s",
-                    self.host,
-                    "NSSU" if nssu else "ISSU",
-                    target_version,
-                )
-                self._wait_for_nssu_completion(target_version)
-            else:
-                log.warning(
-                    "Host %s: Could not extract version from image name %s; skipping NSSU/ISSU completion wait",
-                    self.host,
-                    image_name,
-                )
-
-        # Perform system snapshot after reboot/upgrade
-        snapshot_params = "slice alternate all-members" if is_multiple else "slice alternate"
-        self.request_system_snapshot(parameters=snapshot_params)
-
-        # Verify the install was successful by checking the running version
-        if target_version:
-            self._verify_install_version(target_version, is_multiple)
-        else:
+        if target_version is None:
             log.warning(
-                "Host %s: Could not extract version from image name %s; skipping post-reboot version verification",
+                "Host %s: Could not extract version from image name %s; skipping post-install version checks",
                 self.host,
                 image_name,
             )
+
+        # For in-service upgrades, wait for all members to reach the target version before
+        # snapshot. This wait already confirms every member runs target_version, so the
+        # post-snapshot verification below would just repeat the same RPC and check.
+        verified_by_completion_wait = bool(target_version) and in_service
+        if verified_by_completion_wait:
+            log.info(
+                "Host %s: Waiting for all members to complete %s upgrade to version %s",
+                self.host,
+                "NSSU" if nssu else "ISSU",
+                target_version,
+            )
+            # Member count from the pre-install facts: a member absent from
+            # ``show version all-members`` while it reboots must not count as done.
+            self._wait_for_nssu_completion(target_version, expected_members=self._vc_member_count() or None)
+
+        # Perform system snapshot after reboot/upgrade
+        self.request_system_snapshot(parameters="slice alternate all-members" if is_multiple else "slice alternate")
+
+        # Verify the install was successful by checking the running version
+        if target_version and not verified_by_completion_wait:
+            self._verify_install_version(target_version, is_multiple)
 
         log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
         return True

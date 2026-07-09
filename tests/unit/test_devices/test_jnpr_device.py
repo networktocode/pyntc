@@ -1,3 +1,4 @@
+import itertools
 import os
 import unittest
 from tempfile import NamedTemporaryFile
@@ -6,7 +7,7 @@ import mock
 import pytest
 from jnpr.junos.exception import ConfigLoadError, RpcTimeoutError
 
-from pyntc.devices import JunosDevice
+from pyntc.devices import JunosDevice, jnpr_device
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -450,96 +451,192 @@ class TestJnprDevice(unittest.TestCase):
             self.assertTrue(result)
 
     def test_install_os_single_device(self):
-        with mock.patch.object(self.device, "_validate_multiple_device") as mock_validate:
-            with mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot:
-                with mock.patch.object(self.device, "request_system_snapshot"):
-                    with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
-                        mock_uptime.return_value = 1000
-                        with self.subTest("install succeeds, reboot requested"):
-                            with mock.patch.object(self.device, "_verify_install_version"):
-                                mock_validate.return_value = False
-                                self.device.sw.install.return_value = True
-                                result = self.device.install_os(
-                                    image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
-                                    checksum="c0ffee",
-                                    reboot=True,
-                                )
-                                self.assertTrue(result)
-                                self.device.sw.install.assert_called_once()
-                                self.device.sw.reboot.assert_called_once_with(in_min=0)
-                                mock_wait_reboot.assert_called_once()
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            with self.subTest("install succeeds, reboot requested"):
+                with mock.patch.object(self.device, "_verify_install_version"):
+                    mock_validate.return_value = False
+                    self.device.sw.install.return_value = True
+                    result = self.device.install_os(
+                        image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                    self.assertTrue(result)
+                    self.device.sw.install.assert_called_once()
+                    self.device.sw.reboot.assert_called_once_with(in_min=0)
+                    mock_wait_reboot.assert_called_once()
 
-                        with self.subTest("install fails immediately"):
-                            self.device.sw.install.reset_mock()
-                            self.device.sw.reboot.reset_mock()
-                            self.device.sw.install.return_value = False
-                            with self.assertRaises(OSInstallError):
-                                self.device.install_os(
-                                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
-                                    checksum="c0ffee",
-                                    reboot=True,
-                                )
-                            # Should not have called reboot after install failure
-                            self.device.sw.reboot.assert_not_called()
+            with self.subTest("install fails immediately"):
+                self.device.sw.install.reset_mock()
+                self.device.sw.reboot.reset_mock()
+                self.device.sw.install.return_value = False
+                with self.assertRaises(OSInstallError):
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                # Should not have called reboot after install failure
+                self.device.sw.reboot.assert_not_called()
 
-                        with self.subTest("reboot=False"):
-                            with mock.patch.object(self.device, "_verify_install_version"):
-                                self.device.sw.install.reset_mock()
-                                self.device.sw.reboot.reset_mock()
-                                self.device.sw.install.return_value = True
-                                result = self.device.install_os(
-                                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
-                                    checksum="c0ffee",
-                                    reboot=False,
-                                )
-                                self.assertTrue(result)
-                                self.device.sw.reboot.assert_not_called()
+            with self.subTest("reboot=False"):
+                with mock.patch.object(self.device, "_verify_install_version"):
+                    self.device.sw.install.reset_mock()
+                    self.device.sw.reboot.reset_mock()
+                    self.device.sw.install.return_value = True
+                    result = self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
+                    self.assertTrue(result)
+                    self.device.sw.reboot.assert_not_called()
 
     def test_install_os_multi_device(self):
-        with mock.patch.object(self.device, "_validate_multiple_device") as mock_validate:
-            with mock.patch.object(self.device, "_request_system_reboot_all_members") as mock_reboot_all:
-                with mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot:
-                    with mock.patch.object(self.device, "request_system_snapshot"):
-                        with mock.patch.object(self.device, "_verify_install_version"):
-                            with mock.patch.object(
-                                type(self.device), "uptime", new_callable=mock.PropertyMock
-                            ) as mock_uptime:
-                                mock_uptime.return_value = 1000
-                                mock_validate.return_value = True
-                                self.device.sw.install.return_value = True
-                                result = self.device.install_os(
-                                    image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
-                                    checksum="c0ffee",
-                                    reboot=True,
-                                )
-                                self.assertTrue(result)
-                                # Should call multi-device reboot, not sw.reboot
-                                mock_reboot_all.assert_called_once()
-                                self.device.sw.reboot.assert_not_called()
-                                mock_wait_reboot.assert_called_once()
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members") as mock_reboot_all,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            mock_validate.return_value = True
+            self.device.sw.install.return_value = True
+            result = self.device.install_os(
+                image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
+                checksum="c0ffee",
+                reboot=True,
+            )
+            self.assertTrue(result)
+            # Should call multi-device reboot, not sw.reboot
+            mock_reboot_all.assert_called_once()
+            self.device.sw.reboot.assert_not_called()
+            mock_wait_reboot.assert_called_once()
 
     def test_install_os_with_nssu(self):
-        with mock.patch.object(self.device, "_validate_multiple_device") as mock_validate:
-            with mock.patch.object(self.device, "_request_system_reboot_all_members"):
-                with mock.patch.object(self.device, "_wait_for_device_reboot"):
-                    with mock.patch.object(self.device, "_wait_for_nssu_completion") as mock_nssu_wait:
-                        with mock.patch.object(self.device, "request_system_snapshot"):
-                            with mock.patch.object(self.device, "_verify_install_version"):
-                                with mock.patch.object(
-                                    type(self.device), "uptime", new_callable=mock.PropertyMock
-                                ) as mock_uptime:
-                                    mock_uptime.return_value = 1000
-                                    mock_validate.return_value = True
-                                    self.device.sw.install.return_value = True
-                                    self.device.install_os(
-                                        image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
-                                        checksum="c0ffee",
-                                        nssu=True,
-                                    )
-                                    # Should have called nssu wait with extracted version
-                                    mock_nssu_wait.assert_called_once()
-                                    args = mock_nssu_wait.call_args[0]
-                                    self.assertEqual(args[0], "15.1R7-S2")
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members") as mock_reboot_all,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "_wait_for_nssu_completion") as mock_nssu_wait,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version") as mock_verify,
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            mock_validate.return_value = True
+            self.device.native.facts = {
+                **DEVICE_FACTS,
+                "re_info": {"default": {"0": {"status": "OK"}, "1": {"status": "OK"}, "default": {"status": "OK"}}},
+            }
+            self.device.sw.install.return_value = True
+            self.device.install_os(
+                image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
+                checksum="c0ffee",
+                nssu=True,
+            )
+            # NSSU performs its own rolling reboot inside sw.install(); a second,
+            # manual reboot would take the whole chassis down mid-switchover.
+            mock_reboot_all.assert_not_called()
+            mock_wait_reboot.assert_not_called()
+            self.device.sw.reboot.assert_not_called()
+            # Completion is verified by polling member versions instead, and a member
+            # absent from the output mid-reboot must not count as done.
+            mock_nssu_wait.assert_called_once_with("15.1R7-S2", expected_members=2)
+            # The completion wait already confirms every member's version;
+            # the separate post-snapshot verification must not repeat it.
+            mock_verify.assert_not_called()
+
+    def test_install_os_nssu_with_reboot_false_raises_value_error(self):
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=True):
+            with self.assertRaises(ValueError):
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
+                    checksum="c0ffee",
+                    nssu=True,
+                    reboot=False,
+                )
+        # The contradiction must be rejected before touching the device.
+        self.device.sw.install.assert_not_called()
+
+    def test_install_os_nssu_on_single_device_runs_standard_install(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=False),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+            result = self.device.install_os(
+                image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                checksum="c0ffee",
+                nssu=True,
+            )
+            self.assertTrue(result)
+            # nssu is ignored on a standalone device: standard install + manual reboot.
+            self.assertNotIn("nssu", self.device.sw.install.call_args.kwargs)
+            self.device.sw.reboot.assert_called_once_with(in_min=0)
+
+    @mock.patch("pyntc.devices.jnpr_device.time.sleep")
+    def test_wait_for_nssu_completion(self, mock_sleep):
+        target = "15.1R7-S2"
+        with mock.patch.object(self.device, "_get_all_members_version") as mock_versions:
+            with self.subTest("succeeds when every expected member reports the target version"):
+                mock_versions.return_value = {"0": target, "1": target}
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+
+            with self.subTest("keeps waiting while a rebooting member is absent from the output"):
+                mock_versions.reset_mock()
+                mock_versions.side_effect = [
+                    {"1": target},  # old master rebooting; only the new master reports
+                    {"0": target, "1": target},
+                ]
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+                self.assertEqual(mock_versions.call_count, 2)
+
+            with self.subTest("reconnects after a dropped session and keeps polling"):
+                mock_versions.side_effect = [
+                    ConnectionError("session dropped with the old master"),
+                    {"0": target, "1": target},
+                ]
+                self.device.native.connected = True
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+                # The failed poll must force a fresh connection on the next attempt.
+                self.assertFalse(self.device.native.connected is True)
+
+            with self.subTest("raises OSInstallError when versions never converge"):
+                mock_versions.reset_mock()
+                mock_versions.side_effect = None
+                mock_versions.return_value = {"0": "12.3R12-S10", "1": target}
+                # Patching time.time patches the shared stdlib module (logging calls it
+                # too), so use a monotonic fake clock that tolerates extra calls.
+                fake_clock = itertools.count(start=0, step=10)
+                with mock.patch("pyntc.devices.jnpr_device.time.time", side_effect=lambda: next(fake_clock)):
+                    with self.assertRaises(OSInstallError):
+                        self.device._wait_for_nssu_completion(target, timeout=50, expected_members=2)
+                # At least one poll saw the mismatched member before giving up.
+                self.assertGreaterEqual(mock_versions.call_count, 1)
+
+    def test_vc_member_count(self):
+        with self.subTest("two-member virtual chassis"):
+            self.device.native.facts = {
+                "re_info": {"default": {"0": {"status": "OK"}, "1": {"status": "OK"}, "default": {"status": "OK"}}}
+            }
+            self.assertEqual(self.device._vc_member_count(), 2)
+
+        with self.subTest("no re_info fact"):
+            self.device.native.facts = {}
+            self.assertEqual(self.device._vc_member_count(), 0)
 
     def test_request_system_snapshot(self):
         with mock.patch.object(self.device, "_wait_for_system_snapshot"):
@@ -651,6 +748,24 @@ class TestJnprDevice(unittest.TestCase):
             self.device.native.cli.return_value = output
             result = self.device._get_all_members_version()
             self.assertEqual(result, {"0": "15.1R7-S2", "1": "12.3R12-S10"})
+
+        with self.subTest("qualifier suffix on the Junos: line is dropped"):
+            output = "fpc0:\nJunos: 15.1R7-S2 Limited\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2"})
+
+        with self.subTest("CRLF line endings from the transport are normalized"):
+            output = "fpc0:\r\nJunos: 15.1R7-S2\r\n\r\nfpc1:\r\nJunos: 15.1R7-S2\r\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
+
+        with self.subTest("leading whitespace on header and version lines is tolerated"):
+            output = "  fpc0:\n  Junos: 15.1R7-S2\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2"})
 
     def test_check_file_exists(self):
         self.device.check_file_exists("foo.txt")
@@ -848,11 +963,6 @@ class TestJnprDevice(unittest.TestCase):
 
     def test_install_os_version_extraction(self):
         """Test version regex extraction from various image name formats."""
-        import re
-
-        # Pattern from jnpr_device.py line 906
-        pattern = r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)"
-
         test_cases = [
             ("/var/tmp/jinstall-15.1R7-S2-signed.tgz", "15.1R7-S2"),
             ("/var/tmp/image-20.4R3-signed.tgz", "20.4R3"),
@@ -863,7 +973,7 @@ class TestJnprDevice(unittest.TestCase):
 
         for image_name, expected_version in test_cases:
             with self.subTest(image_name=image_name):
-                match = re.search(pattern, image_name)
+                match = jnpr_device._JUNOS_VERSION_RE.search(image_name)
                 extracted = match.group(1) if match else None
                 self.assertEqual(extracted, expected_version, f"Failed to extract version from {image_name}")
 
