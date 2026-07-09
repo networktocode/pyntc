@@ -594,6 +594,64 @@ class TestJnprDevice(unittest.TestCase):
             result = self.device._get_all_members_version()
             self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
 
+        with self.subTest("EX VC on 15.1 has no Base OS line; version comes from the Junos: line"):
+            # Verbatim `show version all-members` output from an EX3300-48T VC
+            # running 15.1R7-S2 — the platform this parser silently failed on.
+            output = (
+                "fpc0:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t-bf\n"
+                "Junos: 15.1R7-S2\n"
+                "JUNOS EX  Software Suite [15.1R7-S2]\n"
+                "JUNOS FIPS mode utilities [15.1R7-S2]\n"
+                "JUNOS Online Documentation [15.1R7-S2]\n"
+                "JUNOS EX 3300 Software Suite [15.1R7-S2]\n"
+                "JUNOS Web Management Platform Package [15.1R7-S2]\n"
+                "\n"
+                "fpc1:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t\n"
+                "Junos: 15.1R7-S2\n"
+                "JUNOS EX  Software Suite [15.1R7-S2]\n"
+                "JUNOS FIPS mode utilities [15.1R7-S2]\n"
+                "JUNOS Online Documentation [15.1R7-S2]\n"
+                "JUNOS EX 3300 Software Suite [15.1R7-S2]\n"
+                "JUNOS Web Management Platform Package [15.1R7-S2]\n"
+            )
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
+
+        with self.subTest("pre-13.2 output without a Junos: line falls back to the first JUNOS package"):
+            output = (
+                "fpc0:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t-bf\n"
+                "JUNOS Base OS boot [12.3R12-S10]\n"
+                "JUNOS Base OS Software Suite [12.3R12-S10]\n"
+                "JUNOS Kernel Software Suite [12.3R12-S10]\n"
+                "\n"
+                "fpc1:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t\n"
+                "JUNOS Base OS boot [12.3R12-S10]\n"
+                "JUNOS Base OS Software Suite [12.3R12-S10]\n"
+                "JUNOS Kernel Software Suite [12.3R12-S10]\n"
+            )
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "12.3R12-S10", "1": "12.3R12-S10"})
+
+        with self.subTest("mid-upgrade mixed versions are reported per member"):
+            output = "fpc0:\nJunos: 15.1R7-S2\n\nfpc1:\nJunos: 12.3R12-S10\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "12.3R12-S10"})
+
     def test_check_file_exists(self):
         self.device.check_file_exists("foo.txt")
         self.device.fs.ls.assert_called_once_with("foo.txt")

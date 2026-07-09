@@ -417,10 +417,18 @@ class JunosDevice(BaseDevice):
                 if line.startswith("fpc") and line.endswith(":"):
                     current_member = line.split("fpc")[1].rstrip(":")
                     members_versions[current_member] = None
+                    continue
 
-                # Extract version from JUNOS Base OS Software Suite line
-                if current_member and "JUNOS Base OS Software Suite" in line:
-                    # Extract version from format: JUNOS Base OS Software Suite [15.1R7-S2]
+                if current_member is None or members_versions[current_member] is not None:
+                    continue
+
+                # Junos 13.2+ prints a dedicated "Junos: <version>" line. Older
+                # releases only list packages, and the package names vary by
+                # platform (EX 15.1 has no "JUNOS Base OS Software Suite" line),
+                # so fall back to the first "JUNOS <package> [<version>]" line.
+                if line.startswith("Junos:"):
+                    members_versions[current_member] = line.split(":", 1)[1].strip()
+                elif line.startswith("JUNOS"):
                     match = re.search(r"\[([^\]]+)\]", line)
                     if match:
                         members_versions[current_member] = match.group(1)
