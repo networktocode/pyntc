@@ -573,7 +573,7 @@ class JunosDevice(BaseDevice):
             log.warning("Host %s: Could not validate multiple devices: %s", self.host, exc)
             return False
 
-    def _wait_for_system_snapshot(self, timeout=1800, interval=30):
+    def _wait_for_system_snapshot(self, timeout=3600, interval=30):
         """Poll device to verify system snapshot completion.
 
         Periodically checks ``show system snapshot media internal`` to verify the snapshot
@@ -581,7 +581,9 @@ class JunosDevice(BaseDevice):
 
         Args:
             timeout (int, optional): Max seconds to poll for snapshot verification,
-                counted after the initial warm-up delay. Defaults to 1800 (30 minutes).
+                counted after the initial warm-up delay. Defaults to 3600 (60 minutes);
+                field-observed all-members alternate-slice snapshots on a 2-member
+                EX3300 VC have taken 25-35+ minutes.
             interval (int, optional): Seconds between verification polls. Defaults to 30 seconds.
 
         Raises:
@@ -982,6 +984,26 @@ class JunosDevice(BaseDevice):
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
+        self._reboot_to_apply(image_name, is_multiple, in_service, nssu)
+
+        self._post_install_checks(image_name, is_multiple, in_service, nssu, verification_required=not install_ok)
+
+        log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
+        return True
+
+    def _reboot_to_apply(self, image_name, is_multiple, in_service, nssu):
+        """Reboot to apply the installed image, unless the in-service upgrade already did.
+
+        Args:
+            image_name (str): Name of the installed image; used for log context only.
+            is_multiple (bool): Whether device is in multi-device configuration.
+            in_service (bool): Whether the install ran as NSSU/ISSU.
+            nssu (bool): True for NSSU, False for ISSU; only used for log labels.
+
+        Raises:
+            CommandError: When the pre-reboot uptime cannot be determined on the
+                multi-device path (the reboot is refused rather than issued blind).
+        """
         if in_service:
             # The in-service upgrade already rolled through the members and rebooted
             # each one inside ``sw.install()`` — the old master is typically still
@@ -992,27 +1014,23 @@ class JunosDevice(BaseDevice):
                 self.host,
                 "NSSU" if nssu else "ISSU",
             )
+            return
+
+        log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
+        if is_multiple:
+            self._uptime = None
+            original_uptime = self.uptime
+
+            if original_uptime is None:
+                raise CommandError(
+                    command="install_os",
+                    message="Could not determine pre-reboot uptime; refusing to reboot.",
+                )
+
+            self._request_system_reboot_all_members()
+            self._wait_for_device_reboot(original_uptime, is_multiple=True)
         else:
-            log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
-            if is_multiple:
-                self._uptime = None
-                original_uptime = self.uptime
-
-                if original_uptime is None:
-                    raise CommandError(
-                        command="install_os",
-                        message="Could not determine pre-reboot uptime; refusing to reboot.",
-                    )
-
-                self._request_system_reboot_all_members()
-                self._wait_for_device_reboot(original_uptime, is_multiple=True)
-            else:
-                self.reboot(wait_for_reload=True)
-
-        self._post_install_checks(image_name, is_multiple, in_service, nssu, verification_required=not install_ok)
-
-        log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
-        return True
+            self.reboot(wait_for_reload=True)
 
     def _post_install_checks(self, image_name, is_multiple, in_service, nssu, verification_required=False):  # pylint: disable=too-many-positional-arguments
         """Wait for in-service completion, snapshot, and verify the running version.
