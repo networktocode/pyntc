@@ -1,12 +1,13 @@
+import itertools
 import os
 import unittest
 from tempfile import NamedTemporaryFile
 
 import mock
 import pytest
-from jnpr.junos.exception import ConfigLoadError
+from jnpr.junos.exception import ConfigLoadError, RpcTimeoutError
 
-from pyntc.devices import JunosDevice
+from pyntc.devices import JunosDevice, jnpr_device
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -75,6 +76,9 @@ class TestJnprDevice(unittest.TestCase):
 
         self.device = JunosDevice("host", "user", "pass")
         self.device.native.facts = DEVICE_FACTS
+        # ``rpc`` is created in Device.__init__ so the autospec mock lacks it.
+        self.device.native.rpc = mock.MagicMock()
+        self.device.native.rpc.file_copy.return_value = True
 
     def tearDown(self):
         self.mock_sw.stop()
@@ -427,17 +431,384 @@ class TestJnprDevice(unittest.TestCase):
                 result = self.device._file_copy_local_md5(fp.name)
                 self.assertEqual(result, checksum)
 
-    def test_install_os(self):
-        with mock.patch.object(self.device, "reboot") as mock_reboot:
-            with self.subTest("sw.install returns a bool"):
-                self.device.sw.install.return_value = True
-                self.device.install_os(image_name="image.bin", checksum="c0ffee")
-                mock_reboot.assert_called_once_with(wait_for_reload=True)
+    def test_validate_multiple_device(self):
+        with self.subTest("single device"):
+            self.device.native.facts = {"re_info": {"RE0": {"status": "OK"}}}
+            result = self.device._validate_multiple_device()
+            self.assertFalse(result)
 
-            with self.subTest("sw.install returns a tuple and fails"):
-                self.device.sw.install.return_value = (False, "install failure")
+        with self.subTest("multi-device (virtual-chassis)"):
+            self.device.native.facts = {
+                "re_info": {
+                    "default": {
+                        "0": {"status": "OK"},
+                        "1": {"status": "OK"},
+                        "default": {"status": "OK"},
+                    }
+                }
+            }
+            result = self.device._validate_multiple_device()
+            self.assertTrue(result)
+
+    def test_install_os_single_device(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            with self.subTest("install succeeds, reboot requested"):
+                with mock.patch.object(self.device, "_verify_install_version"):
+                    mock_validate.return_value = False
+                    self.device.sw.install.return_value = True
+                    result = self.device.install_os(
+                        image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                    self.assertTrue(result)
+                    self.device.sw.install.assert_called_once()
+                    self.device.sw.reboot.assert_called_once_with(in_min=0)
+                    mock_wait_reboot.assert_called_once()
+
+            with self.subTest("install fails immediately"):
+                self.device.sw.install.reset_mock()
+                self.device.sw.reboot.reset_mock()
+                self.device.sw.install.return_value = False
                 with self.assertRaises(OSInstallError):
-                    self.device.install_os(image_name="image.bin", checksum="c0ffee")
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                # Should not have called reboot after install failure
+                self.device.sw.reboot.assert_not_called()
+
+            with self.subTest("reboot=False"):
+                with mock.patch.object(self.device, "_verify_install_version"):
+                    self.device.sw.install.reset_mock()
+                    self.device.sw.reboot.reset_mock()
+                    self.device.sw.install.return_value = True
+                    result = self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
+                    self.assertTrue(result)
+                    self.device.sw.reboot.assert_not_called()
+
+    def test_install_os_multi_device(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members") as mock_reboot_all,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            mock_validate.return_value = True
+            self.device.sw.install.return_value = True
+            result = self.device.install_os(
+                image_name="/var/tmp/image-15.1R7-S2-signed.tgz",
+                checksum="c0ffee",
+                reboot=True,
+            )
+            self.assertTrue(result)
+            # Should call multi-device reboot, not sw.reboot
+            mock_reboot_all.assert_called_once()
+            self.device.sw.reboot.assert_not_called()
+            mock_wait_reboot.assert_called_once()
+
+    def test_install_os_with_nssu(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members") as mock_reboot_all,
+            mock.patch.object(self.device, "_wait_for_device_reboot") as mock_wait_reboot,
+            mock.patch.object(self.device, "_wait_for_nssu_completion") as mock_nssu_wait,
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version") as mock_verify,
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            mock_validate.return_value = True
+            self.device.native.facts = {
+                **DEVICE_FACTS,
+                "re_info": {"default": {"0": {"status": "OK"}, "1": {"status": "OK"}, "default": {"status": "OK"}}},
+            }
+            self.device.sw.install.return_value = True
+            self.device.install_os(
+                image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
+                checksum="c0ffee",
+                nssu=True,
+            )
+            # NSSU performs its own rolling reboot inside sw.install(); a second,
+            # manual reboot would take the whole chassis down mid-switchover.
+            mock_reboot_all.assert_not_called()
+            mock_wait_reboot.assert_not_called()
+            self.device.sw.reboot.assert_not_called()
+            # Completion is verified by polling member versions instead, and a member
+            # absent from the output mid-reboot must not count as done.
+            mock_nssu_wait.assert_called_once_with("15.1R7-S2", expected_members=2)
+            # The completion wait already confirms every member's version;
+            # the separate post-snapshot verification must not repeat it.
+            mock_verify.assert_not_called()
+
+    def test_install_os_snapshot_option(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device") as mock_validate,
+            mock.patch.object(self.device, "_request_system_reboot_all_members"),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot") as mock_snapshot,
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+
+            with self.subTest("snapshot is skipped by default"):
+                mock_validate.return_value = False
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                )
+                mock_snapshot.assert_not_called()
+
+            with self.subTest("snapshot=True on a single device"):
+                mock_validate.return_value = False
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                    snapshot=True,
+                )
+                mock_snapshot.assert_called_once_with(parameters="slice alternate")
+
+            with self.subTest("snapshot=True on a virtual chassis"):
+                mock_snapshot.reset_mock()
+                mock_validate.return_value = True
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                    snapshot=True,
+                )
+                mock_snapshot.assert_called_once_with(parameters="slice alternate all-members")
+
+    def test_install_os_nssu_with_reboot_false_raises_value_error(self):
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=True):
+            with self.assertRaises(ValueError):
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
+                    checksum="c0ffee",
+                    nssu=True,
+                    reboot=False,
+                )
+        # The contradiction must be rejected before touching the device.
+        self.device.sw.install.assert_not_called()
+
+    def test_install_os_nssu_on_single_device_runs_standard_install(self):
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=False),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+            result = self.device.install_os(
+                image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                checksum="c0ffee",
+                nssu=True,
+            )
+            self.assertTrue(result)
+            # nssu is ignored on a standalone device: standard install + manual reboot.
+            self.assertNotIn("nssu", self.device.sw.install.call_args.kwargs)
+            self.device.sw.reboot.assert_called_once_with(in_min=0)
+
+    @mock.patch("pyntc.devices.jnpr_device.time.sleep")
+    def test_wait_for_nssu_completion(self, mock_sleep):
+        target = "15.1R7-S2"
+        with mock.patch.object(self.device, "_get_all_members_version") as mock_versions:
+            with self.subTest("succeeds when every expected member reports the target version"):
+                mock_versions.return_value = {"0": target, "1": target}
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+
+            with self.subTest("keeps waiting while a rebooting member is absent from the output"):
+                mock_versions.reset_mock()
+                mock_versions.side_effect = [
+                    {"1": target},  # old master rebooting; only the new master reports
+                    {"0": target, "1": target},
+                ]
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+                self.assertEqual(mock_versions.call_count, 2)
+
+            with self.subTest("reconnects after a dropped session and keeps polling"):
+                mock_versions.side_effect = [
+                    ConnectionError("session dropped with the old master"),
+                    {"0": target, "1": target},
+                ]
+                self.device.native.connected = True
+                self.device._wait_for_nssu_completion(target, expected_members=2)
+                # The failed poll must force a fresh connection on the next attempt.
+                self.assertFalse(self.device.native.connected is True)
+
+            with self.subTest("raises OSInstallError when versions never converge"):
+                mock_versions.reset_mock()
+                mock_versions.side_effect = None
+                mock_versions.return_value = {"0": "12.3R12-S10", "1": target}
+                # Patching time.time patches the shared stdlib module (logging calls it
+                # too), so use a monotonic fake clock that tolerates extra calls.
+                fake_clock = itertools.count(start=0, step=10)
+                with mock.patch("pyntc.devices.jnpr_device.time.time", side_effect=lambda: next(fake_clock)):
+                    with self.assertRaises(OSInstallError):
+                        self.device._wait_for_nssu_completion(target, timeout=50, expected_members=2)
+                # At least one poll saw the mismatched member before giving up.
+                self.assertGreaterEqual(mock_versions.call_count, 1)
+
+    def test_vc_member_count(self):
+        with self.subTest("two-member virtual chassis"):
+            self.device.native.facts = {
+                "re_info": {"default": {"0": {"status": "OK"}, "1": {"status": "OK"}, "default": {"status": "OK"}}}
+            }
+            self.assertEqual(self.device._vc_member_count(), 2)
+
+        with self.subTest("no re_info fact"):
+            self.device.native.facts = {}
+            self.assertEqual(self.device._vc_member_count(), 0)
+
+    def test_request_system_snapshot(self):
+        with mock.patch.object(self.device, "_wait_for_system_snapshot"):
+            # Configure mock rpc attribute
+            self.device.native.rpc = mock.MagicMock()
+
+            with self.subTest("snapshot with parameters"):
+                self.device.native.rpc.cli.return_value = "filesystems were archived"
+                self.device.request_system_snapshot(parameters="slice alternate")
+                self.device.native.rpc.cli.assert_called_with(
+                    command="request system snapshot slice alternate", format="text"
+                )
+
+            with self.subTest("snapshot RPC times out, falls back to polling"):
+                from jnpr.junos.exception import RpcTimeoutError
+
+                self.device.native.rpc.cli.side_effect = RpcTimeoutError(
+                    self.device.native, "request system snapshot slice alternate", 30
+                )
+                # Should not raise, should fall through to polling
+                self.device.request_system_snapshot(parameters="slice alternate")
+
+    @mock.patch("pyntc.devices.jnpr_device.time.sleep")
+    def test_wait_for_system_snapshot(self, mock_sleep):
+        with self.subTest("snapshot completes successfully"):
+            self.device.native.cli.return_value = "Creation date: 2024-01-15 10:30:00\nSnapshot verified"
+            # Should not raise when "Creation date:" is found
+            self.device._wait_for_system_snapshot()
+            # Verify initial 180s sleep was called
+            self.assertEqual(mock_sleep.call_count, 1)
+            self.assertEqual(mock_sleep.call_args_list[0][0][0], 180)
+
+        with self.subTest("snapshot times out"):
+            mock_sleep.reset_mock()
+            self.device.native.cli.return_value = "No snapshots found"
+            # time.sleep is mocked, so a real clock would busy-spin for the full
+            # timeout; a fake monotonic clock keeps the test fast and deterministic.
+            fake_clock = itertools.count(start=0, step=3)
+            with mock.patch("pyntc.devices.jnpr_device.time.time", side_effect=lambda: next(fake_clock)):
+                with self.assertRaises(TimeoutError) as ctx:
+                    self.device._wait_for_system_snapshot(timeout=10)
+            self.assertIn("did not complete", str(ctx.exception))
+
+    def test_get_all_members_version(self):
+        with self.subTest("single device"):
+            output = "fpc0:\nJUNOS Base OS Software Suite [15.1R7-S2]\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2"})
+
+        with self.subTest("multi-device"):
+            output = (
+                "fpc0:\nJUNOS Base OS Software Suite [15.1R7-S2]\nfpc1:\nJUNOS Base OS Software Suite [15.1R7-S2]\n"
+            )
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
+
+        with self.subTest("EX VC on 15.1 has no Base OS line; version comes from the Junos: line"):
+            # Verbatim `show version all-members` output from an EX3300-48T VC
+            # running 15.1R7-S2 — the platform this parser silently failed on.
+            output = (
+                "fpc0:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t-bf\n"
+                "Junos: 15.1R7-S2\n"
+                "JUNOS EX  Software Suite [15.1R7-S2]\n"
+                "JUNOS FIPS mode utilities [15.1R7-S2]\n"
+                "JUNOS Online Documentation [15.1R7-S2]\n"
+                "JUNOS EX 3300 Software Suite [15.1R7-S2]\n"
+                "JUNOS Web Management Platform Package [15.1R7-S2]\n"
+                "\n"
+                "fpc1:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t\n"
+                "Junos: 15.1R7-S2\n"
+                "JUNOS EX  Software Suite [15.1R7-S2]\n"
+                "JUNOS FIPS mode utilities [15.1R7-S2]\n"
+                "JUNOS Online Documentation [15.1R7-S2]\n"
+                "JUNOS EX 3300 Software Suite [15.1R7-S2]\n"
+                "JUNOS Web Management Platform Package [15.1R7-S2]\n"
+            )
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
+
+        with self.subTest("pre-13.2 output without a Junos: line falls back to the first JUNOS package"):
+            output = (
+                "fpc0:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t-bf\n"
+                "JUNOS Base OS boot [12.3R12-S10]\n"
+                "JUNOS Base OS Software Suite [12.3R12-S10]\n"
+                "JUNOS Kernel Software Suite [12.3R12-S10]\n"
+                "\n"
+                "fpc1:\n"
+                "--------------------------------------------------------------------------\n"
+                "Hostname: colo-jnpr-ex3300-sw-1a\n"
+                "Model: ex3300-48t\n"
+                "JUNOS Base OS boot [12.3R12-S10]\n"
+                "JUNOS Base OS Software Suite [12.3R12-S10]\n"
+                "JUNOS Kernel Software Suite [12.3R12-S10]\n"
+            )
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "12.3R12-S10", "1": "12.3R12-S10"})
+
+        with self.subTest("mid-upgrade mixed versions are reported per member"):
+            output = "fpc0:\nJunos: 15.1R7-S2\n\nfpc1:\nJunos: 12.3R12-S10\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "12.3R12-S10"})
+
+        with self.subTest("qualifier suffix on the Junos: line is dropped"):
+            output = "fpc0:\nJunos: 15.1R7-S2 Limited\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2"})
+
+        with self.subTest("CRLF line endings from the transport are normalized"):
+            output = "fpc0:\r\nJunos: 15.1R7-S2\r\n\r\nfpc1:\r\nJunos: 15.1R7-S2\r\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2", "1": "15.1R7-S2"})
+
+        with self.subTest("leading whitespace on header and version lines is tolerated"):
+            output = "  fpc0:\n  Junos: 15.1R7-S2\n"
+            self.device.native.cli.return_value = output
+            result = self.device._get_all_members_version()
+            self.assertEqual(result, {"0": "15.1R7-S2"})
 
     def test_check_file_exists(self):
         self.device.check_file_exists("foo.txt")
@@ -458,8 +829,9 @@ class TestJnprDevice(unittest.TestCase):
                 mock_get_remote_checksum.assert_called_once_with("foo.txt", "sha1")
                 self.assertFalse(result)
 
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
     @mock.patch("pyntc.devices.jnpr_device.time.sleep")
-    def test_remote_file_copy(self, mock_sleep):
+    def test_remote_file_copy(self, mock_sleep, mock_start_shell):
         ftp_url = "ftp://example.com/file.bin"
         md5_checksum = "c0ffee"
         filename = "file.bin"
@@ -472,9 +844,12 @@ class TestJnprDevice(unittest.TestCase):
             timeout=1200,
             file_size=330656851,
         )
+        fetch_cmd = f"setenv FTP_PASSIVE_MODE yes; fetch -q -o {dest_file} {ftp_url}"
 
-        self.device.fs.cp.return_value = True
+        self.device.native.rpc = mock.MagicMock()
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
 
         with mock.patch.object(self.device, "verify_file") as mock_verify_file:
             with self.subTest("invalid src argument"):
@@ -484,19 +859,17 @@ class TestJnprDevice(unittest.TestCase):
             with self.subTest("file already exists"):
                 mock_verify_file.return_value = True
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_not_called()
+                mock_start_shell.assert_not_called()
+                self.device.native.rpc.file_copy.assert_not_called()
                 self.assertIsNone(result)
 
-            with self.subTest("copy successful"):
+            with self.subTest("copy successful via shell fetch"):
                 # First False because file does not already exist, then emulate device returning the wrong checksum while the file syncs
                 mock_verify_file.side_effect = [False, False, True]
                 mock_verify_file.reset_mock()
                 result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
-                    dev_timeout=src_file.timeout,
-                )
+                mock_shell.run.assert_called_once_with(fetch_cmd, timeout=src_file.timeout)
+                self.device.native.rpc.file_copy.assert_not_called()
                 verify_file_calls = [
                     mock.call(src_file.checksum, dest_file, hashing_algorithm=src_file.hashing_algorithm)
                 ]
@@ -505,33 +878,116 @@ class TestJnprDevice(unittest.TestCase):
                 self.assertIsNone(result)
 
             with self.subTest("copy succeeded but checksum failed"):
-                self.device.fs.cp.reset_mock()
+                mock_shell.run.reset_mock()
                 mock_verify_file.reset_mock()
                 mock_verify_file.side_effect = None
                 mock_verify_file.return_value = False
                 with self.assertRaises(FileTransferError):
                     result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
-                    dev_timeout=src_file.timeout,
-                )
+                mock_shell.run.assert_called_once_with(fetch_cmd, timeout=src_file.timeout)
                 verify_file_calls = [
                     mock.call(src_file.checksum, dest_file, hashing_algorithm=src_file.hashing_algorithm)
                 ]
 
                 mock_verify_file.assert_has_calls(verify_file_calls * 6)
 
-            with self.subTest("copy failed"):
-                self.device.fs.cp.reset_mock()
-                self.device.fs.cp.return_value = False
-                with self.assertRaises(FileTransferError):
+            with self.subTest("fetch failure surfaces the device's error and removes the partial file"):
+                mock_shell.run.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                mock_shell.run.side_effect = [
+                    (False, "fetch: /var/tmp/file.bin: No space left on device"),
+                    (True, ""),  # rm -f cleanup of the partial file
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
                     result = self.device.remote_file_copy(src_file, dest=dest_file)
-                self.device.fs.cp.assert_called_once_with(
-                    from_path=src_file.download_url,
-                    to_path=dest_file,
+                self.assertIn("No space left on device", str(ctx.exception))
+                mock_shell.run.assert_called_with(f"rm -f {dest_file}")
+
+            with self.subTest("fetch failure masks the URL credential"):
+                mock_shell.run.reset_mock()
+                src_with_creds = FileCopyModel(
+                    download_url="ftp://ntc:s3cret@example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
+                mock_shell.run.side_effect = [
+                    (False, "fetch -q -o /var/tmp/file.bin ftp://ntc:s3cret@example.com/file.bin\nfetch: failed"),
+                    (True, ""),
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(src_with_creds, dest=dest_file)
+                self.assertNotIn("s3cret", str(ctx.exception))
+                self.assertIn("*****", str(ctx.exception))
+
+            with self.subTest("missing fetch binary falls back to the file-copy RPC"):
+                mock_shell.run.reset_mock()
+                mock_verify_file.side_effect = [False, True]
+                mock_shell.run.side_effect = [(False, "fetch: Command not found.")]
+                # PyEZ returns the bool True (not an XML element) for an empty success reply.
+                self.device.native.rpc.file_copy.return_value = True
+                result = self.device.remote_file_copy(src_file, dest=dest_file)
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=src_file.download_url,
+                    destination=dest_file,
                     dev_timeout=src_file.timeout,
                 )
+                self.assertIsNone(result)
+
+            with self.subTest("HTTP 404 is a transfer failure, not a missing fetch binary"):
+                mock_shell.run.reset_mock()
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                mock_shell.run.side_effect = [
+                    (False, "fetch: ftp://example.com/file.bin: Not Found"),
+                    (True, ""),  # rm -f cleanup of the partial file
+                ]
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(src_file, dest=dest_file)
+                self.assertIn("Not Found", str(ctx.exception))
+                # A 404 must not be misrouted to the doomed RPC fallback.
+                self.device.native.rpc.file_copy.assert_not_called()
+
+            with self.subTest("non-fetch scheme uses the file-copy RPC"):
+                mock_start_shell.reset_mock()
+                mock_shell.run.reset_mock()
+                mock_shell.run.side_effect = None
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = [False, True]
+                scp_src = FileCopyModel(
+                    download_url="scp://example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
+                result = self.device.remote_file_copy(scp_src, dest=dest_file)
+                mock_start_shell.assert_not_called()
+                self.device.native.rpc.file_copy.assert_called_once_with(
+                    source=scp_src.download_url,
+                    destination=dest_file,
+                    dev_timeout=scp_src.timeout,
+                )
+                self.assertIsNone(result)
+
+            with self.subTest("RPC copy failure surfaces the device's RPC error"):
+                self.device.native.rpc.file_copy.reset_mock()
+                mock_verify_file.side_effect = None
+                mock_verify_file.return_value = False
+                rpc_exc = RpcTimeoutError(self.device.native, "file-copy-rpc", 900)
+                self.device.native.rpc.file_copy.side_effect = rpc_exc
+                scp_src = FileCopyModel(
+                    download_url="scp://example.com/file.bin",
+                    checksum=md5_checksum,
+                    file_name=filename,
+                    file_size=330656851,
+                )
+                with self.assertRaises(FileTransferError) as ctx:
+                    result = self.device.remote_file_copy(scp_src, dest=dest_file)
+                # The FileTransferError must carry the underlying RpcError, not discard it.
+                self.assertIn("file-copy-rpc", str(ctx.exception))
+                self.assertIs(ctx.exception.__cause__, rpc_exc)
 
     def test_verify_file(self):
         checksum = "c0ffee"
@@ -563,6 +1019,80 @@ class TestJnprDevice(unittest.TestCase):
         assert "sha512" in str(ctx.exception)
         self.device.fs.checksum.assert_not_called()
 
+    def test_install_os_version_extraction(self):
+        """Test version regex extraction from various image name formats."""
+        test_cases = [
+            ("/var/tmp/jinstall-15.1R7-S2-signed.tgz", "15.1R7-S2"),
+            ("/var/tmp/image-20.4R3-signed.tgz", "20.4R3"),
+            ("/var/tmp/junos-21.4X38-D10.tgz", "21.4X38-D10"),
+            ("/var/tmp/image-18.4R2.7-signed.tgz", "18.4R2.7"),
+            ("vmhost-21.4R3.15-20230801.11", "21.4R3.15"),
+        ]
+
+        for image_name, expected_version in test_cases:
+            with self.subTest(image_name=image_name):
+                match = jnpr_device._JUNOS_VERSION_RE.search(image_name)
+                extracted = match.group(1) if match else None
+                self.assertEqual(extracted, expected_version, f"Failed to extract version from {image_name}")
+
+    def test_install_os_ambiguous_install_without_version_raises(self):
+        """An install that only proceeded on the reboot-required heuristic must not report success unverified."""
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=False),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = (False, "WARNING: A reboot is required to install the software")
+            with self.assertRaises(OSInstallError):
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-noversion.tgz",  # no parseable version
+                    checksum="c0ffee",
+                    reboot=True,
+                )
+
+    def test_install_os_uptime_none_raises_error(self):
+        """Test that install_os raises error when uptime cannot be determined."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = None
+                self.device.sw.install.return_value = True
+                with self.assertRaises(CommandError) as ctx:
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=True,
+                    )
+                self.assertIn("uptime", str(ctx.exception).lower())
+
+    def test_install_os_reboot_required_with_reboot_false_raises_error(self):
+        """Test that install_os raises error when reboot is required but reboot=False."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = 1000
+                reboot_msg = "WARNING: A reboot is required to install the software"
+                self.device.sw.install.return_value = (False, reboot_msg)
+                with self.assertRaises(OSInstallError):
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
+
+    def test_install_os_install_failure_reboot_false_raises_error(self):
+        """Test that install_os raises error immediately when install fails with reboot=False."""
+        with mock.patch.object(self.device, "_validate_multiple_device", return_value=False):
+            with mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime:
+                mock_uptime.return_value = 1000
+                self.device.sw.install.return_value = False
+                with self.assertRaises(OSInstallError):
+                    self.device.install_os(
+                        image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                        checksum="c0ffee",
+                        reboot=False,
+                    )
+
 
 class TestJnprFreeSpace(unittest.TestCase):
     """Tests for JunOS pre-transfer free-space verification (NAPPS-1085)."""
@@ -580,6 +1110,9 @@ class TestJnprFreeSpace(unittest.TestCase):
 
         self.device = JunosDevice("host", "user", "pass")
         self.device.native.facts = DEVICE_FACTS
+        # ``rpc`` is created in Device.__init__ so the autospec mock lacks it.
+        self.device.native.rpc = mock.MagicMock()
+        self.device.native.rpc.file_copy.return_value = True
 
     def tearDown(self):
         self.mock_sw.stop()
@@ -642,6 +1175,37 @@ class TestJnprFreeSpace(unittest.TestCase):
         with self.assertRaises(CommandError):
             self.device._get_free_space()
 
+    def test_get_free_space_virtual_chassis_returns_minimum_across_members(self):
+        """On VC/multi-RE devices storage_usage nests per member; return the smallest member's free space."""
+        self.device.fs.storage_usage.return_value = {
+            "fpc0": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "225M"}},
+            "fpc1": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "323M"}},
+        }
+        self.assertEqual(self.device._get_free_space(), 225 * 1024**2)
+
+    def test_get_free_space_cluster_longest_prefix_match_per_member(self):
+        """Mount resolution (longest prefix) applies within each cluster member independently."""
+        self.device.fs.storage_usage.return_value = {
+            "node0": {
+                "/dev/ad0s1a": {"mount": "/", "avail": "500M"},
+                "/dev/ad0s1f": {"mount": "/var", "avail": "2.0G"},
+            },
+            "node1": {
+                "/dev/ad0s1a": {"mount": "/", "avail": "3.0G"},
+            },
+        }
+        # node0 resolves /var/tmp to /var (2G); node1 falls back to / (3G). Minimum is 2G.
+        self.assertEqual(self.device._get_free_space(), 2 * 1024**3)
+
+    def test_get_free_space_raises_when_a_member_has_no_matching_mount(self):
+        """A member with no mount enclosing the path raises rather than overstating free space."""
+        self.device.fs.storage_usage.return_value = {
+            "fpc0": {"/dev/da0s3d": {"mount": "/var/tmp", "avail": "1.0G"}},
+            "fpc1": {"cgroups": {"mount": "/sys/fs/cgroup", "avail": "0B"}},
+        }
+        with self.assertRaises(FileSystemNotFoundError):
+            self.device._get_free_space()
+
     @mock.patch("pyntc.devices.jnpr_device.os.path.getsize", return_value=10**12)
     @mock.patch("pyntc.devices.jnpr_device.SCP")
     def test_file_copy_raises_not_enough_free_space(self, mock_scp, _getsize):
@@ -655,7 +1219,7 @@ class TestJnprFreeSpace(unittest.TestCase):
         mock_scp.assert_not_called()
 
     def test_remote_file_copy_raises_not_enough_free_space(self):
-        """remote_file_copy raises NotEnoughFreeSpaceError and never invokes fs.cp."""
+        """remote_file_copy raises NotEnoughFreeSpaceError and never invokes the file-copy RPC."""
         self.device.fs.storage_usage.return_value = {
             "/dev/ad0s1f": {"mount": "/var/tmp", "avail": "10M"},
         }
@@ -669,11 +1233,13 @@ class TestJnprFreeSpace(unittest.TestCase):
         with mock.patch.object(self.device, "verify_file", return_value=False):
             with self.assertRaises(NotEnoughFreeSpaceError):
                 self.device.remote_file_copy(oversized, dest="/var/tmp/file.bin")
-        self.device.fs.cp.assert_not_called()
+        self.device.native.rpc.file_copy.assert_not_called()
 
-    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self):
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_skips_space_check_when_file_size_omitted(self, mock_start_shell):
         """When FileCopyModel has no file_size, _check_free_space is NOT called."""
-        self.device.fs.cp.return_value = True
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://example.com/file.bin",
             checksum="c0ffee",
@@ -686,12 +1252,14 @@ class TestJnprFreeSpace(unittest.TestCase):
         ):
             self.device.remote_file_copy(model, dest="/var/tmp/file.bin")
         mock_check.assert_not_called()
-        self.device.fs.cp.assert_called_once()
+        mock_shell.run.assert_called_once()
 
-    def test_remote_file_copy_appends_filename_when_url_has_no_path(self):
-        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before ``fs.cp``."""
-        self.device.fs.cp.return_value = True
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_appends_filename_when_url_has_no_path(self, mock_start_shell):
+        """A bare ``ftp://host`` URL gets ``/<file_name>`` appended before the transfer."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220",  # no path
             checksum="c0ffee",
@@ -701,16 +1269,17 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.fs.cp.assert_called_once_with(
-            from_path="ftp://ntc:pw@10.1.100.220/image.bin",
-            to_path="/var/tmp/image.bin",
-            dev_timeout=mock.ANY,
+        mock_shell.run.assert_called_once_with(
+            "setenv FTP_PASSIVE_MODE yes; fetch -q -o /var/tmp/image.bin ftp://ntc:pw@10.1.100.220/image.bin",
+            timeout=mock.ANY,
         )
 
-    def test_remote_file_copy_keeps_url_intact_when_path_is_present(self):
-        """When the URL already contains a path, ``fs.cp`` receives it unchanged."""
-        self.device.fs.cp.return_value = True
+    @mock.patch("pyntc.devices.jnpr_device.StartShell")
+    def test_remote_file_copy_keeps_url_intact_when_path_is_present(self, mock_start_shell):
+        """When the URL already contains a path, the transfer receives it unchanged."""
         self.device.fs.storage_usage.return_value = STORAGE_USAGE_PLENTY
+        mock_shell = mock_start_shell.return_value.__enter__.return_value
+        mock_shell.run.return_value = (True, "")
         model = FileCopyModel(
             download_url="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
             checksum="c0ffee",
@@ -720,10 +1289,9 @@ class TestJnprFreeSpace(unittest.TestCase):
         )
         with mock.patch.object(self.device, "verify_file", side_effect=[False, True]):
             self.device.remote_file_copy(model, dest="/var/tmp/image.bin")
-        self.device.fs.cp.assert_called_once_with(
-            from_path="ftp://ntc:pw@10.1.100.220/subdir/image.bin",
-            to_path="/var/tmp/image.bin",
-            dev_timeout=mock.ANY,
+        mock_shell.run.assert_called_once_with(
+            "setenv FTP_PASSIVE_MODE yes; fetch -q -o /var/tmp/image.bin ftp://ntc:pw@10.1.100.220/subdir/image.bin",
+            timeout=mock.ANY,
         )
 
 
