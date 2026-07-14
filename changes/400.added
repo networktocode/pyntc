@@ -1,0 +1,2 @@
+Added support for ISSU and NSSU non-disruptive OS upgrades on Juniper devices.
+Added a `snapshot` option to `JunosDevice.install_os` that takes a post-upgrade `request system snapshot slice alternate` and waits for completion; disabled by default because Junos does not require a snapshot to complete an upgrade.

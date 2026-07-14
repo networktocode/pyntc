@@ -3,17 +3,19 @@
 import hashlib
 import os
 import re
+import shlex
 import time
 import warnings
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 from jnpr.junos import Device as JunosNativeDevice
-from jnpr.junos.exception import ConfigLoadError
+from jnpr.junos.exception import ConfigLoadError, RpcError, RpcTimeoutError
 from jnpr.junos.op.ethport import EthPortTable  # pylint: disable=import-error,no-name-in-module
 from jnpr.junos.utils.config import Config as JunosNativeConfig
 from jnpr.junos.utils.fs import FS as JunosNativeFS
 from jnpr.junos.utils.scp import SCP
+from jnpr.junos.utils.start_shell import StartShell
 from jnpr.junos.utils.sw import SW as JunosNativeSW
 
 from pyntc import log
@@ -46,6 +48,18 @@ _JUNOS_AVAIL_FORMAT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([BKMGTP]?)\s*$", re
 # the standard destination for ``fs.cp`` transfers on Junos (remote device
 # mount point, not a local temp directory).
 _JUNOS_DEFAULT_FILE_SYSTEM = "/var/tmp"  # noqa: S108
+
+# URL schemes the FreeBSD ``fetch`` binary on Junos can download. Other
+# schemes (e.g., scp) go through the ``file copy`` RPC instead.
+_JUNOS_FETCH_SCHEMES = {"ftp", "http", "https"}
+
+# Head start given to reboots and snapshots before the first status poll —
+# probing earlier burns round-trips against a device that cannot be ready yet.
+_JUNOS_POLL_WARMUP_SECONDS = 180
+
+# Extracts a Junos version from an install image filename.
+# Matches formats: 15.1R7-S2, 20.4R3, 21.4X38-D10, 18.4R2.7, etc.
+_JUNOS_VERSION_RE = re.compile(r"(\d+\.\d+[A-Z]+\d+(?:\.\d+)?(?:[-][A-Z]+\d+)?)")
 
 # Hashing algorithms that Junos implements for the ``file checksum`` RPC.
 # Junos does NOT implement sha512; callers passing it will be rejected at the
@@ -124,6 +138,12 @@ class JunosDevice(BaseDevice):
         back the correct filesystem's free space. ``/`` is always a fallback
         when nothing more specific matches.
 
+        On virtual-chassis, multi-RE, and cluster platforms, PyEZ returns a
+        nested ``{member: {filesystem: info}}`` dict instead of the flat
+        ``{filesystem: info}`` shape. The mount is resolved per member and the
+        **minimum** free space across members is returned — an install needs
+        room on every member.
+
         Args:
             file_system (str, optional): Target path. When ``None`` (the
                 default), the probe uses ``_JUNOS_DEFAULT_FILE_SYSTEM``
@@ -131,21 +151,43 @@ class JunosDevice(BaseDevice):
                 on Junos).
 
         Returns:
-            int: Free bytes available on the resolved filesystem.
+            int: Free bytes available on the resolved filesystem (the smallest
+                member's value on multi-member platforms).
 
         Raises:
             FileSystemNotFoundError: When no mount point encloses ``file_system``
-                (i.e., not even ``/`` is present in ``storage_usage``).
-            CommandError: When the ``avail`` format string cannot be parsed.
+                on any member (i.e., not even ``/`` is present in
+                ``storage_usage`` for that member).
+            CommandError: When an ``avail`` format string cannot be parsed.
         """
         if file_system is None:
             file_system = _JUNOS_DEFAULT_FILE_SYSTEM
 
         usage = self.fs.storage_usage()
+        # Flat entries always carry a "mount" key; on multi-member platforms
+        # the top-level values are per-member {filesystem: info} dicts instead.
+        is_nested = bool(usage) and all(isinstance(info, dict) and "mount" not in info for info in usage.values())
+        member_groups = usage if is_nested else {"": usage}
+
+        free_bytes = min(
+            self._free_bytes_for_mount(filesystems, file_system, member=member)
+            for member, filesystems in member_groups.items()
+        )
+        log.debug(
+            "Host %s: %s bytes free (resolved from %s across %d member(s)).",
+            self.host,
+            free_bytes,
+            file_system,
+            len(member_groups),
+        )
+        return free_bytes
+
+    def _free_bytes_for_mount(self, filesystems, file_system, member=""):
+        """Resolve ``file_system`` within one member's storage output and return its free bytes."""
         best_info = None
         best_mount = None
         best_len = -1
-        for _dev, info in usage.items():
+        for _dev, info in filesystems.items():
             mount = info.get("mount")
             if not mount or not _mount_encloses_path(mount, file_system):
                 continue
@@ -156,9 +198,10 @@ class JunosDevice(BaseDevice):
 
         if best_info is None:
             log.error(
-                "Host %s: no mount encloses %s in storage_usage output.",
+                "Host %s: no mount encloses %s in storage_usage output%s.",
                 self.host,
                 file_system,
+                f" for member {member}" if member else "",
             )
             raise FileSystemNotFoundError(hostname=self.host, command="show system storage")
 
@@ -166,10 +209,11 @@ class JunosDevice(BaseDevice):
         match = _JUNOS_AVAIL_FORMAT_RE.match(str(avail))
         if match is None:
             log.error(
-                "Host %s: could not parse avail %r for mount %s.",
+                "Host %s: could not parse avail %r for mount %s%s.",
                 self.host,
                 avail,
                 best_mount,
+                f" on member {member}" if member else "",
             )
             raise CommandError(
                 command="show system storage",
@@ -177,15 +221,7 @@ class JunosDevice(BaseDevice):
             )
         size = float(match.group(1))
         multiplier = _JUNOS_SIZE_UNIT_MULTIPLIERS[match.group(2).upper()]
-        free_bytes = int(size * multiplier)
-        log.debug(
-            "Host %s: %s bytes free on %s (resolved from %s).",
-            self.host,
-            free_bytes,
-            best_mount,
-            file_system,
-        )
-        return free_bytes
+        return int(size * multiplier)
 
     def _get_interfaces(self):
         eth_ifaces = EthPortTable(self.native)
@@ -228,7 +264,7 @@ class JunosDevice(BaseDevice):
         days, hours, minutes, seconds = self._uptime_components(uptime_full_string)
         return f"{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-    def _wait_for_device_reboot(self, original_uptime, timeout=7200):
+    def _wait_for_device_reboot(self, original_uptime, timeout=7200, is_multiple=False):
         """Block until the device reboots and accepts a fresh connection.
 
         Drops the existing NETCONF session and polls for the device to come back.
@@ -236,16 +272,19 @@ class JunosDevice(BaseDevice):
         device reports an uptime lower than ``original_uptime`` (i.e., it has
         booted since the reboot was issued).
 
+        For multi-device setups (virtual-chassis, chassis-cluster), checks that all
+        members have rebooted by verifying no members in re_info are in pending state.
+
         The pre-reboot session must be discarded first: once the device restarts,
         PyEZ still reports it as connected even though the transport is dead, so it
         is closed here to force each probe to establish a fresh connection.
 
         Args:
             original_uptime (int): Device uptime in seconds captured before the reboot.
-            timeout (int, optional): Max seconds to wait for the device to return. Defaults to 2 hours.
+            timeout (int, optional): Max seconds to poll for the device to return,
+                counted after the initial warm-up delay. Defaults to 2 hours.
+            is_multiple (bool, optional): Whether device is in multi-device configuration. Defaults to False.
         """
-        start = time.time()
-
         # Drop the pre-reboot NETCONF session so subsequent probes can't read from
         # a stale connection PyEZ still reports as connected.
         try:
@@ -253,12 +292,30 @@ class JunosDevice(BaseDevice):
         except Exception as close_exc:  # pylint: disable=broad-exception-caught
             log.debug("Host %s: Pre-reboot disconnect raised %s (ignored).", self.host, close_exc)
 
+        # Give the device time to boot before polling (avoid hammering a device that's still starting up)
+        log.info(
+            "Host %s: Waiting %s seconds for device to boot before polling...",
+            self.host,
+            _JUNOS_POLL_WARMUP_SECONDS,
+        )
+        time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
+
+        # Start the clock after the warm-up so ``timeout`` is the real polling window.
+        start = time.time()
+
         while time.time() - start < timeout:
             try:
                 self.open()
                 self._uptime = None
                 current_uptime = self.uptime
-                if current_uptime is not None and current_uptime < original_uptime:
+
+                if is_multiple and (pending_members := self._pending_reboot_members()):
+                    log.debug(
+                        "Host %s: Members still pending reboot: %s; still waiting.",
+                        self.host,
+                        pending_members,
+                    )
+                elif current_uptime is not None and current_uptime < original_uptime:
                     log.info(
                         "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
                         self.host,
@@ -266,18 +323,353 @@ class JunosDevice(BaseDevice):
                         original_uptime,
                     )
                     return
-                log.debug(
-                    "Host %s: Reachable but uptime %ss >= pre-reboot %ss; still waiting.",
-                    self.host,
-                    current_uptime,
-                    original_uptime,
-                )
+                else:
+                    log.debug(
+                        "Host %s: Reachable but uptime %ss >= pre-reboot %ss; still waiting.",
+                        self.host,
+                        current_uptime,
+                        original_uptime,
+                    )
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
                 self.native.connected = False
-            time.sleep(10)
+            time.sleep(30)
 
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
+
+    def _pending_reboot_members(self):
+        """Return VC member names whose re_info status is still "pending"."""
+        # Scoped refresh: a full facts_refresh() re-collects every fact (many RPCs)
+        # when only re_info is needed here.
+        try:
+            self.native.facts_refresh(keys="re_info")
+        except RuntimeError:
+            # PyEZ only supports scoped refreshes with fact_style="new" (its default);
+            # "old"/"both" raise RuntimeError, so fall back to a full refresh.
+            self.native.facts_refresh()
+        # Virtual-chassis structure: members are under re_info['default']
+        members = self.native.facts.get("re_info", {}).get("default", {})
+        return [
+            name
+            for name, info in members.items()
+            if name != "default" and isinstance(info, dict) and info.get("status") == "pending"
+        ]
+
+    def _vc_member_count(self):
+        """Count VC members from the currently cached re_info facts (no refresh).
+
+        Only the virtual-chassis ``re_info['default']`` structure is recognized;
+        other layouts (e.g., SRX chassis-cluster) yield 0.
+        """
+        members = self.native.facts.get("re_info", {}).get("default", {})
+        return len([name for name in members if name != "default"])
+
+    def _wait_for_nssu_completion(self, target_version, timeout=3600, interval=60, expected_members=None):
+        """Wait for all members to complete NSSU/ISSU and run target version.
+
+        Polls device to verify all members are running the same (target) software version.
+        The in-service upgrade reboots each member itself (the old master goes down right
+        as the install RPC returns), so each poll reconnects if the session dropped.
+
+        Args:
+            target_version (str): Target software version (e.g., "15.1R7-S2").
+            timeout (int, optional): Max seconds to wait. Defaults to 1 hour.
+            interval (int, optional): Seconds between version checks. Defaults to 60.
+            expected_members (int, optional): Number of members that must report a
+                version before the result is trusted. Guards against declaring
+                success while a member is mid-reboot and absent from
+                ``show version all-members``. When ``None``, any non-empty result
+                is compared as-is.
+
+        Raises:
+            OSInstallError: When all members don't match target version within timeout.
+        """
+        start = time.time()
+
+        # Drop the pre-install NETCONF session first: the old master's reboot kills the
+        # transport, but PyEZ can still report it as connected — the same quirk
+        # _wait_for_device_reboot guards against. Closing forces a fresh connection.
+        try:
+            self.close()
+        except Exception as close_exc:  # pylint: disable=broad-exception-caught
+            log.debug("Host %s: Pre-poll disconnect raised %s (ignored).", self.host, close_exc)
+
+        while time.time() - start < timeout:
+            try:
+                self.open()
+                members_versions = self._get_all_members_version()
+                mismatched = {m: v for m, v in members_versions.items() if v != target_version}
+
+                if not members_versions:
+                    log.debug("Host %s: Could not retrieve member versions; will retry.", self.host)
+                elif expected_members is not None and len(members_versions) < expected_members:
+                    log.debug(
+                        "Host %s: Only %s of %s members reporting a version; still waiting.",
+                        self.host,
+                        len(members_versions),
+                        expected_members,
+                    )
+                elif not mismatched:
+                    log.info(
+                        "Host %s: All members running target version %s.",
+                        self.host,
+                        target_version,
+                    )
+                    return
+                else:
+                    log.debug(
+                        "Host %s: Members not all on target version %s. Still waiting on: %s",
+                        self.host,
+                        target_version,
+                        mismatched,
+                    )
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                log.debug("Host %s: Version check failed (%s); will retry.", self.host, exc)
+                self.native.connected = False
+
+            time.sleep(interval)
+
+        log.error(
+            "Host %s: Not all members reached target version %s within %s seconds.",
+            self.host,
+            target_version,
+            timeout,
+        )
+        raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
+
+    def _get_all_members_version(self):
+        """Get software version running on all members.
+
+        Parses `show version all-members` output to extract version for each member.
+
+        Returns:
+            dict: Member IDs mapped to their running version. Example:
+                {'0': '15.1R7-S2', '1': '12.3R12-S10'}
+        """
+        try:
+            version_output = self.show("show version all-members")
+            members_versions = {}
+            current_member = None
+
+            # splitlines() + strip() normalize CRLF endings and stray indentation
+            # from the CLI transport, which would otherwise silently defeat the
+            # startswith/endswith checks below.
+            for line in (raw_line.strip() for raw_line in version_output.splitlines()):
+                # Detect member header (fpc0:, fpc1:, etc.)
+                if line.startswith("fpc") and line.endswith(":"):
+                    current_member = line.split("fpc")[1].rstrip(":")
+                    members_versions[current_member] = None
+                    continue
+
+                if current_member is None or members_versions[current_member] is not None:
+                    continue
+
+                # Junos 13.2+ prints a dedicated "Junos: <version>" line, which
+                # always precedes the package list when both exist. Older
+                # releases only list packages, and the package names vary by
+                # platform (EX 15.1 has no "JUNOS Base OS Software Suite" line),
+                # so fall back to the first "JUNOS <package> [<version>]" line.
+                if line.startswith("Junos:"):
+                    # First token only: drops qualifiers like "15.1R7-S2 Limited"
+                    # that would break exact-match comparison to target_version.
+                    tokens = line.split(":", 1)[1].split()
+                    if tokens:
+                        members_versions[current_member] = tokens[0]
+                elif line.startswith("JUNOS"):
+                    match = re.search(r"\[([^\]]+)\]", line)
+                    if match:
+                        members_versions[current_member] = match.group(1)
+
+            log.debug("Host %s: Members versions: %s", self.host, members_versions)
+            return members_versions
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: Failed to get all members version: %s", self.host, exc)
+            return {}
+
+    def _verify_install_version(self, target_version, is_multiple):
+        """Verify that the target version is running after install/reboot.
+
+        Args:
+            target_version (str): The expected version (e.g., "15.1R7-S2").
+            is_multiple (bool): Whether this is a multi-device setup.
+
+        Raises:
+            OSInstallError: If the target version is not running on any member/device.
+        """
+        if is_multiple:
+            members_versions = self._get_all_members_version()
+            if not members_versions:
+                log.warning(
+                    "Host %s: Could not verify member versions after install; proceeding without verification",
+                    self.host,
+                )
+                return
+
+            mismatched = [member for member, version in members_versions.items() if version != target_version]
+            if mismatched:
+                log.error(
+                    "Host %s: Version mismatch after install. Expected %s, got %s",
+                    self.host,
+                    target_version,
+                    members_versions,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
+
+            log.info("Host %s: All members running target version %s", self.host, target_version)
+        else:
+            # For single device, check facts
+            self.native.facts_refresh()
+            current_version = self.native.facts.get("version", "")
+            if current_version != target_version:
+                log.error(
+                    "Host %s: Version mismatch after install. Expected %s, got %s",
+                    self.host,
+                    target_version,
+                    current_version,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
+
+            log.info("Host %s: Device running target version %s", self.host, target_version)
+
+    def _request_system_reboot_all_members(self):
+        """Issue system reboot command for all members using RPC CLI.
+
+        Used for disruptive multi-member OS upgrades where both members reboot together.
+        """
+        try:
+            log.info("Host %s: Issuing 'request system reboot all-members' command", self.host)
+            response = self.native.rpc.cli(command="request system reboot all-members")
+            log.debug("Host %s: Reboot command response: %s", self.host, response)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: Failed to issue reboot command: %s", self.host, exc)
+            raise
+
+    def _validate_multiple_device(self):
+        """Check if device is in a multi-member configuration.
+
+        Inspects re_info from PyEZ facts to determine if multiple members are present.
+        Currently only the virtual-chassis ``re_info['default']`` structure is
+        recognized; chassis-cluster (SRX) layouts are not yet detected.
+
+        Returns:
+            bool: True if multiple members are present, False otherwise.
+        """
+        try:
+            self.native.facts_refresh()
+            re_info = self.native.facts.get("re_info", {})
+
+            # Virtual-chassis structure: {'default': {'0': {...}, '1': {...}, 'default': {...}}}
+            # Count members excluding the 'default' key itself
+            if "default" in re_info and isinstance(re_info["default"], dict):
+                members = {k: v for k, v in re_info["default"].items() if k != "default"}
+                is_multiple = len(members) > 1
+                log.info("Host %s: Multiple device configuration detected: %s", self.host, is_multiple)
+                return is_multiple
+
+            log.info("Host %s: Multiple device configuration detected: False", self.host)
+            return False
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.warning("Host %s: Could not validate multiple devices: %s", self.host, exc)
+            return False
+
+    def _wait_for_system_snapshot(self, timeout=3600, interval=30):
+        """Poll device to verify system snapshot completion.
+
+        Periodically checks ``show system snapshot media internal`` to verify the snapshot
+        was successfully taken. Used when the ``request system snapshot`` RPC times out.
+
+        Args:
+            timeout (int, optional): Max seconds to poll for snapshot verification,
+                counted after the initial warm-up delay. Defaults to 3600 (60 minutes);
+                field-observed all-members alternate-slice snapshots on a 2-member
+                EX3300 VC have taken 25-35+ minutes.
+            interval (int, optional): Seconds between verification polls. Defaults to 30 seconds.
+
+        Raises:
+            TimeoutError: When the snapshot verification does not complete within the timeout.
+        """
+        log.info(
+            "Host %s: Polling to verify system snapshot completion (timeout: %s seconds, interval: %s seconds)",
+            self.host,
+            timeout,
+            interval,
+        )
+        # Give the snapshot time to complete before polling
+        log.info(
+            "Host %s: Waiting %s seconds for snapshot to complete before polling...",
+            self.host,
+            _JUNOS_POLL_WARMUP_SECONDS,
+        )
+        time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
+
+        # Start the clock after the warm-up so ``timeout`` is the real polling window.
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                output = self.native.cli("show system snapshot media internal")
+                # Check for actual snapshot success: "Creation date:" indicates snapshots exist
+                # and timestamps indicate they were recently created
+                if "Creation date:" in output:
+                    log.info("Host %s: System snapshot verified (snapshots with creation dates found).", self.host)
+                    return
+                log.debug("Host %s: Snapshot verification in progress; will retry.", self.host)
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                log.debug("Host %s: Snapshot verification poll failed (%s); will retry.", self.host, exc)
+
+            time.sleep(interval)
+
+        log.error("Host %s: System snapshot did not complete within %s seconds.", self.host, timeout)
+        raise TimeoutError(f"System snapshot did not complete within {timeout} seconds on {self.hostname}")
+
+    def request_system_snapshot(self, parameters=None):
+        """Request a system snapshot and verify completion.
+
+        Issues the snapshot RPC call and polls device to verify completion.
+        Handles RPC timeouts by switching to polling mode.
+
+        Parameters include:
+         - all-members
+         - local
+         - media
+         - member
+         - partition
+         - slice
+
+        Args:
+            parameters (str, optional): Parameters to pass to the RPC call. Defaults to None.
+
+        Raises:
+            TimeoutError: When the snapshot verification does not complete within the timeout.
+        """
+        command = "request system snapshot"
+        if parameters is not None:
+            command = f"{command} {parameters}"
+
+        response = None
+
+        try:
+            log.info("Host %s: Issuing snapshot RPC: %s", self.host, command)
+            response = self.native.rpc.cli(command=command, format="text")
+            log.info("Host %s: Snapshot RPC response: %s", self.host, response)
+
+        except RpcTimeoutError:
+            log.debug("Host %s: snapshot RPC timed out; will poll device to verify.", self.host)
+
+        except Exception as rpc_error:
+            log.error("Host %s: Failed to request system snapshot (%s).", self.host, rpc_error)
+            raise
+
+        # Check if snapshot completed in the response (fast path)
+        if response is not None and "filesystems were archived" in str(response):
+            log.info("Host %s: Snapshot completed successfully (fast path).", self.host)
+            return
+
+        # Response unclear or RPC timed out; poll to verify (slow path)
+        log.debug("Host %s: Snapshot response unclear or timed out; polling device to verify.", self.host)
+        self._wait_for_system_snapshot()
 
     def backup_running_config(self, filename):
         """Backup current running configuration.
@@ -507,38 +899,216 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
-    def install_os(self, image_name, checksum, reboot=True, hashing_algorithm="md5"):
+    def install_os(
+        self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False, snapshot=False
+    ):  # pylint: disable=too-many-positional-arguments
         """Install OS on device and reboot.
+
+        For multi-device setups (virtual-chassis, chassis-cluster), supports NSSU/ISSU
+        upgrades and optional system snapshots after reboot. NSSU/ISSU performs its own
+        rolling reboot member-by-member during the install, so no separate reboot is
+        issued on that path; completion is verified by polling until every member
+        reports the target version.
 
         Args:
             image_name (str): Name of image.
-            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to true.
             checksum (str): The checksum of the file.
+            reboot (bool): Whether to reboot the device after setting the boot options. Defaults to True.
             hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
+            nssu (bool): Enable Nonstop Software Upgrade. Defaults to False.
+            issu (bool): Enable In-Service Software Upgrade. Defaults to False.
+            snapshot (bool): Take a post-upgrade ``request system snapshot slice alternate``
+                to sync the alternate root with the new version. Junos does not require a
+                snapshot to complete an upgrade, but on dual-root platforms an unsynced
+                alternate slice boots the OLD version if the device ever falls back to it.
+                Snapshots can take 25+ minutes per member on small-flash platforms.
+                Defaults to False.
 
+        Raises:
+            ValueError: When both nssu and issu are True (mutually exclusive), or when
+                ``reboot=False`` is combined with an in-service (NSSU/ISSU) upgrade on a
+                multi-device setup — the in-service install reboots the members itself,
+                so there is no reboot left to defer.
         """
-        install_ok = self.sw.install(
-            package=image_name,
-            checksum=checksum,
-            checksum_algorithm=hashing_algorithm,
-            progress=True,
-            validate=True,
-            no_copy=True,
-            timeout=3600,
-        )
+        if nssu and issu:
+            raise ValueError("nssu and issu are mutually exclusive; only one can be True")
+
+        is_multiple = self._validate_multiple_device()
+
+        # In-service upgrades only apply to multi-device setups; on a standalone
+        # device the nssu/issu flags are ignored and a standard install runs.
+        in_service = (nssu or issu) and is_multiple
+        if in_service and not reboot:
+            raise ValueError(
+                "reboot=False cannot be combined with nssu/issu on a multi-device setup; "
+                "the in-service upgrade reboots the members as part of the install"
+            )
+
+        install_kwargs = {
+            "package": image_name,
+            "checksum": checksum,
+            "checksum_algorithm": hashing_algorithm,
+            "progress": True,
+            "validate": True,
+            "no_copy": True,
+            "timeout": 3600,
+        }
+
+        if in_service:
+            install_kwargs["nssu" if nssu else "issu"] = True
+            log.info(
+                "Host %s: %s enabled for multi-device upgrade",
+                self.host,
+                "NSSU" if nssu else "ISSU",
+            )
 
         # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
+        install_ok = self.sw.install(**install_kwargs)
+        install_msg = None
         if isinstance(install_ok, tuple):
-            install_ok = install_ok[0]
+            install_ok, install_msg = install_ok[0], install_ok[1]
 
-        if not install_ok:
+        log.info("Host %s: install_ok result: %s", self.host, install_ok)
+        if install_msg:
+            log.debug("Host %s: install message: %s", self.host, install_msg)
+
+        # Check if reboot is required (indicated by specific message in output).
+        # NSSU/ISSU per-member output contains "A reboot is required" as informational
+        # text, but the rolling reboot already happens inside the install — don't
+        # treat it as an outstanding manual reboot on that path.
+        reboot_required = bool(install_msg) and "A reboot is required" in str(install_msg) and not in_service
+
+        if not install_ok and not reboot_required:
+            log.error(
+                "Host %s: SW install failed for image %s. Device is in undefined state.",
+                self.host,
+                image_name,
+            )
             raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
         if not reboot:
+            if reboot_required:
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
             log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
             return True
 
-        self.reboot(wait_for_reload=True)
+        self._reboot_to_apply(image_name, is_multiple, in_service, nssu)
+
+        self._post_install_checks(
+            image_name,
+            is_multiple,
+            in_service,
+            nssu,
+            verification_required=not install_ok,
+            snapshot=snapshot,
+        )
+
+        log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
+        return True
+
+    def _reboot_to_apply(self, image_name, is_multiple, in_service, nssu):
+        """Reboot to apply the installed image, unless the in-service upgrade already did.
+
+        Args:
+            image_name (str): Name of the installed image; used for log context only.
+            is_multiple (bool): Whether device is in multi-device configuration.
+            in_service (bool): Whether the install ran as NSSU/ISSU.
+            nssu (bool): True for NSSU, False for ISSU; only used for log labels.
+
+        Raises:
+            CommandError: When the pre-reboot uptime cannot be determined on the
+                multi-device path (the reboot is refused rather than issued blind).
+        """
+        if in_service:
+            # The in-service upgrade already rolled through the members and rebooted
+            # each one inside ``sw.install()`` — the old master is typically still
+            # rebooting when the install RPC returns. Issuing another reboot here
+            # would take the whole chassis down and race that in-progress reboot.
+            log.info(
+                "Host %s: %s performed its rolling reboot during install; skipping manual reboot",
+                self.host,
+                "NSSU" if nssu else "ISSU",
+            )
+            return
+
+        log.info("Host %s: Rebooting device to apply OS image %s", self.host, image_name)
+        if is_multiple:
+            self._uptime = None
+            original_uptime = self.uptime
+
+            if original_uptime is None:
+                raise CommandError(
+                    command="install_os",
+                    message="Could not determine pre-reboot uptime; refusing to reboot.",
+                )
+
+            self._request_system_reboot_all_members()
+            self._wait_for_device_reboot(original_uptime, is_multiple=True)
+        else:
+            self.reboot(wait_for_reload=True)
+
+    def _post_install_checks(
+        self, image_name, is_multiple, in_service, nssu, verification_required=False, snapshot=False
+    ):  # pylint: disable=too-many-positional-arguments
+        """Wait for in-service completion, optionally snapshot, and verify the running version.
+
+        Args:
+            image_name (str): Name of the installed image; the target version is
+                extracted from it. When no version can be extracted, the completion
+                wait and version verification are skipped with a warning.
+            is_multiple (bool): Whether device is in multi-device configuration.
+            in_service (bool): Whether the install ran as NSSU/ISSU.
+            nssu (bool): True for NSSU, False for ISSU; only used for log labels.
+            verification_required (bool): True when the install only proceeded on the
+                "A reboot is required" heuristic (PyEZ reported failure); post-reboot
+                version verification is then the only proof the install worked, so an
+                unverifiable image name raises instead of warning.
+            snapshot (bool): Take a post-upgrade system snapshot and wait for it to
+                complete. Defaults to False.
+
+        Raises:
+            OSInstallError: When ``verification_required`` is True and no version can
+                be extracted from ``image_name`` to verify against.
+        """
+        match = _JUNOS_VERSION_RE.search(image_name)
+        target_version = match.group(1) if match else None
+        if target_version is None:
+            if verification_required:
+                log.error(
+                    "Host %s: Install of %s reported failure and its result cannot be verified "
+                    "(no parseable version in the image name); treating as failed.",
+                    self.host,
+                    image_name,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+            log.warning(
+                "Host %s: Could not extract version from image name %s; skipping post-install version checks",
+                self.host,
+                image_name,
+            )
+
+        # For in-service upgrades, wait for all members to reach the target version before
+        # snapshot. This wait already confirms every member runs target_version, so the
+        # post-snapshot verification below would just repeat the same RPC and check.
+        verified_by_completion_wait = bool(target_version) and in_service
+        if verified_by_completion_wait:
+            log.info(
+                "Host %s: Waiting for all members to complete %s upgrade to version %s",
+                self.host,
+                "NSSU" if nssu else "ISSU",
+                target_version,
+            )
+            # Member count from the pre-install facts: a member absent from
+            # ``show version all-members`` while it reboots must not count as done.
+            self._wait_for_nssu_completion(target_version, expected_members=self._vc_member_count() or None)
+
+        # Optionally sync the alternate root with the new version after reboot/upgrade
+        if snapshot:
+            self.request_system_snapshot(parameters="slice alternate all-members" if is_multiple else "slice alternate")
+
+        # Verify the install was successful by checking the running version
+        if target_version and not verified_by_completion_wait:
+            self._verify_install_version(target_version, is_multiple)
 
     def open(self):
         """Open connection to device."""
@@ -716,8 +1286,81 @@ class JunosDevice(BaseDevice):
         """
         return checksum == self.get_remote_checksum(filename, hashing_algorithm)
 
+    def _remote_file_copy_shell_fetch(self, src, source_url, dest):
+        r"""Download ``source_url`` straight to ``dest`` with the shell ``fetch`` binary.
+
+        The ``file copy`` RPC stages remote fetches under the calling user's
+        home directory (``/var/home/<user>`` on the ``/var`` partition) and
+        only moves the file to the destination afterwards, so it fails with
+        "filesystem is full" whenever the image is larger than the free space
+        on ``/var`` — even when the destination filesystem has plenty of room.
+        ``fetch -o`` writes directly to the destination path with no staging
+        copy. ``-q`` is required, not cosmetic: fetch's progress lines
+        (``89% of 119 MB``) can match PyEZ's shell-prompt pattern
+        ``(%|#|$)\s`` and would end the prompt wait mid-transfer.
+
+        Returns:
+            bool: True when the file was downloaded; False when the platform
+                has no ``fetch`` binary (e.g., Junos Evolved) and the caller
+                should fall back to the ``file copy`` RPC.
+
+        Raises:
+            FileTransferError: When ``fetch`` ran and failed, or the shell
+                session itself could not be established.
+        """
+        fetch_cmd = f"fetch -q -o {shlex.quote(dest)} {shlex.quote(source_url)}"
+        if src.scheme == "ftp":
+            fetch_cmd = f"setenv FTP_PASSIVE_MODE {'yes' if src.ftp_passive else 'no'}; {fetch_cmd}"
+
+        exit_ok, output = False, ""
+        try:
+            with StartShell(self.native) as shell:
+                exit_ok, output = shell.run(fetch_cmd, timeout=src.timeout)
+                if not exit_ok:
+                    # csh reports "fetch: Command not found."; sh reports "fetch: not
+                    # found". A bare "not found" check would also match fetch's own
+                    # HTTP 404 error text and misroute a real transfer failure.
+                    if "command not found" in output.lower() or "fetch: not found" in output.lower():
+                        log.warning(
+                            "Host %s: no fetch binary on this platform; falling back to the file-copy RPC.",
+                            self.host,
+                        )
+                        return False
+                    # Remove the partial file so it does not consume the space a retry needs.
+                    shell.run(f"rm -f {shlex.quote(dest)}")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: shell fetch from %s failed: %s", self.host, src.clean_url, exc)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
+
+        if not exit_ok:
+            # The echoed fetch command carries the URL credential; mask it.
+            error = output.replace(src.token, "*****").strip() if src.token else output.strip()
+            log.error("Host %s: shell fetch from %s failed: %s", self.host, src.clean_url, error)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {error}")
+        return True
+
+    def _remote_file_copy_rpc(self, src, source_url, dest):
+        """Copy ``source_url`` to ``dest`` with the ``file copy`` RPC.
+
+        Issued directly rather than through PyEZ ``fs.cp``, which wraps the RPC
+        in a bare ``except`` and returns False — discarding the device's actual
+        error message. A successful reply may be the bool True (empty rpc-reply)
+        or an XML element; only an exception means failure.
+        """
+        try:
+            self.native.rpc.file_copy(source=source_url, destination=dest, dev_timeout=src.timeout)
+        except RpcError as exc:
+            log.error("Host %s: file copy from %s failed: %s", self.host, src.clean_url, exc)
+            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}: {exc}") from exc
+
     def remote_file_copy(self, src: FileCopyModel = None, dest=None, file_system: str | None = None, **kwargs):
         """Copy a file to a remote device.
+
+        For ``ftp``/``http``/``https`` URLs the transfer runs as a shell
+        ``fetch`` writing directly to ``dest``, avoiding the ``file copy``
+        RPC's staging copy in the user's home directory on ``/var`` (which
+        fails on small-flash platforms). Other schemes, and platforms without
+        a ``fetch`` binary, use the ``file copy`` RPC.
 
         Args:
             src (FileCopyModel): The source file model.
@@ -744,14 +1387,23 @@ class JunosDevice(BaseDevice):
 
         self._pre_transfer_space_check(src, file_system=file_system)
 
-        # Junos ``fs.cp`` requires the filename in the URL; append ``src.file_name``
+        # The download URL requires the filename; append ``src.file_name``
         # when the URL carries no path so callers can point at a bare host.
         source_url = src.download_url
         if not urlparse(source_url).path.strip("/"):
             source_url = f"{source_url.rstrip('/')}/{src.file_name}"
 
-        if not self.fs.cp(from_path=source_url, to_path=dest, dev_timeout=src.timeout):
-            raise FileTransferError(message=f"Unable to copy file from remote url {src.clean_url}")
+        # The ``file copy`` RPC stages remote fetches in the calling user's home
+        # directory (on the small ``/var`` partition) before moving them to the
+        # destination, so it fails with "filesystem is full" on small-flash
+        # platforms even when the destination filesystem has room. Prefer a
+        # shell ``fetch`` which writes straight to ``dest``; fall back to the
+        # RPC for schemes ``fetch`` cannot handle or platforms without the binary.
+        copied = False
+        if src.scheme in _JUNOS_FETCH_SCHEMES:
+            copied = self._remote_file_copy_shell_fetch(src, source_url, dest)
+        if not copied:
+            self._remote_file_copy_rpc(src, source_url, dest)
 
         # Some devices take a while to sync the filesystem after a copy but netconf returns before the sync completes
         for _ in range(5):
