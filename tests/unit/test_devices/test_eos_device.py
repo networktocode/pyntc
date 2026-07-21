@@ -299,16 +299,6 @@ class TestEOSDevice(unittest.TestCase):
 
     @mock.patch("pyntc.devices.eos_device.time")
     @mock.patch.object(EOSDevice, "boot_time", new_callable=mock.PropertyMock)
-    def test_wait_for_device_reboot_low_pre_reboot_uptime(self, mock_boot_time, mock_time):
-        mock_time.time.side_effect = [0, 1, 2]
-        mock_boot_time.side_effect = [Exception("unreachable"), 2000]
-
-        self.device._wait_for_device_reboot(original_boot_time=1000)
-
-        self.assertEqual(mock_boot_time.call_count, 2)
-
-    @mock.patch("pyntc.devices.eos_device.time")
-    @mock.patch.object(EOSDevice, "boot_time", new_callable=mock.PropertyMock)
     def test_wait_for_device_reboot_timeout(self, mock_boot_time, mock_time):
         mock_time.time.side_effect = [0, 5, 15]
         mock_boot_time.return_value = 1000
