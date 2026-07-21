@@ -5,7 +5,7 @@ from tempfile import NamedTemporaryFile
 
 import mock
 import pytest
-from jnpr.junos.exception import ConfigLoadError, RpcTimeoutError
+from jnpr.junos.exception import ConfigLoadError, RpcError, RpcTimeoutError
 
 from pyntc.devices import JunosDevice, jnpr_device
 from pyntc.errors import (
@@ -60,6 +60,81 @@ DEVICE_FACTS = {
     "vc_capable": False,
     "personality": "MX",
 }
+
+# SRX3xx chassis-cluster variant of DEVICE_FACTS with model and cluster awareness
+SRX3XX_FACTS = {
+    **DEVICE_FACTS,
+    "model": "SRX340",
+    "current_re": "node0",
+    "srx_cluster": {
+        "cluster_id": 1,
+        "node_id": 0,
+    },
+}
+
+# Realistic `show version` output from an SRX340 chassis-cluster (node0 and node1)
+CHASSIS_CLUSTER_SHOW_VERSION = """
+node0:
+----------
+Hostname: srx340-node0
+Model: srx340
+JUNOS Software Release [19.1R1.6]
+Junos: 19.1R1.6
+
+node1:
+----------
+Hostname: srx340-node1
+Model: srx340
+JUNOS Software Release [19.1R1.6]
+Junos: 19.1R1.6
+"""
+
+# Version mismatch variant: node0 upgraded, node1 still on old version
+CHASSIS_CLUSTER_SHOW_VERSION_MISMATCH = """
+node0:
+----------
+Junos: 19.1R1.6
+
+node1:
+----------
+Junos: 19.1R1.5
+"""
+
+# Realistic `show configuration chassis cluster` output
+CHASSIS_CLUSTER_CONFIG = """
+chassis {
+    cluster {
+        disable-auto-image-copy;
+        reth-count 8;
+        redundancy-group 0 {
+            priority 100;
+        }
+        redundancy-group 1 {
+            priority 90;
+        }
+    }
+}
+"""
+
+# Realistic `show chassis cluster status` output (both RGs primary on node0)
+CHASSIS_CLUSTER_STATUS = """
+Redundancy group: 0, Status: Up
+node0 master primary
+node1 backup secondary
+Redundancy group: 1, Status: Up
+node0 master primary
+node1 backup secondary
+"""
+
+# Variant: node0 secondary in RG 0 (not primary everywhere)
+CHASSIS_CLUSTER_STATUS_SECONDARY_RG0 = """
+Redundancy group: 0, Status: Up
+node0 backup secondary
+node1 master primary
+Redundancy group: 1, Status: Up
+node0 master primary
+node1 backup secondary
+"""
 
 
 class TestJnprDevice(unittest.TestCase):
@@ -1093,6 +1168,62 @@ class TestJnprDevice(unittest.TestCase):
                         reboot=False,
                     )
 
+    def test_install_os_no_validate_parameter(self):
+        """Test no_validate parameter controls validation."""
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=False),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+
+            with self.subTest("no_validate=True (default)"):
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                )
+                install_kwargs = self.device.sw.install.call_args.kwargs
+                self.assertFalse(install_kwargs.get("validate"))
+
+            with self.subTest("validate=True"):
+                self.device.sw.install.reset_mock()
+                self.device.install_os(
+                    image_name="/var/tmp/jinstall-15.1R7-S2-signed.tgz",
+                    checksum="c0ffee",
+                    validate=True,
+                )
+                install_kwargs = self.device.sw.install.call_args.kwargs
+                self.assertTrue(install_kwargs.get("validate"))
+
+    def test_install_os_srx3xx_no_validate_warning_on_multi_device(self):
+        """Test warning is logged when no_validate is True on multi-device."""
+        with (
+            mock.patch.object(self.device, "_validate_multiple_device", return_value=True),
+            mock.patch.object(self.device, "_wait_for_nssu_completion"),
+            mock.patch.object(self.device, "request_system_snapshot"),
+            mock.patch.object(self.device, "_verify_install_version"),
+            mock.patch("pyntc.devices.jnpr_device.log") as mock_log,
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock) as mock_uptime,
+        ):
+            self.device.native.facts = {
+                **DEVICE_FACTS,
+                "re_info": {"default": {"0": {"status": "OK"}, "1": {"status": "OK"}, "default": {"status": "OK"}}},
+            }
+            mock_uptime.return_value = 1000
+            self.device.sw.install.return_value = True
+
+            self.device.install_os(
+                image_name="/var/tmp/jinstall-ex-3300-15.1R7-S2-domestic-signed.tgz",
+                checksum="c0ffee",
+                nssu=True,
+            )
+
+            # Should log warning about no_validate on multi-device
+            mock_log.warning.assert_called()
+
 
 class TestJnprFreeSpace(unittest.TestCase):
     """Tests for JunOS pre-transfer free-space verification (NAPPS-1085)."""
@@ -1293,6 +1424,266 @@ class TestJnprFreeSpace(unittest.TestCase):
             "setenv FTP_PASSIVE_MODE yes; fetch -q -o /var/tmp/image.bin ftp://ntc:pw@10.1.100.220/subdir/image.bin",
             timeout=mock.ANY,
         )
+
+
+class TestJnprDeviceICUUpgrade(unittest.TestCase):
+    """Tests for ICU (In-service Cluster Upgrade) on SRX chassis-cluster devices."""
+
+    def setUp(self):
+        self.mock_sw = mock.patch("pyntc.devices.jnpr_device.JunosNativeSW", autospec=True)
+        self.mock_fs = mock.patch("pyntc.devices.jnpr_device.JunosNativeFS", autospec=True)
+        self.mock_config = mock.patch("pyntc.devices.jnpr_device.JunosNativeConfig", autospec=True)
+        self.mock_device = mock.patch("pyntc.devices.jnpr_device.JunosNativeDevice", autospec=True)
+
+        self.mock_sw.start()
+        self.mock_fs.start()
+        self.mock_config.start()
+        self.mock_device.start()
+
+        self.device = JunosDevice("host", "user", "pass")
+        self.device.native.rpc = mock.MagicMock()
+        self.device.native.timeout = 120
+        self.device.native.facts = {"hostname": "srx340"}
+
+    def tearDown(self):
+        self.mock_sw.stop()
+        self.mock_fs.stop()
+        self.mock_config.stop()
+        self.mock_device.stop()
+
+    def test_get_chassis_cluster_versions_parses_show_version(self):
+        """_get_chassis_cluster_versions() correctly parses show version output."""
+        show_version_output = """
+node0:
+----------
+Hostname: srx340-node0
+Model: srx340
+JUNOS Software Release [19.1R1.6]
+Junos: 19.1R1.6
+
+node1:
+----------
+Hostname: srx340-node1
+Model: srx340
+JUNOS Software Release [19.1R1.6]
+Junos: 19.1R1.6
+"""
+        with mock.patch.object(self.device, "show", return_value=show_version_output):
+            versions = self.device._get_chassis_cluster_versions()
+
+        self.assertEqual(versions, {"0": "19.1R1.6", "1": "19.1R1.6"})
+
+    def test_get_chassis_cluster_versions_handles_single_node(self):
+        """_get_chassis_cluster_versions() handles single node output."""
+        show_version_output = """
+node0:
+----------
+Junos: 21.4R3-S5.3
+"""
+        with mock.patch.object(self.device, "show", return_value=show_version_output):
+            versions = self.device._get_chassis_cluster_versions()
+
+        self.assertEqual(versions, {"0": "21.4R3-S5.3"})
+
+    def test_get_chassis_cluster_versions_returns_empty_on_error(self):
+        """_get_chassis_cluster_versions() returns empty dict on exception."""
+        with mock.patch.object(self.device, "show", side_effect=Exception("parse error")):
+            versions = self.device._get_chassis_cluster_versions()
+
+        self.assertEqual(versions, {})
+
+    def test_initiate_issu_upgrade_timeout_override_for_icu(self):
+        """_initiate_issu_upgrade() increases timeout to 1800s for ICU upgrades."""
+        self.device.native.rpc.cli.return_value = "ISSU: Validating package"
+
+        self.device._initiate_issu_upgrade("/var/tmp/image.tgz", is_icu=True, no_validate=True)
+
+        # Verify timeout was increased
+        self.assertEqual(self.device.native.timeout, 120)  # restored after call
+
+    def test_initiate_issu_upgrade_handles_rpc_timeout(self):
+        """_initiate_issu_upgrade() handles RpcTimeoutError gracefully for device reboot."""
+        self.device.native.rpc.cli.side_effect = RpcTimeoutError("device", "cli", 1800)
+
+        result = self.device._initiate_issu_upgrade("/var/tmp/image.tgz", is_icu=True, no_validate=False)
+
+        # Should not raise; RpcTimeoutError is expected during device reboot
+        self.assertIsNone(result)
+
+    def test_initiate_issu_upgrade_raises_on_other_errors(self):
+        """_initiate_issu_upgrade() raises OSInstallError on non-timeout RPC errors."""
+        error_response = mock.MagicMock()
+        self.device.native.rpc.cli.side_effect = RpcError(error_response)
+
+        with self.assertRaises(OSInstallError):
+            self.device._initiate_issu_upgrade("/var/tmp/image.tgz", is_icu=True, no_validate=False)
+
+    def test_get_icu_redundancy_groups(self):
+        """_get_icu_redundancy_groups() extracts RG numbers from config."""
+        config_output = """
+chassis {
+    cluster {
+        disable-auto-image-copy;
+        reth-count 8;
+        redundancy-group 0 {
+            priority 100;
+        }
+        redundancy-group 1 {
+            priority 90;
+        }
+    }
+}
+"""
+        with mock.patch.object(self.device, "show", return_value=config_output):
+            rgs = self.device._get_icu_redundancy_groups()
+
+        self.assertEqual(rgs, [0, 1])
+
+    def test_get_node_redundancy_status_primary(self):
+        """_get_node_redundancy_status() returns primary for primary node."""
+        cluster_status = """
+Redundancy group: 0, Status: Up
+node0 master primary
+node1 backup secondary
+Redundancy group: 1, Status: Up
+node0 backup secondary
+node1 master primary
+"""
+        with mock.patch.object(self.device, "show", return_value=cluster_status):
+            status = self.device._get_node_redundancy_status("node0", 0)
+
+        self.assertEqual(status, "primary")
+
+    def test_get_node_redundancy_status_secondary(self):
+        """_get_node_redundancy_status() returns secondary for secondary node."""
+        cluster_status = """
+Redundancy group: 0, Status: Up
+node0 master primary
+node1 backup secondary
+"""
+        with mock.patch.object(self.device, "show", return_value=cluster_status):
+            status = self.device._get_node_redundancy_status("node1", 0)
+
+        self.assertEqual(status, "secondary")
+
+    def test_failover_redundancy_group(self):
+        """_failover_redundancy_group() executes failover RPC command."""
+        self.device.native.rpc.cli.return_value = "Failover successful"
+
+        self.device._failover_redundancy_group(0, "node1")
+
+        self.device.native.rpc.cli.assert_called_once()
+        call_args = self.device.native.rpc.cli.call_args
+        self.assertIn("redundancy-group 0", call_args[1]["command"])
+        self.assertIn("node 1", call_args[1]["command"])
+
+    def test_install_os_icu_retries_after_primary_node_rpc_error(self):
+        """ICU install retries failover after 'primary node error' RPC failure."""
+
+        self.device.native.facts = SRX3XX_FACTS.copy()
+        self.device._is_chassis_cluster = True
+
+        # Create RpcError with proper response object containing error text
+        primary_node_error = RpcError(self.device.native, "test")
+        primary_node_error.rsp = "primary node error"  # Set the response text
+
+        initial_calls = [primary_node_error, None]  # Second call (after failover) succeeds
+        call_iter = iter(initial_calls)
+
+        def initiate_side_effect(*args, **kwargs):
+            result = next(call_iter)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        # Mock the redundancy groups and status to indicate we need failover
+        show_call_count = {"count": 0}
+
+        def show_side_effect(cmd):
+            if "config" in cmd:
+                return CHASSIS_CLUSTER_CONFIG
+            # Initially secondary, then primary after failover
+            show_call_count["count"] += 1
+
+            # First call: show cluster status with node0 secondary
+            if show_call_count["count"] == 1:
+                return CHASSIS_CLUSTER_STATUS_SECONDARY_RG0
+            # After failover: show cluster status with node0 primary
+            return CHASSIS_CLUSTER_STATUS
+
+        with (
+            mock.patch.object(self.device, "_initiate_issu_upgrade", side_effect=initiate_side_effect),
+            mock.patch.object(self.device, "show", side_effect=show_side_effect),
+            mock.patch.object(self.device, "_wait_for_device_reboot"),
+            mock.patch.object(self.device, "_post_install_checks"),
+            mock.patch.object(self.device, "_failover_redundancy_group"),
+            mock.patch("pyntc.devices.jnpr_device.time.sleep"),  # Skip actual sleep
+            mock.patch.object(
+                type(self.device), "uptime", new_callable=mock.PropertyMock, return_value=1000
+            ),  # Pre-upgrade uptime
+        ):
+            # Should succeed despite initial primary node error (via failover retry)
+            self.device._install_os_icu(
+                image_name="/var/tmp/jinstall-srx340-19.1R1.6.tgz",
+                checksum="abc123",
+                reboot=True,
+            )
+
+            # Verify _initiate_issu_upgrade was called twice (initial + retry after failover)
+            self.assertEqual(self.device._initiate_issu_upgrade.call_count, 2)
+
+    def test_install_os_icu_raises_device_not_active_if_failover_does_not_take(self):
+        """ICU raises DeviceNotActiveError if node still not primary after failover."""
+        from pyntc.errors import DeviceNotActiveError
+
+        self.device.native.facts = SRX3XX_FACTS.copy()
+        self.device._is_chassis_cluster = True
+
+        # _initiate_issu_upgrade raises primary node error initially
+        primary_node_error = RpcError(self.device.native, "test")
+        primary_node_error.rsp = "primary node error"
+
+        # Cluster status always shows node0 as secondary (failover didn't work)
+        def show_side_effect(cmd):
+            if "config" in cmd:
+                return CHASSIS_CLUSTER_CONFIG
+            # Always show secondary — failover didn't help
+            return CHASSIS_CLUSTER_STATUS_SECONDARY_RG0
+
+        with (
+            mock.patch.object(self.device, "_initiate_issu_upgrade", side_effect=primary_node_error),
+            mock.patch.object(self.device, "show", side_effect=show_side_effect),
+            mock.patch.object(self.device, "_failover_redundancy_group"),
+            mock.patch("pyntc.devices.jnpr_device.time.sleep"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock, return_value=1000),
+        ):
+            with self.assertRaises(DeviceNotActiveError):
+                self.device._install_os_icu(
+                    image_name="/var/tmp/jinstall-srx340-19.1R1.6.tgz",
+                    checksum="abc123",
+                    reboot=True,
+                )
+
+    def test_install_os_icu_propagates_non_primary_node_errors(self):
+        """ICU propagates non-primary RPC errors as OSInstallError without failover."""
+        self.device.native.facts = SRX3XX_FACTS.copy()
+        self.device._is_chassis_cluster = True
+
+        # RPC error that is NOT a primary node error (e.g., validation failure)
+        non_primary_error = RpcError(self.device.native, "test")
+        non_primary_error.rsp = "validation failed"
+
+        with (
+            mock.patch.object(self.device, "_initiate_issu_upgrade", side_effect=non_primary_error),
+            mock.patch("pyntc.devices.jnpr_device.time.sleep"),
+            mock.patch.object(type(self.device), "uptime", new_callable=mock.PropertyMock, return_value=1000),
+        ):
+            with self.assertRaises(OSInstallError):
+                self.device._install_os_icu(
+                    image_name="/var/tmp/jinstall-srx340-19.1R1.6.tgz",
+                    checksum="abc123",
+                    reboot=True,
+                )
 
 
 if __name__ == "__main__":
