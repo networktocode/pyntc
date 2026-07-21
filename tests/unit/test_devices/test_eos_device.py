@@ -9,7 +9,7 @@ from pyntc.devices import EOSDevice
 from pyntc.devices.base_device import RollbackError
 from pyntc.devices.eos_device import FileTransferError
 from pyntc.devices.system_features.vlans.eos_vlans import EOSVlans
-from pyntc.errors import CommandError, CommandListError, NotEnoughFreeSpaceError  # noqa: F401
+from pyntc.errors import CommandError, CommandListError, NotEnoughFreeSpaceError, RebootTimeoutError  # noqa: F401
 from pyntc.utils.models import FileCopyModel
 
 from .device_mocks.eos import config, enable, send_command, send_command_expect
@@ -285,6 +285,26 @@ class TestEOSDevice(unittest.TestCase):
     def test_reboot(self):
         self.device.reboot()
         self.device.native.enable.assert_called_with(["reload now"], encoding="json")
+
+    @mock.patch("pyntc.devices.eos_device.time")
+    @mock.patch.object(EOSDevice, "uptime", new_callable=mock.PropertyMock)
+    def test_wait_for_device_reboot(self, mock_device_uptime, mock_time):
+        mock_time.time.side_effect = [0, 1, 2, 3]
+        mock_device_uptime.side_effect = [10005, Exception("unreachable"), 12]
+
+        self.device._wait_for_device_reboot(original_uptime=10000)
+
+        self.assertEqual(mock_device_uptime.call_count, 3)
+        self.assertEqual(mock_time.sleep.call_count, 2)
+
+    @mock.patch("pyntc.devices.eos_device.time")
+    @mock.patch.object(EOSDevice, "uptime", new_callable=mock.PropertyMock)
+    def test_wait_for_device_reboot_timeout(self, mock_device_uptime, mock_time):
+        mock_time.time.side_effect = [0, 5, 15]
+        mock_device_uptime.return_value = 10005
+
+        with self.assertRaises(RebootTimeoutError):
+            self.device._wait_for_device_reboot(original_uptime=10000, timeout=10)
 
     def test_boot_options(self):
         boot_options = self.device.boot_options
