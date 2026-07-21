@@ -178,34 +178,36 @@ class EOSDevice(BaseDevice):
 
         return f"{days:02d}:{hours:02d}:{mins:02d}:{seconds:02d}"
 
-    def _wait_for_device_reboot(self, original_uptime, timeout=DEFAULT_REBOOT_TIMEOUT):
-        """Block until the device reboots, detected by uptime dropping below original_uptime.
+    def _wait_for_device_reboot(self, original_boot_time, timeout=DEFAULT_REBOOT_TIMEOUT):
+        """Block until the device reboots, detected by its boot time advancing past original_boot_time.
 
         Args:
-            original_uptime (int): Device uptime in seconds captured before the reboot.
+            original_boot_time (float): Device boot time (epoch seconds) captured before the reboot.
             timeout (int): Max seconds to poll for the device to return. Defaults to 3600.
 
         Raises:
-            RebootTimeoutError: When the device does not report a reset uptime within timeout.
+            ValueError: When original_boot_time is None (no pre-reboot boot time was captured).
+            RebootTimeoutError: When the device does not report a later boot time within timeout.
         """
+        if original_boot_time is None:
+            raise ValueError("original_boot_time is required to detect a reboot; capture it before issuing the reload.")
+
         start = time.time()
         while time.time() - start < timeout:
             try:
-                self._uptime = None  # bust the cached value so we re-read from the device
-                current_uptime = self.uptime
-                if current_uptime < original_uptime:
+                current_boot_time = self.boot_time
+                if current_boot_time > original_boot_time:
                     log.info(
-                        "Host %s: Device rebooted (uptime %ss < pre-reboot %ss).",
+                        "Host %s: Device rebooted (boot time %s > pre-reboot %s).",
                         self.host,
-                        current_uptime,
-                        original_uptime,
+                        current_boot_time,
+                        original_boot_time,
                     )
                     return
                 log.debug(
-                    "Host %s: Reachable but uptime %ss >= pre-reboot %ss; still waiting.",
+                    "Host %s: Reachable but boot time unchanged (%s); still waiting.",
                     self.host,
-                    current_uptime,
-                    original_uptime,
+                    current_boot_time,
                 )
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
@@ -286,6 +288,15 @@ class EOSDevice(BaseDevice):
             self.native_ssh.exit_config_mode()
 
         log.debug("Host %s: Device enabled", self.host)
+
+    @property
+    def boot_time(self):
+        """Get the epoch timestamp (seconds) of the device's last boot, read live from ``show version``.
+
+        Returns:
+            (float): Epoch seconds when the device last booted, per ``bootupTimestamp``.
+        """
+        return self.show("show version")["bootupTimestamp"]
 
     @property
     def uptime(self):
@@ -798,7 +809,8 @@ class EOSDevice(BaseDevice):
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): When True, block until the device reboots (detected via
+                the pre-reboot boot time capture) before returning. Defaults to False.
             timeout (int): Max seconds to poll for the device to return when wait_for_reload is True. Defaults to 3600.
             kwargs (dict): Additional keyword arguments, such as confirm.
 
@@ -814,11 +826,11 @@ class EOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
-        original_uptime = self.uptime if wait_for_reload else None
+        original_boot_time = self.boot_time if wait_for_reload else None
         self.show("reload now")
         log.info("Host %s: Device rebooted.", self.host)
         if wait_for_reload:
-            self._wait_for_device_reboot(original_uptime, timeout=timeout)
+            self._wait_for_device_reboot(original_boot_time, timeout=timeout)
 
     def rollback(self, rollback_to):
         """Rollback device configuration.

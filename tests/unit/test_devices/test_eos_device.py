@@ -287,24 +287,38 @@ class TestEOSDevice(unittest.TestCase):
         self.device.native.enable.assert_called_with(["reload now"], encoding="json")
 
     @mock.patch("pyntc.devices.eos_device.time")
-    @mock.patch.object(EOSDevice, "uptime", new_callable=mock.PropertyMock)
-    def test_wait_for_device_reboot(self, mock_device_uptime, mock_time):
+    @mock.patch.object(EOSDevice, "boot_time", new_callable=mock.PropertyMock)
+    def test_wait_for_device_reboot(self, mock_boot_time, mock_time):
         mock_time.time.side_effect = [0, 1, 2, 3]
-        mock_device_uptime.side_effect = [10005, Exception("unreachable"), 12]
+        mock_boot_time.side_effect = [1000, Exception("unreachable"), 2000]
 
-        self.device._wait_for_device_reboot(original_uptime=10000)
+        self.device._wait_for_device_reboot(original_boot_time=1000)
 
-        self.assertEqual(mock_device_uptime.call_count, 3)
+        self.assertEqual(mock_boot_time.call_count, 3)
         self.assertEqual(mock_time.sleep.call_count, 2)
 
     @mock.patch("pyntc.devices.eos_device.time")
-    @mock.patch.object(EOSDevice, "uptime", new_callable=mock.PropertyMock)
-    def test_wait_for_device_reboot_timeout(self, mock_device_uptime, mock_time):
+    @mock.patch.object(EOSDevice, "boot_time", new_callable=mock.PropertyMock)
+    def test_wait_for_device_reboot_low_pre_reboot_uptime(self, mock_boot_time, mock_time):
+        mock_time.time.side_effect = [0, 1, 2]
+        mock_boot_time.side_effect = [Exception("unreachable"), 2000]
+
+        self.device._wait_for_device_reboot(original_boot_time=1000)
+
+        self.assertEqual(mock_boot_time.call_count, 2)
+
+    @mock.patch("pyntc.devices.eos_device.time")
+    @mock.patch.object(EOSDevice, "boot_time", new_callable=mock.PropertyMock)
+    def test_wait_for_device_reboot_timeout(self, mock_boot_time, mock_time):
         mock_time.time.side_effect = [0, 5, 15]
-        mock_device_uptime.return_value = 10005
+        mock_boot_time.return_value = 1000
 
         with self.assertRaises(RebootTimeoutError):
-            self.device._wait_for_device_reboot(original_uptime=10000, timeout=10)
+            self.device._wait_for_device_reboot(original_boot_time=1000, timeout=10)
+
+    def test_wait_for_device_reboot_requires_boot_time(self):
+        with self.assertRaises(ValueError):
+            self.device._wait_for_device_reboot(original_boot_time=None)
 
     def test_boot_options(self):
         boot_options = self.device.boot_options
