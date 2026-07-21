@@ -360,6 +360,12 @@ class TestEOSDevice(unittest.TestCase):
         self.assertIsInstance(uptime, int)
         self.assertEqual(uptime, expected)
 
+    def test_boot_time(self):
+        expected = self.device.show("show version")["bootupTimestamp"]
+        boot_time = self.device.boot_time
+        self.assertIsInstance(boot_time, float)
+        self.assertEqual(boot_time, expected)
+
     @mock.patch.object(EOSDevice, "_uptime_to_string", autospec=True)
     def test_uptime_string(self, mock_upt_str):
         mock_upt_str.return_value = "02:00:03:38"
