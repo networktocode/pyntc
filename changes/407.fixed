@@ -1,0 +1,1 @@
+Fixed Arista EOS reboots not being detected when waiting for the device to reload.
