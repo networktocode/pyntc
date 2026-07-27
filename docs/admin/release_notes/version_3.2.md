@@ -5,8 +5,15 @@ This document describes all new features and changes in the release. The format 
 ## Release Overview
 
 - Added support for ISSU and NSSU non-disruptive OS upgrades on Juniper devices, along with several fixes to Juniper `install_os` and `remote_file_copy` handling.
+- Fixed Arista EOS reboot detection when waiting for a device to reload.
 
 <!-- towncrier release notes start -->
+## [v3.2.1 (2026-07-27)](https://github.com/networktocode/pyntc/releases/tag/v3.2.1)
+
+### Fixed
+
+- [#407](https://github.com/networktocode/pyntc/issues/407) - Fixed Arista EOS reboots not being detected when waiting for the device to reload.
+
 ## [v3.2.0 (2026-07-14)](https://github.com/networktocode/pyntc/releases/tag/v3.2.0)
 
 ### Added
