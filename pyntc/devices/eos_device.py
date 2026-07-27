@@ -27,6 +27,7 @@ from pyntc.utils.models import FileCopyModel
 
 EOS_SUPPORTED_HASHING_ALGORITHMS = {"md5", "sha1", "sha256", "sha512"}  # Subset of HASHING_ALGORITHMS for EOS verify
 EOS_SUPPORTED_SCHEMES = {"http", "https", "scp", "ftp", "sftp", "tftp"}
+DEFAULT_REBOOT_TIMEOUT = 3600  # seconds (1 hour) to wait for a device to come back after a reboot
 BASIC_FACTS_KM = {"model": "modelName", "os_version": "internalVersion", "serial_number": "serialNumber"}
 INTERFACES_KM = {
     "speed": "bandwidth",
@@ -177,15 +178,40 @@ class EOSDevice(BaseDevice):
 
         return f"{days:02d}:{hours:02d}:{mins:02d}:{seconds:02d}"
 
-    def _wait_for_device_reboot(self, timeout=3600):
+    def _wait_for_device_reboot(self, original_boot_time, timeout=DEFAULT_REBOOT_TIMEOUT):
+        """Block until the device reboots, detected by its boot time advancing past original_boot_time.
+
+        Args:
+            original_boot_time (float): Device boot time (epoch seconds) captured before the reboot.
+            timeout (int): Max seconds to poll for the device to return. Defaults to 3600.
+
+        Raises:
+            ValueError: When original_boot_time is None (no pre-reboot boot time was captured).
+            RebootTimeoutError: When the device does not report a later boot time within timeout.
+        """
+        if original_boot_time is None:
+            raise ValueError("original_boot_time is required to detect a reboot; capture it before issuing the reload.")
+
         start = time.time()
         while time.time() - start < timeout:
             try:
-                self.show("show hostname")
-                log.debug("Host %s: Device rebooted.", self.host)
-                return
-            except:  # noqa E722 # nosec  # pylint: disable=bare-except
-                time.sleep(10)
+                current_boot_time = self.boot_time
+                if current_boot_time > original_boot_time:
+                    log.info(
+                        "Host %s: Device rebooted (boot time %s > pre-reboot %s).",
+                        self.host,
+                        current_boot_time,
+                        original_boot_time,
+                    )
+                    return
+                log.debug(
+                    "Host %s: Reachable but boot time unchanged (%s); still waiting.",
+                    self.host,
+                    current_boot_time,
+                )
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                log.debug("Host %s: Reboot probe failed (%s); will retry.", self.host, exc)
+            time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
         raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
@@ -262,6 +288,15 @@ class EOSDevice(BaseDevice):
             self.native_ssh.exit_config_mode()
 
         log.debug("Host %s: Device enabled", self.host)
+
+    @property
+    def boot_time(self):
+        """Get the epoch timestamp (seconds) of the device's last boot, read live from ``show version``.
+
+        Returns:
+            (float): Epoch seconds when the device last booted, per ``bootupTimestamp``.
+        """
+        return self.show("show version")["bootupTimestamp"]
 
     @property
     def uptime(self):
@@ -729,14 +764,13 @@ class EOSDevice(BaseDevice):
         Returns:
             (bool): True if device OS is succesfully installed.
         """
-        timeout = vendor_specifics.get("timeout", 3600)
+        timeout = vendor_specifics.get("timeout", DEFAULT_REBOOT_TIMEOUT)
         if not self._image_booted(image_name):
             self.set_boot_options(image_name, **vendor_specifics)
             if not reboot:
                 log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
                 return True
-            self.reboot()
-            self._wait_for_device_reboot(timeout=timeout)
+            self.reboot(wait_for_reload=True, timeout=timeout)
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
@@ -770,12 +804,14 @@ class EOSDevice(BaseDevice):
 
         log.debug("Host %s: Connection to controller was opened successfully.", self.host)
 
-    def reboot(self, wait_for_reload=False, **kwargs):
+    def reboot(self, wait_for_reload=False, timeout=DEFAULT_REBOOT_TIMEOUT, **kwargs):
         """
         Reload the controller or controller pair.
 
         Args:
-            wait_for_reload (bool): Whether or not reboot method should also run _wait_for_device_reboot(). Defaults to False.
+            wait_for_reload (bool): When True, block until the device reboots (detected via
+                the pre-reboot boot time capture) before returning. Defaults to False.
+            timeout (int): Max seconds to poll for the device to return when wait_for_reload is True. Defaults to 3600.
             kwargs (dict): Additional keyword arguments, such as confirm.
 
         Raises:
@@ -790,10 +826,11 @@ class EOSDevice(BaseDevice):
         if kwargs.get("confirm"):
             log.warning("Passing 'confirm' to reboot method is deprecated.")
 
+        original_boot_time = self.boot_time if wait_for_reload else None
         self.show("reload now")
         log.info("Host %s: Device rebooted.", self.host)
         if wait_for_reload:
-            self._wait_for_device_reboot()
+            self._wait_for_device_reboot(original_boot_time, timeout=timeout)
 
     def rollback(self, rollback_to):
         """Rollback device configuration.
