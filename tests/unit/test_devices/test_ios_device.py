@@ -505,9 +505,27 @@ class TestIOSDevice(unittest.TestCase):
             self.device.native.send_command_timing.return_value = "MD5 (flash:/file.txt) = dummy_checksum"
             self.assertEqual(self.device.get_remote_checksum("file.txt", file_system="flash:"), "dummy_checksum")
 
+        with self.subTest("Test get_remote_checksum uses default read_timeout"):
+            self.device.native.send_command_timing.assert_called_with("verify /md5 flash:/file.txt", read_timeout=900)
+
+        with self.subTest("Test get_remote_checksum with custom read_timeout"):
+            self.device.get_remote_checksum("file.txt", file_system="flash:", read_timeout=1800)
+            self.device.native.send_command_timing.assert_called_with("verify /md5 flash:/file.txt", read_timeout=1800)
+
         with self.subTest("Test get_remote_checksum with invalid hashing algorithm"):
             with self.assertRaises(ValueError):
                 self.device.get_remote_checksum("file.txt", hashing_algorithm="invalid_algo", file_system="flash:")
+
+        with self.subTest("Test get_remote_checksum raises CommandError when checksum is unparsable"):
+            self.device.native.send_command_timing.return_value = "truncated output with no checksum"
+            with self.assertRaises(ios_module.CommandError):
+                self.device.get_remote_checksum("file.txt", file_system="flash:")
+
+    @mock.patch.object(IOSDevice, "compare_file_checksum", return_value=True)
+    @mock.patch.object(IOSDevice, "check_file_exists", return_value=True)
+    def test_verify_file_forwards_read_timeout(self, mock_exists, mock_compare):
+        self.assertTrue(self.device.verify_file("dummy_checksum", "file.txt", file_system="flash:", read_timeout=1800))
+        mock_compare.assert_called_with("dummy_checksum", "file.txt", "md5", file_system="flash:", read_timeout=1800)
 
     def test_get_free_space(self):
         self.device.native.send_command.return_value = "16777216 bytes total (1592488 bytes free)"

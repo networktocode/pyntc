@@ -641,7 +641,7 @@ class IOSDevice(BaseDevice):
         log.debug("Host %s: Config register %s", self.host, self._config_register)
         return self._config_register
 
-    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None, read_timeout=900):
         """Get the checksum of a remote file.
 
         Args:
@@ -650,6 +650,8 @@ class IOSDevice(BaseDevice):
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (str): The checksum of the remote file.
@@ -663,7 +665,7 @@ class IOSDevice(BaseDevice):
         if file_system is None:
             file_system = self._get_file_system()
         cmd = f"verify /{hashing_algorithm} {file_system}/{filename}"
-        result = self.native.send_command_timing(cmd, read_timeout=300)
+        result = self.native.send_command_timing(cmd, read_timeout=read_timeout)
 
         patterns = [r"=\s+(\S+)", r"^([a-fA-F0-9]+)$"]
         for pattern in patterns:
@@ -675,7 +677,7 @@ class IOSDevice(BaseDevice):
                     hashing_algorithm,
                     match[1],
                 )
-            return match[1]
+                return match[1]
         log.error(
             "Host %s: Unable to get remote checksum for file %s with hashing algorithm %s",
             self.host,
@@ -718,7 +720,7 @@ class IOSDevice(BaseDevice):
             return True
         raise CommandError(cmd, f"Unable to determine if file {filename} exists on remote: {result}")
 
-    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None, read_timeout=900):
         """Verify a file on the remote device by and validate the checksums.
 
         Args:
@@ -728,12 +730,14 @@ class IOSDevice(BaseDevice):
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (bool): True if the file is verified successfully, False otherwise.
         """
         return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
-            checksum, filename, hashing_algorithm, file_system=file_system
+            checksum, filename, hashing_algorithm, file_system=file_system, read_timeout=read_timeout
         )
 
     def file_copy(self, src, dest=None, file_system=None):
