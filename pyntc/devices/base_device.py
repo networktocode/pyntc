@@ -410,6 +410,8 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
             file_system (str): Supported only for IOS and NXOS. The file system for the
                 remote file. If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
+            read_timeout (int): Supported only for IOS, ASA and IOS-XR. Maximum time in
+                seconds to wait for the checksum command to complete (default: 900).
 
         Returns:
             (bool): True if the checksums match, False otherwise.

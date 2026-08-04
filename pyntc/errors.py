@@ -229,15 +229,18 @@ class NotEnoughFreeSpaceError(NTCError):
 class OSInstallError(NTCError):
     """Error for failing to install an OS on a device."""
 
-    def __init__(self, hostname, desired_boot):
+    def __init__(self, hostname, desired_boot, detail=None):
         """
         Error for failing to install an OS on a device.
 
         Args:
             hostname (str): The hostname of the device that failed to install OS.
             desired_boot (str): The OS that was attempted to be installed.
+            detail (str, optional): The error output reported by the device.
         """
         message = f"{hostname} was unable to boot into {desired_boot}"
+        if detail:
+            message = f"{message}: {detail}"
         super().__init__(message)
 
 
