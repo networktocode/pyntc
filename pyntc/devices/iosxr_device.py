@@ -408,7 +408,7 @@ class IOSXRDevice(BaseDevice):
         """
         log.debug("Host %s: enable() is a no-op on IOS-XR.", self.host)
 
-    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None):
+    def get_remote_checksum(self, filename, hashing_algorithm="md5", file_system=None, read_timeout=900):
         """Get the checksum of a remote file.
 
         Args:
@@ -417,6 +417,8 @@ class IOSXRDevice(BaseDevice):
             file_system (str): The file system for the remote file.
                 If no file_system is provided, then the ``get_file_system``
                 method is used to determine the correct file system to use.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (str): The checksum of the remote file.
@@ -434,7 +436,7 @@ class IOSXRDevice(BaseDevice):
         if not file_system.startswith("/"):
             file_system = "/" + file_system
         cmd = f"run {hashing_algorithm}sum {file_system}/{filename}"
-        result = self._send_command(cmd, read_timeout=300)
+        result = self._send_command(cmd, read_timeout=read_timeout)
 
         match = re.search(r"^([a-fA-F0-9]+)\s", result, flags=re.MULTILINE)
         if match:
@@ -481,7 +483,7 @@ class IOSXRDevice(BaseDevice):
         log.debug("Host %s: File %s not found in 'dir' output on %s.", self.host, filename, file_system)
         return False
 
-    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None):
+    def verify_file(self, checksum, filename, hashing_algorithm="md5", file_system=None, read_timeout=900):
         """Verify a file on the remote device exists and its checksum matches.
 
         Args:
@@ -491,12 +493,14 @@ class IOSXRDevice(BaseDevice):
             file_system (str): The file system for the remote file. If no file_system
                 is provided, then the ``_get_file_system`` method is used to determine
                 the correct file system to use.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (bool): True if the file is verified successfully, False otherwise.
         """
         return self.check_file_exists(filename, file_system=file_system) and self.compare_file_checksum(
-            checksum, filename, hashing_algorithm, file_system=file_system
+            checksum, filename, hashing_algorithm, file_system=file_system, read_timeout=read_timeout
         )
 
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):

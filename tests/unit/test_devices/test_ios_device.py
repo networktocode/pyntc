@@ -505,9 +505,27 @@ class TestIOSDevice(unittest.TestCase):
             self.device.native.send_command_timing.return_value = "MD5 (flash:/file.txt) = dummy_checksum"
             self.assertEqual(self.device.get_remote_checksum("file.txt", file_system="flash:"), "dummy_checksum")
 
+        with self.subTest("Test get_remote_checksum uses default read_timeout"):
+            self.device.native.send_command_timing.assert_called_with("verify /md5 flash:/file.txt", read_timeout=900)
+
+        with self.subTest("Test get_remote_checksum with custom read_timeout"):
+            self.device.get_remote_checksum("file.txt", file_system="flash:", read_timeout=1800)
+            self.device.native.send_command_timing.assert_called_with("verify /md5 flash:/file.txt", read_timeout=1800)
+
         with self.subTest("Test get_remote_checksum with invalid hashing algorithm"):
             with self.assertRaises(ValueError):
                 self.device.get_remote_checksum("file.txt", hashing_algorithm="invalid_algo", file_system="flash:")
+
+        with self.subTest("Test get_remote_checksum raises CommandError when checksum is unparsable"):
+            self.device.native.send_command_timing.return_value = "truncated output with no checksum"
+            with self.assertRaises(ios_module.CommandError):
+                self.device.get_remote_checksum("file.txt", file_system="flash:")
+
+    @mock.patch.object(IOSDevice, "compare_file_checksum", return_value=True)
+    @mock.patch.object(IOSDevice, "check_file_exists", return_value=True)
+    def test_verify_file_forwards_read_timeout(self, mock_exists, mock_compare):
+        self.assertTrue(self.device.verify_file("dummy_checksum", "file.txt", file_system="flash:", read_timeout=1800))
+        mock_compare.assert_called_with("dummy_checksum", "file.txt", "md5", file_system="flash:", read_timeout=1800)
 
     def test_get_free_space(self):
         self.device.native.send_command.return_value = "16777216 bytes total (1592488 bytes free)"
@@ -1384,6 +1402,92 @@ def test_install_os_install_mode_failed(
     mock_os_version.assert_called()
     mock_image_booted.assert_called()
     mock_wait_for_reboot.assert_called()
+
+
+# Test install mode upgrade falls back to the legacy command and completes successfully
+@mock.patch.object(IOSDevice, "install_mode", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+def test_install_os_install_mode_fallback_success(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    mock_install_mode,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_install_mode.return_value = True
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_image_booted.side_effect = [False, True]
+    mock_show.side_effect = [
+        ios_module.CommandError("install add command", "% failure"),
+        "install successful",
+    ]
+    # Call the install_os
+    actual = ios_device.install_os(image_name)
+
+    # Test the results
+    mock_show.assert_called_with(
+        f"request platform software package install switch all file {file_system}{image_name} auto-copy",
+        read_timeout=2000,
+    )
+    mock_reboot.assert_called()
+    assert actual is True
+
+
+# Test install mode upgrade legacy fallback failure preserves the original install error
+@mock.patch.object(IOSDevice, "install_mode", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "os_version", new_callable=mock.PropertyMock)
+@mock.patch.object(IOSDevice, "_image_booted")
+@mock.patch.object(IOSDevice, "set_boot_options")
+@mock.patch.object(IOSDevice, "show")
+@mock.patch.object(IOSDevice, "_wait_for_device_reboot")
+@mock.patch.object(IOSDevice, "_get_file_system")
+@mock.patch.object(IOSDevice, "reboot")
+def test_install_os_install_mode_fallback_failure_preserves_original_error(
+    mock_reboot,
+    mock_get_file_system,
+    mock_wait_for_reboot,
+    mock_show,
+    mock_set_boot_options,
+    mock_image_booted,
+    mock_os_version,
+    mock_install_mode,
+    ios_device,
+):
+    image_name = "cat9k_iosxe.16.12.04.SPA.bin"
+    file_system = "flash:"
+    mock_install_mode.return_value = True
+    mock_get_file_system.return_value = file_system
+    mock_os_version.return_value = "16.12.03a"
+    mock_image_booted.side_effect = [False]
+    original_error = ios_module.CommandError(
+        "install add command", "FAILED: Expanding all-in-one software package failed in switch 3"
+    )
+    mock_show.side_effect = [
+        original_error,
+        ios_module.CommandError("request platform command", "% Invalid input detected at '^' marker."),
+    ]
+    # Call the install_os
+    with pytest.raises(ios_module.CommandError) as err:
+        ios_device.install_os(image_name)
+
+    # Both the fallback error and the original install error are in the message
+    assert "% Invalid input detected" in err.value.message
+    assert "FAILED: Expanding all-in-one software package failed in switch 3" in err.value.message
+    assert err.value.__cause__ is original_error
+    mock_reboot.assert_not_called()
 
 
 # Test install mode upgrade for install mode with latest method

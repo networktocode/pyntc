@@ -657,6 +657,8 @@ class ASADevice(BaseDevice):
 
         Keyword Args:
             file_system (str): The file system where the file resides. Defaults to ``_get_file_system()``.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (str): The checksum of the file.
@@ -674,7 +676,7 @@ class ASADevice(BaseDevice):
 
         file_system = kwargs.get("file_system") or self._get_file_system()
         cmd = f"verify /{asa_algorithm} {file_system}{filename}"
-        result = self.native.send_command_timing(cmd, read_timeout=300)
+        result = self.native.send_command_timing(cmd, read_timeout=kwargs.get("read_timeout", 900))
 
         if match := re.search(r"=\s+(\S+)", result):
             log.debug(
@@ -1326,6 +1328,8 @@ class ASADevice(BaseDevice):
 
         Keyword Args:
             file_system (str): The file system where the file resides. Defaults to ``_get_file_system()``.
+            read_timeout (int): Maximum time in seconds to wait for the checksum command to
+                complete. Hashing large files can take several minutes (default: 900).
 
         Returns:
             (bool): True if the file exists and the checksum matches, False otherwise.

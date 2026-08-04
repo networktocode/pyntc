@@ -8,6 +8,12 @@ This document describes all new features and changes in the release. The format 
 - Fixed Arista EOS reboot detection when waiting for a device to reload.
 
 <!-- towncrier release notes start -->
+## [v3.2.2 (2026-08-04)](https://github.com/networktocode/pyntc/releases/tag/v3.2.2)
+
+### Fixed
+
+- [#410](https://github.com/networktocode/pyntc/issues/410) - Fixed checksum verification timing out on large OS images — `get_remote_checksum` and `verify_file` now accept a `read_timeout` argument and its default was raised from 300s to 900s for IOS, ASA and IOS-XR devices.
+
 ## [v3.2.1 (2026-07-27)](https://github.com/networktocode/pyntc/releases/tag/v3.2.1)
 
 ### Fixed

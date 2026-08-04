@@ -969,7 +969,7 @@ def test_get_remote_checksum_md5(mock_fs, asa_device):
     )
     result = asa_device.get_remote_checksum("asa.bin")
     assert result == MD5_CHECKSUM
-    asa_device.native.send_command_timing.assert_called_with("verify /md5 disk0:asa.bin", read_timeout=300)
+    asa_device.native.send_command_timing.assert_called_with("verify /md5 disk0:asa.bin", read_timeout=900)
 
 
 @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
@@ -979,7 +979,7 @@ def test_get_remote_checksum_sha512(mock_fs, asa_device):
     )
     result = asa_device.get_remote_checksum("asa.bin", hashing_algorithm="sha512")
     assert result == SHA512_CHECKSUM
-    asa_device.native.send_command_timing.assert_called_with("verify /sha-512 disk0:asa.bin", read_timeout=300)
+    asa_device.native.send_command_timing.assert_called_with("verify /sha-512 disk0:asa.bin", read_timeout=900)
 
 
 @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
@@ -989,8 +989,18 @@ def test_get_remote_checksum_uses_provided_file_system(mock_fs, asa_device):
     )
     result = asa_device.get_remote_checksum("asa.bin", file_system="flash:")
     assert result == MD5_CHECKSUM
-    asa_device.native.send_command_timing.assert_called_with("verify /md5 flash:asa.bin", read_timeout=300)
+    asa_device.native.send_command_timing.assert_called_with("verify /md5 flash:asa.bin", read_timeout=900)
     mock_fs.assert_not_called()
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+def test_get_remote_checksum_custom_read_timeout(mock_fs, asa_device):
+    asa_device.native.send_command_timing.return_value = (
+        f"!!!!!!!!!!!!!!!!!!!!!!!!Done!\nverify /MD5 (disk0:/asa.bin) = {MD5_CHECKSUM}"
+    )
+    result = asa_device.get_remote_checksum("asa.bin", read_timeout=1800)
+    assert result == MD5_CHECKSUM
+    asa_device.native.send_command_timing.assert_called_with("verify /md5 disk0:asa.bin", read_timeout=1800)
 
 
 def test_get_remote_checksum_invalid_algorithm(asa_device):
