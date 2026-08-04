@@ -1,1 +1,0 @@
-Fixed checksum verification timing out on large OS images — `get_remote_checksum` and `verify_file` now accept a `read_timeout` argument and its default was raised from 300s to 900s for IOS, ASA and IOS-XR devices.
