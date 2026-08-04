@@ -140,7 +140,7 @@ class IOSDevice(BaseDevice):
                 continue
 
         log.error("host %s: File system not found with command 'dir'.")
-        raise FileSystemNotFoundError(self.hostname, "dir")
+        raise FileSystemNotFoundError(hostname=self.hostname, command="dir")
 
     def _get_free_space(self, file_system=None):
         """Return free bytes on ``file_system`` as reported by IOS ``dir`` output."""
@@ -263,7 +263,7 @@ class IOSDevice(BaseDevice):
                 time.sleep(10)
 
         log.error("Host %s: Device timed out while rebooting.", self.host)
-        raise RebootTimeoutError(self.hostname, timeout)
+        raise RebootTimeoutError(hostname=self.hostname, wait_time=timeout)
 
     def _has_reload_happened_recently(self):
         if re.search(r"^00:00:0\d:*", self.uptime_string) is None:
@@ -957,7 +957,9 @@ class IOSDevice(BaseDevice):
                         install_message = self.show(command, read_timeout=read_timeout)
                         if install_message.startswith("FAILED:"):
                             log.error("Host %s: OS install error for image %s", self.host, image_name)
-                            raise OSInstallError(self.hostname, image_name, install_message)
+                            raise OSInstallError(
+                                hostname=self.hostname, desired_boot=image_name, detail=install_message
+                            )
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
                     except CommandError as original_error:
@@ -994,7 +996,7 @@ class IOSDevice(BaseDevice):
             # Verify the OS level
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
-                raise OSInstallError(self.hostname, image_name)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
             log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
             return True
@@ -1253,7 +1255,7 @@ class IOSDevice(BaseDevice):
         file_system_files = self.show(f"dir {file_system}")
         if image_name != INSTALL_MODE_FILE_NAME and re.search(image_name, file_system_files) is None:
             log.error("Host %s: File not found error for image %s.", self.host, image_name)
-            raise NTCFileNotFoundError(self.hostname, image_name, file_system)
+            raise NTCFileNotFoundError(hostname=self.hostname, file=image_name, directory=file_system)
         if image_name == "packages.conf":
             command = f"boot system {file_system}{image_name}"
             self.config(["no boot system", command])

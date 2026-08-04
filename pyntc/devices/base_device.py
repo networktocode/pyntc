@@ -90,7 +90,7 @@ class BaseDevice:  # pylint: disable=too-many-instance-attributes,too-many-publi
                 required_bytes,
             )
             raise NotEnoughFreeSpaceError(
-                self.host,
+                hostname=self.host,
                 required=required_bytes,
                 available=available,
                 file_system=file_system,

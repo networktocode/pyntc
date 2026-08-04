@@ -1,0 +1,1 @@
+Improved IOS `install_os` failure visibility — the legacy install fallback now logs a warning and preserves the original install error (chained and included in the raised message), and `OSInstallError` includes the device's `FAILED:` output.
