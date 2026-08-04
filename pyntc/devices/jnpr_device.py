@@ -24,6 +24,7 @@ from pyntc.devices.tables.jnpr.loopback import LoopbackTable  # pylint: disable=
 from pyntc.errors import (
     CommandError,
     CommandListError,
+    DeviceNotActiveError,
     FileSystemNotFoundError,
     FileTransferError,
     OSInstallError,
@@ -108,6 +109,7 @@ class JunosDevice(BaseDevice):
         self.cu = JunosNativeConfig(self.native)  # pylint: disable=invalid-name
         self.fs = JunosNativeFS(self.native)  # pylint: disable=invalid-name
         self.sw = JunosNativeSW(self.native)  # pylint: disable=invalid-name
+        self._is_chassis_cluster = None
 
     def _file_copy_local_file_exists(self, filepath):
         return os.path.isfile(filepath)
@@ -164,8 +166,7 @@ class JunosDevice(BaseDevice):
             file_system = _JUNOS_DEFAULT_FILE_SYSTEM
 
         usage = self.fs.storage_usage()
-        # Flat entries always carry a "mount" key; on multi-member platforms
-        # the top-level values are per-member {filesystem: info} dicts instead.
+        # Multi-member platforms nest dicts; single-member platforms are flat with "mount" key.
         is_nested = bool(usage) and all(isinstance(info, dict) and "mount" not in info for info in usage.values())
         member_groups = usage if is_nested else {"": usage}
 
@@ -285,8 +286,7 @@ class JunosDevice(BaseDevice):
                 counted after the initial warm-up delay. Defaults to 2 hours.
             is_multiple (bool, optional): Whether device is in multi-device configuration. Defaults to False.
         """
-        # Drop the pre-reboot NETCONF session so subsequent probes can't read from
-        # a stale connection PyEZ still reports as connected.
+        # Close stale session; PyEZ may report it as connected even after reboot.
         try:
             self.close()
         except Exception as close_exc:  # pylint: disable=broad-exception-caught
@@ -339,13 +339,11 @@ class JunosDevice(BaseDevice):
 
     def _pending_reboot_members(self):
         """Return VC member names whose re_info status is still "pending"."""
-        # Scoped refresh: a full facts_refresh() re-collects every fact (many RPCs)
-        # when only re_info is needed here.
+        # Scoped refresh for re_info only; full refresh would re-collect all facts (many RPCs).
         try:
             self.native.facts_refresh(keys="re_info")
         except RuntimeError:
-            # PyEZ only supports scoped refreshes with fact_style="new" (its default);
-            # "old"/"both" raise RuntimeError, so fall back to a full refresh.
+            # PyEZ only supports scoped refresh with fact_style="new"; fall back to full refresh.
             self.native.facts_refresh()
         # Virtual-chassis structure: members are under re_info['default']
         members = self.native.facts.get("re_info", {}).get("default", {})
@@ -363,6 +361,30 @@ class JunosDevice(BaseDevice):
         """
         members = self.native.facts.get("re_info", {}).get("default", {})
         return len([name for name in members if name != "default"])
+
+    def _detect_chassis_cluster(self):
+        """Detect if device is an SRX chassis-cluster by checking srx_cluster in facts.
+
+        SRX chassis-cluster stores cluster info under the 'srx_cluster' fact key.
+        Returns True if srx_cluster information is found in facts.
+        """
+        srx_cluster_info = self.native.facts.get("srx_cluster")
+        is_chassis_cluster = bool(srx_cluster_info)
+        log.debug(
+            "Host %s: Checking for SRX chassis-cluster; srx_cluster fact=%s, result=%s",
+            self.host,
+            srx_cluster_info,
+            is_chassis_cluster,
+        )
+        return is_chassis_cluster
+
+    def _is_srx3xx(self):
+        """Return True if device is SRX3xx platform."""
+        if self._model is None:
+            self._model = self.native.facts.get("model")
+        if self._model and "srx3" in str(self._model).lower():
+            return True
+        return False
 
     def _wait_for_nssu_completion(self, target_version, timeout=3600, interval=60, expected_members=None):
         """Wait for all members to complete NSSU/ISSU and run target version.
@@ -386,9 +408,7 @@ class JunosDevice(BaseDevice):
         """
         start = time.time()
 
-        # Drop the pre-install NETCONF session first: the old master's reboot kills the
-        # transport, but PyEZ can still report it as connected — the same quirk
-        # _wait_for_device_reboot guards against. Closing forces a fresh connection.
+        # Close stale session before poll; PyEZ may report it as connected after reboot.
         try:
             self.close()
         except Exception as close_exc:  # pylint: disable=broad-exception-caught
@@ -438,10 +458,62 @@ class JunosDevice(BaseDevice):
         )
         raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
 
+    def _get_chassis_cluster_versions(self):
+        """Get software version from both nodes in SRX chassis-cluster.
+
+        Parses 'show version' output to extract version for each node, returning
+        node numbers as keys for consistency with facts and verification.
+
+        Returns:
+            dict: Node numbers mapped to their running version. Example:
+                {'0': '21.4R3-S5.3', '1': '21.4R3-S5.3'}
+        """
+        try:
+            version_output = self.show("show version")
+            node_versions = {}
+            current_node = None
+
+            for line in version_output.splitlines():
+                line = line.strip()
+
+                # Detect node header (node0:, node1:, etc.)
+                if line.startswith("node") and line.endswith(":"):
+                    current_node = line.rstrip(":")
+                    node_versions[current_node] = None
+                    continue
+
+                if current_node is None or node_versions[current_node] is not None:
+                    continue
+
+                # Extract version from "Junos: <version>" line
+                if line.startswith("Junos:"):
+                    tokens = line.split(":", 1)[1].split()
+                    if tokens:
+                        node_versions[current_node] = tokens[0]
+
+            # Convert node names (node0, node1) to node numbers (0, 1) for consistency
+            numbered_versions = {}
+            for node_name, version in node_versions.items():
+                if node_name.startswith("node"):
+                    node_num = node_name.replace("node", "")
+                    numbered_versions[node_num] = version
+                else:
+                    numbered_versions[node_name] = version
+
+            log.debug("Host %s: SRX chassis-cluster node versions: %s", self.host, numbered_versions)
+            return numbered_versions
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: Failed to get chassis-cluster versions: %s", self.host, exc)
+            return {}
+
     def _get_all_members_version(self):
         """Get software version running on all members.
 
         Parses `show version all-members` output to extract version for each member.
+        Handles different Junos release formats: Junos 13.2+ prints a dedicated
+        `Junos: <version>` line, while older releases only list packages in format
+        `JUNOS <package> [<version>]`. Takes the first version token to drop
+        qualifiers like "15.1R7-S2 Limited" that would break exact-match comparison.
 
         Returns:
             dict: Member IDs mapped to their running version. Example:
@@ -452,11 +524,7 @@ class JunosDevice(BaseDevice):
             members_versions = {}
             current_member = None
 
-            # splitlines() + strip() normalize CRLF endings and stray indentation
-            # from the CLI transport, which would otherwise silently defeat the
-            # startswith/endswith checks below.
             for line in (raw_line.strip() for raw_line in version_output.splitlines()):
-                # Detect member header (fpc0:, fpc1:, etc.)
                 if line.startswith("fpc") and line.endswith(":"):
                     current_member = line.split("fpc")[1].rstrip(":")
                     members_versions[current_member] = None
@@ -465,14 +533,7 @@ class JunosDevice(BaseDevice):
                 if current_member is None or members_versions[current_member] is not None:
                     continue
 
-                # Junos 13.2+ prints a dedicated "Junos: <version>" line, which
-                # always precedes the package list when both exist. Older
-                # releases only list packages, and the package names vary by
-                # platform (EX 15.1 has no "JUNOS Base OS Software Suite" line),
-                # so fall back to the first "JUNOS <package> [<version>]" line.
                 if line.startswith("Junos:"):
-                    # First token only: drops qualifiers like "15.1R7-S2 Limited"
-                    # that would break exact-match comparison to target_version.
                     tokens = line.split(":", 1)[1].split()
                     if tokens:
                         members_versions[current_member] = tokens[0]
@@ -492,12 +553,15 @@ class JunosDevice(BaseDevice):
 
         Args:
             target_version (str): The expected version (e.g., "15.1R7-S2").
-            is_multiple (bool): Whether this is a multi-device setup.
+            is_multiple (bool): Whether this is a multi-device setup (virtual-chassis).
 
         Raises:
             OSInstallError: If the target version is not running on any member/device.
         """
-        if is_multiple:
+        # Check if this is SRX chassis-cluster (multiple nodes but not virtual-chassis)
+        is_chassis_cluster = self._is_chassis_cluster or self._detect_chassis_cluster()
+
+        if is_multiple and not is_chassis_cluster:
             members_versions = self._get_all_members_version()
             if not members_versions:
                 log.warning(
@@ -517,6 +581,27 @@ class JunosDevice(BaseDevice):
                 raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
 
             log.info("Host %s: All members running target version %s", self.host, target_version)
+        elif is_chassis_cluster:
+            # SRX chassis-cluster: verify both nodes running target version
+            members_versions = self._get_chassis_cluster_versions()
+            if not members_versions:
+                log.warning(
+                    "Host %s: Could not verify chassis-cluster node versions after install; proceeding without verification",
+                    self.host,
+                )
+                return
+
+            mismatched = [node for node, version in members_versions.items() if version != target_version]
+            if mismatched:
+                log.error(
+                    "Host %s: Version mismatch after install. Expected %s, got %s",
+                    self.host,
+                    target_version,
+                    members_versions,
+                )
+                raise OSInstallError(hostname=self.hostname, desired_boot=target_version)
+
+            log.info("Host %s: All chassis-cluster nodes running target version %s", self.host, target_version)
         else:
             # For single device, check facts
             self.native.facts_refresh()
@@ -558,20 +643,225 @@ class JunosDevice(BaseDevice):
         try:
             self.native.facts_refresh()
             re_info = self.native.facts.get("re_info", {})
+            log.debug("Host %s: re_info keys: %s", self.host, list(re_info.keys()))
 
-            # Virtual-chassis structure: {'default': {'0': {...}, '1': {...}, 'default': {...}}}
-            # Count members excluding the 'default' key itself
+            # VC members nested under re_info['default'], excluding the 'default' key itself.
             if "default" in re_info and isinstance(re_info["default"], dict):
                 members = {k: v for k, v in re_info["default"].items() if k != "default"}
                 is_multiple = len(members) > 1
+                log.debug(
+                    "Host %s: Found re_info['default'] with members: %s, is_multiple=%s",
+                    self.host,
+                    list(members.keys()),
+                    is_multiple,
+                )
                 log.info("Host %s: Multiple device configuration detected: %s", self.host, is_multiple)
                 return is_multiple
 
+            log.debug("Host %s: re_info['default'] not found or invalid structure", self.host)
             log.info("Host %s: Multiple device configuration detected: False", self.host)
             return False
         except Exception as exc:  # pylint: disable=broad-exception-caught
             log.warning("Host %s: Could not validate multiple devices: %s", self.host, exc)
             return False
+
+    def _get_icu_redundancy_groups(self):
+        """Get list of redundancy group numbers from chassis-cluster configuration.
+
+        Parses 'show configuration chassis cluster' output to find all configured
+        redundancy groups.
+
+        Returns:
+            list: Redundancy group numbers (e.g., [0, 1]) or empty list if not a chassis-cluster.
+        """
+        try:
+            output = self.show("show configuration chassis cluster")
+            if "syntax error" in output.lower() or "unknown command" in output.lower():
+                return []
+
+            redundancy_groups = []
+            for line in output.splitlines():
+                line = line.strip()
+                if not line.startswith("redundancy-group "):
+                    continue
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                try:
+                    group_num = int(parts[1].rstrip("{"))
+                    if group_num not in redundancy_groups:
+                        redundancy_groups.append(group_num)
+                except ValueError:
+                    pass
+
+            log.debug("Host %s: Found redundancy groups: %s", self.host, sorted(redundancy_groups))
+            return sorted(redundancy_groups)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error("Host %s: Failed to get redundancy groups: %s", self.host, exc)
+            return []
+
+    def _get_node_redundancy_status(self, node, redundancy_group):
+        """Get a node's status (primary/secondary) for a specific redundancy group.
+
+        Parses 'show chassis cluster status' output to find the node's role in the given RG.
+
+        Args:
+            node (str): Node name (e.g., 'node0', 'node1')
+            redundancy_group (int): Redundancy group number
+
+        Returns:
+            str: Node status ('primary', 'secondary') or empty string if not found.
+        """
+        try:
+            output = self.show("show chassis cluster status")
+            log.debug("Host %s: Parsing cluster status for %s in RG %d", self.host, node, redundancy_group)
+            current_group = None
+
+            for line in output.splitlines():
+                line = line.strip()
+
+                if line.startswith("Redundancy group:"):
+                    try:
+                        parts = line.split(",")[0].split()
+                        current_group = int(parts[2])
+                        log.debug("Host %s: Found RG header: %d", self.host, current_group)
+                    except (ValueError, IndexError):
+                        pass
+                    continue
+
+                if current_group == redundancy_group:
+                    if line.startswith(node):
+                        log.debug("Host %s: Found node line for RG %d: %s", self.host, redundancy_group, line)
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            status = parts[2]
+                            log.debug(
+                                "Host %s: Extracted status for %s in RG %d: %s",
+                                self.host,
+                                node,
+                                redundancy_group,
+                                status,
+                            )
+                            return status
+
+            log.warning(
+                "Host %s: Could not find status for %s in RG %d",
+                self.host,
+                node,
+                redundancy_group,
+            )
+            return ""
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Host %s: Failed to get status for node %s in RG %d: %s",
+                self.host,
+                node,
+                redundancy_group,
+                exc,
+            )
+            return ""
+
+    def _failover_redundancy_group(self, redundancy_group, target_node):
+        """Failover a redundancy group to target node.
+
+        Args:
+            redundancy_group (int): Redundancy group number
+            target_node (str): Target node name (e.g., 'node0')
+
+        Raises:
+            CommandError: If failover fails
+        """
+        try:
+            # Extract node number from name (node0 -> 0, node1 -> 1)
+            node_num = target_node.replace("node", "")
+            command = f"request chassis cluster failover redundancy-group {redundancy_group} node {node_num}"
+
+            log.info(
+                "Host %s: Failing over RG %d to %s",
+                self.host,
+                redundancy_group,
+                target_node,
+            )
+            log.debug("Host %s: Failover command: %s", self.host, command)
+
+            response = self.native.rpc.cli(format="text", command=command)
+            log.info("Host %s: Failover RPC response for RG %d:\n%s", self.host, redundancy_group, response)
+            log.info("Host %s: Failover succeeded for RG %d to %s", self.host, redundancy_group, target_node)
+            time.sleep(30)  # Allow cluster to stabilize after failover
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Host %s: Failover failed for RG %d to %s: %s",
+                self.host,
+                redundancy_group,
+                target_node,
+                exc,
+            )
+            raise CommandError(
+                command=f"request chassis cluster failover redundancy-group {redundancy_group} node {node_num}",
+                message=f"Failed to failover RG {redundancy_group} to {target_node}: {exc}",
+            ) from exc
+
+    def _initiate_issu_upgrade(self, image_name, is_icu=False, no_validate=False):
+        """Issue in-service upgrade command (ISSU or ICU) via CLI.
+
+        Builds command dynamically:
+        - Base: request system software in-service-upgrade {image_name}
+        - If is_icu: append "no-sync" (ICU-specific)
+        - If no_validate: append "no-validate" (optional for both)
+
+        Args:
+            image_name (str): Full path to image on device
+            is_icu (bool): If True, add "no-sync" flag for ICU. Defaults to False.
+            no_validate (bool): If True, add "no-validate" flag. Defaults to False.
+
+        Raises:
+            OSInstallError: On RPC command failures (non-timeout errors).
+
+        Returns:
+            RPC response text if command succeeds, None if RpcTimeoutError occurs
+            (timeout is expected during device reboot and is not treated as an error).
+        """
+        flags = []
+        if is_icu:
+            flags.append("no-sync")
+        if no_validate:
+            flags.append("no-validate")
+
+        command = f"request system software in-service-upgrade {image_name}"
+        if flags:
+            command = f"{command} {' '.join(flags)}"
+
+        upgrade_type = "ICU" if is_icu else "ISSU"
+        log.info("Host %s: Initiating %s upgrade", self.host, upgrade_type)
+        log.debug("Host %s: Command: %s", self.host, command)
+
+        rpc_response = None
+        original_timeout = self.native.timeout
+        try:
+            if is_icu:
+                self.native.timeout = 1800
+                log.debug("Host %s: Increased RPC timeout to 30 minutes for ICU upgrade", self.host)
+            rpc_response = self.native.rpc.cli(command=command)
+            if rpc_response is not None:
+                response_text = str(rpc_response).strip()
+                log.info("Host %s: %s response received:\n%s", self.host, upgrade_type, response_text)
+            else:
+                log.info("Host %s: %s command accepted (no immediate response)", self.host, upgrade_type)
+        except RpcTimeoutError:
+            log.info(
+                "Host %s: RPC timeout during %s upgrade — device initiated reboot (expected behavior)",
+                self.host,
+                upgrade_type,
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            log.error(
+                "Host %s: %s command failed with error:\n%s\nCommand was: %s", self.host, upgrade_type, exc, command
+            )
+            raise OSInstallError(hostname=self.hostname, desired_boot=image_name) from exc
+        finally:
+            self.native.timeout = original_timeout
+
+        return rpc_response
 
     def _wait_for_system_snapshot(self, timeout=3600, interval=30):
         """Poll device to verify system snapshot completion.
@@ -609,8 +899,7 @@ class JunosDevice(BaseDevice):
         while time.time() - start < timeout:
             try:
                 output = self.native.cli("show system snapshot media internal")
-                # Check for actual snapshot success: "Creation date:" indicates snapshots exist
-                # and timestamps indicate they were recently created
+                # "Creation date:" indicates recent snapshot completion.
                 if "Creation date:" in output:
                     log.info("Host %s: System snapshot verified (snapshots with creation dates found).", self.host)
                     return
@@ -899,135 +1188,332 @@ class JunosDevice(BaseDevice):
             return True
         return False
 
+    def _install_os_icu(
+        self,
+        image_name,
+        checksum,
+        reboot=True,
+        hashing_algorithm="md5",
+        validate=False,
+        snapshot=False,
+    ):  # pylint: disable=too-many-positional-arguments,unused-argument,too-many-locals,too-many-branches,too-many-statements
+        """Execute ICU (In-service Cluster Upgrade) for SRX3xx chassis-cluster.
+
+        ICU is a ~30-second disruptive upgrade with automatic failover and reboot.
+        The in-service upgrade reboots both nodes in sequence with automatic failover.
+
+        Args:
+            image_name (str): Name of image.
+            checksum (str): The checksum of the file.
+            reboot (bool): Whether to reboot after install. Must be True for ICU. Defaults to True.
+            hashing_algorithm (str): The hashing algorithm to use. Defaults to 'md5'.
+            validate (bool): Perform image validation. When False, adds 'no-validate' flag. Defaults to False.
+            snapshot (bool): Take post-upgrade system snapshot. Defaults to False.
+
+        Returns:
+            bool: True if upgrade completed successfully.
+
+        Raises:
+            ValueError: When reboot=False (ICU requires automatic reboot).
+            OSInstallError: On upgrade failure or version verification failure.
+        """
+        if not reboot:
+            raise ValueError("ICU (in-service cluster upgrade) requires automatic reboot; reboot=False is invalid")
+
+        # Extract target version from image name
+        match = _JUNOS_VERSION_RE.search(image_name)
+        target_version = match.group(1) if match else None
+        if target_version is None:
+            log.warning("Host %s: Could not extract version from image %s", self.host, image_name)
+
+        # Capture pre-upgrade uptime BEFORE initiating upgrade
+        try:
+            self._uptime = None
+            original_uptime = self.uptime
+            log.debug("Host %s: Pre-upgrade uptime: %s seconds", self.host, original_uptime)
+        except Exception as uptime_exc:  # pylint: disable=broad-exception-caught
+            log.warning("Host %s: Could not capture pre-upgrade uptime: %s (proceeding anyway)", self.host, uptime_exc)
+            original_uptime = None
+
+        # Issue ICU command (no-sync flag is ICU-specific)
+        # Note: validate=False means we want to skip validation, so no_validate=True
+        # Reactive failover: catch "primary node" RPC errors, failover, retry once
+        rpc_response = None
+        try:
+            rpc_response = self._initiate_issu_upgrade(image_name, is_icu=True, no_validate=not validate)
+        except RpcError as rpc_err:
+            # Check if this is a "primary node error" by inspecting the RPC response
+            err_text = str(rpc_err.rsp) if hasattr(rpc_err, "rsp") else str(rpc_err)
+            if not isinstance(err_text, str):
+                err_text = str(err_text)
+            err_text = err_text.lower()
+            if "primary node" in err_text:
+                log.warning(
+                    "Host %s: ICU initiation failed with 'primary node' error. Attempting failover and retry.",
+                    self.host,
+                )
+                # Determine current node and non-primary redundancy groups
+                try:
+                    self.native.facts_refresh()
+                    current_re = self.native.facts.get("current_re", [])
+                    if not current_re or len(current_re) == 0:
+                        raise DeviceNotActiveError(
+                            hostname=self.hostname,
+                            redundancy_state="unknown",
+                            peer_redundancy_state="unknown",
+                        )
+                    current_node = current_re[0]
+
+                    # Get RGs that are not primary
+                    redundancy_groups = self._get_icu_redundancy_groups()
+                    for rg in redundancy_groups:
+                        status = self._get_node_redundancy_status(current_node, rg)
+                        if status != "primary":
+                            log.info("Host %s: Failing over RG %d to achieve primary", self.host, rg)
+                            self._failover_redundancy_group(rg, current_node)
+
+                    # Re-check: all RGs must be primary now
+                    for rg in redundancy_groups:
+                        status = self._get_node_redundancy_status(current_node, rg)
+                        if status != "primary":
+                            log.error(
+                                "Host %s: Still not primary for RG %d after failover (status: %s)",
+                                self.host,
+                                rg,
+                                status,
+                            )
+                            raise DeviceNotActiveError(
+                                hostname=self.hostname,
+                                redundancy_state=status,
+                                peer_redundancy_state="primary" if status == "secondary" else "secondary",
+                            )
+
+                    # Retry ICU after successful failover
+                    log.info("Host %s: Retrying ICU upgrade after failover", self.host)
+                    rpc_response = self._initiate_issu_upgrade(image_name, is_icu=True, no_validate=not validate)
+                except (CommandError, OSInstallError, DeviceNotActiveError):
+                    raise
+                except Exception as failover_exc:  # pylint: disable=broad-exception-caught
+                    log.error("Host %s: Failover recovery failed: %s", self.host, failover_exc)
+                    raise OSInstallError(hostname=self.hostname, desired_boot=image_name) from failover_exc
+            else:
+                # Non-primary errors are not retried
+                log.error("Host %s: ICU failed with non-recoverable RPC error: %s", self.host, rpc_err)
+                raise OSInstallError(hostname=self.hostname, desired_boot=image_name) from rpc_err
+
+        if rpc_response:
+            log.info("Host %s: ICU RPC response captured", self.host)
+        else:
+            log.info("Host %s: No RPC response (device initiated reboot)", self.host)
+
+        # Wait for device to reboot and come back up with warm-up-then-poll pattern
+        log.info("Host %s: ICU upgrade initiated. Waiting for device to reboot and synchronize", self.host)
+
+        if original_uptime is not None:
+            log.info(
+                "Host %s: Waiting %s seconds before polling for reboot completion",
+                self.host,
+                _JUNOS_POLL_WARMUP_SECONDS,
+            )
+            time.sleep(_JUNOS_POLL_WARMUP_SECONDS)
+            log.info("Host %s: Polling for device reboot completion", self.host)
+            self._wait_for_device_reboot(original_uptime, timeout=2400, is_multiple=True)
+            log.info("Host %s: Device rebooted successfully", self.host)
+        else:
+            log.warning("Host %s: Skipping reboot poll (uptime unavailable)", self.host)
+
+        # Post-upgrade checks
+        self._post_install_checks(
+            image_name,
+            is_multiple=True,
+            in_service=True,
+            nssu=False,
+            verification_required=False,
+            snapshot=snapshot,
+        )
+
+        log.info("Host %s: ICU upgrade completed successfully", self.host)
+        return True
+
     def install_os(
-        self, image_name, checksum, reboot=True, hashing_algorithm="md5", nssu=False, issu=False, snapshot=False
-    ):  # pylint: disable=too-many-positional-arguments
+        self,
+        image_name,
+        checksum,
+        reboot=True,
+        hashing_algorithm="md5",
+        nssu=False,
+        issu=False,
+        snapshot=False,
+        validate=False,
+    ):  # pylint: disable=too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
         """Install OS on device and reboot.
 
-        For multi-device setups (virtual-chassis, chassis-cluster), supports NSSU/ISSU
-        upgrades and optional system snapshots after reboot. NSSU/ISSU performs its own
-        rolling reboot member-by-member during the install, so no separate reboot is
-        issued on that path; completion is verified by polling until every member
-        reports the target version.
+        For multi-device setups (virtual-chassis, chassis-cluster), supports ICU/NSSU/ISSU
+        upgrades and optional system snapshots after reboot. Upgrade method is auto-detected:
+        - SRX300-380 chassis-cluster → ICU (in-service cluster upgrade, ~30s downtime)
+        - SRX high-end chassis-cluster → ISSU (in-service software upgrade, zero downtime)
+        - Virtual-chassis + nssu flag → NSSU (nonstop software upgrade)
+        - Standalone or standard install → standard OS install
+
+        In-service upgrades (ICU/ISSU/NSSU) perform rolling reboots member-by-member during
+        the install, so no separate reboot is issued on those paths; completion is verified
+        by polling until every member reports the target version. For ICU, the device performs
+        automatic failover during reboot; the upgrade must be initiated on the primary node.
 
         Args:
             image_name (str): Name of image.
             checksum (str): The checksum of the file.
             reboot (bool): Whether to reboot the device after setting the boot options. Defaults to True.
-            hashing_algorithm (str): The hashing algorithm to use. Valid values are 'md5', 'sha1', and 'sha256'. Defaults to 'md5'.
-            nssu (bool): Enable Nonstop Software Upgrade. Defaults to False.
-            issu (bool): Enable In-Service Software Upgrade. Defaults to False.
-            snapshot (bool): Take a post-upgrade ``request system snapshot slice alternate``
-                to sync the alternate root with the new version. Junos does not require a
-                snapshot to complete an upgrade, but on dual-root platforms an unsynced
-                alternate slice boots the OLD version if the device ever falls back to it.
-                Snapshots can take 25+ minutes per member on small-flash platforms.
-                Defaults to False.
+                For ICU/ISSU/NSSU, must be True (automatic reboot is part of the upgrade).
+            hashing_algorithm (str): The hashing algorithm to use. Valid values are md5, sha1, and sha256.
+                Defaults to md5.
+            nssu (bool): Enable Nonstop Software Upgrade (virtual-chassis only). Defaults to False.
+            issu (bool): Ignored; ISSU and ICU are auto-detected based on device type. Defaults to False.
+            snapshot (bool): Take a post-upgrade system snapshot to sync the alternate root with the
+                new version. Junos does not require a snapshot to complete an upgrade, but on dual-root
+                platforms an unsynced alternate slice boots the OLD version if the device ever falls back
+                to it. Snapshots can take 25+ minutes per member on small-flash platforms. Defaults to False.
+            validate (bool): Perform validation of the image during install. Defaults to False.
+                For multi-device setups, validation can exceed 30 minutes and cause timeouts;
+                validation is not recommended on multi-device platforms. When False on ICU/ISSU,
+                adds no-validate flag to skip validation (faster upgrade).
 
         Raises:
-            ValueError: When both nssu and issu are True (mutually exclusive), or when
-                ``reboot=False`` is combined with an in-service (NSSU/ISSU) upgrade on a
-                multi-device setup — the in-service install reboots the members itself,
-                so there is no reboot left to defer.
+            ValueError: When both nssu and issu are True (mutually exclusive), or when reboot=False
+                is combined with an in-service (ICU/ISSU/NSSU) upgrade.
+            CommandError: When ICU upgrade fails to verify primary node availability.
         """
         if nssu and issu:
             raise ValueError("nssu and issu are mutually exclusive; only one can be True")
 
         is_multiple = self._validate_multiple_device()
+        is_chassis_cluster = self._is_chassis_cluster or self._detect_chassis_cluster()
+        log.info(
+            "Host %s: Multi-device detected: %s, Chassis-cluster detected: %s",
+            self.host,
+            is_multiple,
+            is_chassis_cluster,
+        )
+        # TODO: test this
+        if is_multiple and not validate:
+            log.warning(
+                "Host %s: Image validation is disabled for multi-device install; "
+                "enable it only if live device testing shows no timeout issues.",
+                self.host,
+            )
+
+        # ICU (in-service-upgrade) for SRX3xx chassis-cluster is a modified ISSU
+        is_icu = is_chassis_cluster and self._is_srx3xx()
 
         # In-service upgrades only apply to multi-device setups; on a standalone
         # device the nssu/issu flags are ignored and a standard install runs.
-        in_service = (nssu or issu) and is_multiple
+        # ICU for SRX3xx chassis-cluster is also in-service (automatic rolling reboot).
+        in_service = ((nssu or issu) and is_multiple) or is_icu
         if in_service and not reboot:
             raise ValueError(
-                "reboot=False cannot be combined with nssu/issu on a multi-device setup; "
-                "the in-service upgrade reboots the members as part of the install"
+                "reboot=False cannot be combined with in-service upgrades (NSSU/ISSU/ICU); "
+                "the in-service upgrade reboots the device(s) as part of the install"
             )
 
-        install_kwargs = {
-            "package": image_name,
-            "checksum": checksum,
-            "checksum_algorithm": hashing_algorithm,
-            "progress": True,
-            "validate": True,
-            "no_copy": True,
-            "timeout": 3600,
-        }
-
-        if in_service:
-            install_kwargs["nssu" if nssu else "issu"] = True
-            log.info(
-                "Host %s: %s enabled for multi-device upgrade",
-                self.host,
-                "NSSU" if nssu else "ISSU",
-            )
-
-        # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
-        install_ok = self.sw.install(**install_kwargs)
-        install_msg = None
-        if isinstance(install_ok, tuple):
-            install_ok, install_msg = install_ok[0], install_ok[1]
-
-        log.info("Host %s: install_ok result: %s", self.host, install_ok)
-        if install_msg:
-            log.debug("Host %s: install message: %s", self.host, install_msg)
-
-        # Check if reboot is required (indicated by specific message in output).
-        # NSSU/ISSU per-member output contains "A reboot is required" as informational
-        # text, but the rolling reboot already happens inside the install — don't
-        # treat it as an outstanding manual reboot on that path.
-        reboot_required = bool(install_msg) and "A reboot is required" in str(install_msg) and not in_service
-
-        if not install_ok and not reboot_required:
-            log.error(
-                "Host %s: SW install failed for image %s. Device is in undefined state.",
-                self.host,
+        # Route to ICU path for SRX300-380 chassis-cluster (auto-detected)
+        icu_complete = False
+        if is_icu:
+            icu_complete = self._install_os_icu(
                 image_name,
+                checksum,
+                reboot=reboot,
+                hashing_algorithm=hashing_algorithm,
+                validate=validate,
+                snapshot=snapshot,
             )
-            raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
 
-        if not reboot:
-            if reboot_required:
+        if not icu_complete:
+            # Standard install, NSSU, or ISSU (non-ICU) paths
+            install_kwargs = {
+                "package": image_name,
+                "checksum": checksum,
+                "checksum_algorithm": hashing_algorithm,
+                "progress": True,
+                "validate": validate,
+                "no_copy": True,
+                "timeout": 3600,
+            }
+
+            if in_service:
+                install_kwargs["nssu" if nssu else "issu"] = True
+                log.info(
+                    "Host %s: %s enabled for multi-device upgrade",
+                    self.host,
+                    "NSSU" if nssu else "ISSU",
+                )
+            else:
+                log.info("Host %s: Standard install (no NSSU/ISSU)", self.host)
+
+            log.debug("Host %s: install_kwargs before install: %s", self.host, install_kwargs)
+            # Sometimes install() returns a tuple of (ok, msg). Other times it returns a single bool
+            install_ok = None
+            install_msg = None
+            try:
+                install_ok = self.sw.install(**install_kwargs)
+                log.info("Host %s: Install RPC response: %s", self.host, install_ok)
+                if isinstance(install_ok, tuple):
+                    install_ok, install_msg = install_ok[0], install_ok[1]
+            except RpcError as rpc_err:
+                log.error("Host %s: Install RPC error: %s", self.host, rpc_err)
+                raise
+
+            log.info("Host %s: install_ok result: %s", self.host, install_ok)
+            if install_msg:
+                log.debug("Host %s: install message: %s", self.host, install_msg)
+
+            # In-service upgrades roll reboot per member; don't treat "A reboot is required" as outstanding.
+            reboot_required = bool(install_msg) and "A reboot is required" in str(install_msg) and not in_service
+
+            if not install_ok and not reboot_required:
+                log.error(
+                    "Host %s: SW install failed for image %s. Device is in undefined state.",
+                    self.host,
+                    image_name,
+                )
                 raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
-            log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
-            return True
 
-        self._reboot_to_apply(image_name, is_multiple, in_service, nssu)
+            if not reboot:
+                if reboot_required:
+                    raise OSInstallError(hostname=self.hostname, desired_boot=image_name)
+                log.info("Host %s: OS image %s boot options set. Reboot the device to apply", self.host, image_name)
+                return True
 
-        self._post_install_checks(
-            image_name,
-            is_multiple,
-            in_service,
-            nssu,
-            verification_required=not install_ok,
-            snapshot=snapshot,
-        )
+            self._reboot_to_apply(image_name, is_multiple, in_service)
+
+            self._post_install_checks(
+                image_name,
+                is_multiple,
+                in_service,
+                nssu,
+                verification_required=not install_ok,
+                snapshot=snapshot,
+            )
 
         log.info("Host %s: OS image %s installed successfully.", self.host, image_name)
         return True
 
-    def _reboot_to_apply(self, image_name, is_multiple, in_service, nssu):
+    def _reboot_to_apply(self, image_name, is_multiple, in_service):
         """Reboot to apply the installed image, unless the in-service upgrade already did.
 
         Args:
             image_name (str): Name of the installed image; used for log context only.
             is_multiple (bool): Whether device is in multi-device configuration.
-            in_service (bool): Whether the install ran as NSSU/ISSU.
-            nssu (bool): True for NSSU, False for ISSU; only used for log labels.
+            in_service (bool): Whether the install ran as NSSU/ISSU/ICU.
 
         Raises:
             CommandError: When the pre-reboot uptime cannot be determined on the
                 multi-device path (the reboot is refused rather than issued blind).
         """
         if in_service:
-            # The in-service upgrade already rolled through the members and rebooted
-            # each one inside ``sw.install()`` — the old master is typically still
-            # rebooting when the install RPC returns. Issuing another reboot here
-            # would take the whole chassis down and race that in-progress reboot.
+            # In-service upgrades automatically reboot devices
             log.info(
-                "Host %s: %s performed its rolling reboot during install; skipping manual reboot",
+                "Host %s: performed a in-service upgrade and reboots automatically; skipping manual reboot",
                 self.host,
-                "NSSU" if nssu else "ISSU",
             )
             return
 
@@ -1048,16 +1534,27 @@ class JunosDevice(BaseDevice):
             self.reboot(wait_for_reload=True)
 
     def _post_install_checks(
-        self, image_name, is_multiple, in_service, nssu, verification_required=False, snapshot=False
+        self,
+        image_name,
+        is_multiple,
+        in_service,
+        nssu,
+        verification_required=False,
+        snapshot=False,
     ):  # pylint: disable=too-many-positional-arguments
         """Wait for in-service completion, optionally snapshot, and verify the running version.
+
+        For in-service upgrades (NSSU/ISSU/ICU), waits for all members to reach the
+        target version before snapshot. This completion wait already verifies every
+        member runs the target version, so skips redundant verification after.
+        For standard installs, post-install verification confirms the upgrade worked.
 
         Args:
             image_name (str): Name of the installed image; the target version is
                 extracted from it. When no version can be extracted, the completion
                 wait and version verification are skipped with a warning.
             is_multiple (bool): Whether device is in multi-device configuration.
-            in_service (bool): Whether the install ran as NSSU/ISSU.
+            in_service (bool): Whether the install ran as NSSU/ISSU/ICU (in-service upgrade).
             nssu (bool): True for NSSU, False for ISSU; only used for log labels.
             verification_required (bool): True when the install only proceeded on the
                 "A reboot is required" heuristic (PyEZ reported failure); post-reboot
@@ -1087,9 +1584,6 @@ class JunosDevice(BaseDevice):
                 image_name,
             )
 
-        # For in-service upgrades, wait for all members to reach the target version before
-        # snapshot. This wait already confirms every member runs target_version, so the
-        # post-snapshot verification below would just repeat the same RPC and check.
         verified_by_completion_wait = bool(target_version) and in_service
         if verified_by_completion_wait:
             log.info(
@@ -1098,8 +1592,6 @@ class JunosDevice(BaseDevice):
                 "NSSU" if nssu else "ISSU",
                 target_version,
             )
-            # Member count from the pre-install facts: a member absent from
-            # ``show version all-members`` while it reboots must not count as done.
             self._wait_for_nssu_completion(target_version, expected_members=self._vc_member_count() or None)
 
         # Optionally sync the alternate root with the new version after reboot/upgrade
