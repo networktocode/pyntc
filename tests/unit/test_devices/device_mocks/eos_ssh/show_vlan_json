@@ -1,0 +1,35 @@
+{
+    "sourceDetail": "",
+    "vlans": {
+        "1": {
+            "status": "active",
+            "name": "default",
+            "interfaces": {},
+            "dynamic": false
+        },
+        "11": {
+            "status": "active",
+            "name": "HR",
+            "interfaces": {},
+            "dynamic": false
+        },
+        "12": {
+            "status": "active",
+            "name": "FIN",
+            "interfaces": {},
+            "dynamic": false
+        },
+        "10": {
+            "status": "active",
+            "name": "IT_DEP",
+            "interfaces": {},
+            "dynamic": false
+        },
+        "9": {
+            "status": "active",
+            "name": "AP",
+            "interfaces": {},
+            "dynamic": false
+        }
+    }
+}
