@@ -265,7 +265,17 @@ def test_show_resolves_read_timeout_per_command(eos_ssh_send_command, command, e
 def test_config_single_command_returns_none(eos_ssh_config):
     device = eos_ssh_config([""])
     assert device.config("interface Ethernet1") is None
-    device.native.send_config_set.assert_called_with("interface Ethernet1", exit_config_mode=False)
+    device.native.send_config_set.assert_called_with("interface Ethernet1", exit_config_mode=False, cmd_verify=True)
+
+
+def test_config_disables_cmd_verify_for_multiline_commands(eos_ssh_config):
+    # Multi-line input modes (banner motd ... EOF) echo in a way cmd_verify cannot match;
+    # verified against real hardware (vEOS): with cmd_verify netmiko raises ReadTimeout.
+    device = eos_ssh_config([""])
+    device.config("banner motd\npyntc\nEOF")
+    device.native.send_config_set.assert_called_with(
+        "banner motd\npyntc\nEOF", exit_config_mode=False, cmd_verify=False
+    )
 
 
 def test_config_list_returns_none(eos_ssh_config):

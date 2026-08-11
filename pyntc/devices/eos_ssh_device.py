@@ -268,7 +268,10 @@ class EOSSSHDevice(EOSDevice):
         try:
             for command in command_list:
                 entered_commands.append(command)
-                output = self.native.send_config_set(command, exit_config_mode=False)
+                # Multi-line commands (e.g. "banner motd\n...\nEOF") drop the CLI into an
+                # input mode whose echo Netmiko's cmd_verify cannot match; verification must
+                # be disabled for them or send_config_set raises ReadTimeout.
+                output = self.native.send_config_set(command, exit_config_mode=False, cmd_verify="\n" not in command)
                 try:
                     self._check_output_for_errors(command, output)
                 except CommandError as err:

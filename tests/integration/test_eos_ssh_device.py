@@ -155,10 +155,15 @@ def test_startup_config(device):
 
 
 def test_config_round_trip(device):
-    """Apply a harmless config change and confirm it lands in the running config."""
+    """Apply a harmless config change, confirm it lands in the running config, then remove it."""
     marker = "pyntc integration test"
-    device.config(f"banner motd {marker}\nEOF")
-    assert marker in device.running_config
+    # Multi-line on purpose: banners exercise the cmd_verify=False path in config().
+    device.config(f"banner motd\n{marker}\nEOF")
+    try:
+        assert marker in device.running_config
+    finally:
+        device.config("no banner motd")
+    assert marker not in device.running_config
 
 
 def test_show_raises_on_bad_command(device):
