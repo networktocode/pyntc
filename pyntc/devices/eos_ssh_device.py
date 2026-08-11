@@ -40,7 +40,7 @@ RE_EOS_CLI_ERROR = re.compile(r"^%\s|^Invalid input|^Error:", re.MULTILINE)
 # signature byte-identical to EOSDevice.show(), so inherited callers such as
 # ``set_boot_options``, ``save``, ``checkpoint`` and ``rollback`` work without overrides.
 COMMAND_READ_TIMEOUTS = (
-    (re.compile(r"^\s*install\s+source\b"), 1800),
+    (re.compile(r"^\s*install\s+source\b"), 3600),
     (re.compile(r"^\s*copy\s+running-config\b"), 300),
     (re.compile(r"^\s*configure\s+replace\b"), 300),
     (re.compile(r"^\s*show\s+(running|startup)-config\b"), 120),
@@ -204,7 +204,8 @@ class EOSSSHDevice(EOSDevice):
                 pipe, True to return the raw CLI text. Defaults to False.
 
         Returns:
-            (dict): When ``commands`` is a str and ``raw_text`` is False.
+            (dict): When ``commands`` is a str and ``raw_text`` is False. Non-show commands
+                cannot be piped to ``| json``; they run as plain text and return an empty dict.
             (str): When ``commands`` is a str and ``raw_text`` is True.
             (list): When ``commands`` is a list.
 
@@ -226,15 +227,15 @@ class EOSSSHDevice(EOSDevice):
             cli_command = f"{command} | json" if as_json else command
             try:
                 output = self._send_command(cli_command, error_command=command)
+                if as_json:
+                    output = self._load_json(command, output)
             except CommandError as err:
                 if original_commands_is_str:
                     raise
                 raise CommandListError(entered_commands, command, err.cli_error_msg) from err
 
-            if raw_text:
+            if raw_text or as_json:
                 responses.append(output)
-            elif as_json:
-                responses.append(self._load_json(command, output))
             else:
                 # Non-show command sent with raw_text=False (checkpoint, save, rollback,
                 # reboot, set_boot_options). Every inherited caller discards the result,

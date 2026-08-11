@@ -220,6 +220,16 @@ def test_show_raises_when_output_is_not_json(eos_ssh_send_command):
     assert "does not support JSON output" in err.value.cli_error_msg
 
 
+def test_show_list_raises_command_list_error_when_output_is_not_json(eos_ssh_send_command):
+    # The list contract must hold for JSON parse failures too, not only device-reported
+    # errors: a non-JSON response mid-list raises CommandListError, never bare CommandError.
+    device = eos_ssh_send_command(["show_version_json", "This command is not converted to JSON"])
+    with pytest.raises(CommandListError) as err:
+        device.show(["show version", "show something-unconverted"])
+    assert err.value.commands == ["show version", "show something-unconverted"]
+    assert err.value.command == "show something-unconverted"
+
+
 def test_show_reopens_connection(eos_ssh_send_command):
     # Guards reboot polling: _wait_for_device_reboot survives only because show() re-opens.
     device = eos_ssh_send_command(["show_version_json"])
@@ -231,7 +241,7 @@ def test_show_reopens_connection(eos_ssh_send_command):
 @pytest.mark.parametrize(
     "command,expected_timeout",
     [
-        ("install source flash:EOS.swi", 1800),
+        ("install source flash:EOS.swi", 3600),
         ("copy running-config startup-config", 300),
         ("configure replace flash:cp force", 300),
         ("show running-config", 120),
@@ -868,7 +878,7 @@ def test_set_boot_options_uses_long_read_timeout(eos_ssh_send_command):
     )
     device.set_boot_options("EOS-4.28.9M.swi")
     install_call = [c for c in device.native.send_command.call_args_list if "install source" in c[0][0]][0]
-    assert install_call[1]["read_timeout"] == 1800
+    assert install_call[1]["read_timeout"] == 3600
 
 
 def test_set_boot_options_missing_image(eos_ssh_send_command):
