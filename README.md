@@ -11,7 +11,7 @@ To avoid extra work and temporary links, make sure that publishing docs (or merg
 -->
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/icon-Pyntc.png" class="logo" height="200px">
+  <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/icon-pyntc.png" class="logo" height="200px">
   <br>
   <a href="https://github.com/networktocode/pyntc/actions"><img src="https://github.com/networktocode/pyntc/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://pyntc.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/pyntc/badge/"></a>
@@ -28,11 +28,11 @@ To avoid extra work and temporary links, make sure that publishing docs (or merg
 
 Full documentation for this library can be found over on the [Pyntc Docs](https://pyntc.readthedocs.io/) website:
 
-- [User Guide](https://pyntc.readthedocs.io/user/app_overview/) - Overview, Using the Library, Getting Started.
-- [Administrator Guide](https://pyntc.readthedocs.io/admin/install/) - How to Install, Configure, Upgrade, or Uninstall the Library.
-- [Developer Guide](https://pyntc.readthedocs.io/dev/contributing/) - Extending the Library, Code Reference, Contribution Guide.
-- [Release Notes / Changelog](https://pyntc.readthedocs.io/admin/release_notes/).
-- [Frequently Asked Questions](https://pyntc.readthedocs.io/user/faq/).
+- [User Guide](https://pyntc.readthedocs.io/en/latest/user/app_overview/) - Overview, Using the Library, Getting Started.
+- [Administrator Guide](https://pyntc.readthedocs.io/en/latest/admin/install/) - How to Install, Configure, Upgrade, or Uninstall the Library.
+- [Developer Guide](https://pyntc.readthedocs.io/en/latest/dev/contributing/) - Extending the Library, Code Reference, Contribution Guide.
+- [Release Notes / Changelog](https://pyntc.readthedocs.io/en/latest/admin/release_notes/).
+- [Frequently Asked Questions](https://pyntc.readthedocs.io/en/latest/user/faq/).
 
 ### Contributing to the Documentation
 
