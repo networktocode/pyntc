@@ -8,6 +8,17 @@ This document describes all new features and changes in the release. The format 
 - Fixed Arista EOS reboot detection when waiting for a device to reload.
 
 <!-- towncrier release notes start -->
+## [v3.2.3a0 (2026-08-12)](https://github.com/networktocode/pyntc/releases/tag/velease-3.2.3a0)
+
+### Added
+
+- [#413](https://github.com/networktocode/pyntc/issues/413) - Added Juniper SRX Chassis Cluster upgrade support when ICU.
+- [#418](https://github.com/networktocode/pyntc/issues/418) - Added the `arista_eos_ssh` device type, an SSH-only Arista EOS driver for environments where eAPI is not enabled; it exposes the same API as `arista_eos_eapi` and obtains structured data via the CLI's `| json` pipe.
+
+### Housekeeping
+
+- Work on trusted publisher for networktocode org.
+
 ## [v3.2.2 (2026-08-04)](https://github.com/networktocode/pyntc/releases/tag/v3.2.2)
 
 ### Fixed
