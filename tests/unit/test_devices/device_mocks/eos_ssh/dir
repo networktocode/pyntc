@@ -1,0 +1,18 @@
+Directory of flash:/
+
+       -rwx        1386            Aug 5 20:51  AsuFastPktTransmit.log
+       -rwx   764915173            Aug 5 20:49  EOS-4.28.5M.swi
+       -rwx   764834205            Aug 5 17:46  EOS-4.28.9M.swi
+       drwx        4096            Aug 3 21:32  Fossil
+       -rwx         852            Aug 5 20:51  SsuRestore.log
+       -rwx         852            Aug 5 20:51  SsuRestoreLegacy.log
+       -rwx          27            Aug 5 20:49  boot-config
+       drwx        4096            Aug 8 19:25  debug
+       drwx        4096            Aug 3 21:32  fastpkttx.backup
+       -rwx       94038            Apr 7 15:42  nautobot.png
+       drwx        4096            Aug 8 19:24  persist
+       drwx        4096           Aug 12  2024  schedule
+       -rwx        3610            Aug 5 20:48  startup-config
+       -rwx           0            Dec 2  2024  zerotouch-config
+
+3634421760 bytes total (1327603712 bytes free)

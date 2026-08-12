@@ -9,6 +9,12 @@ username: user
 password: arista
 transport: http
 
+[arista_eos_ssh:test_eos_ssh]
+host: 192.168.43.4
+username: user
+password: arista
+port: 22
+
 [cisco_ios_ssh:test_ios]
 username: user
 password: pass

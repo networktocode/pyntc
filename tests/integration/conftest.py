@@ -19,6 +19,7 @@ from ._helpers import PROTOCOL_URL_VARS
 # integration tests.
 _PLATFORM_HASH_ALGOS = {
     "test_eos_device": "sha512",
+    "test_eos_ssh_device": "sha512",
     "test_asa_device": "sha512",
     "test_jnpr_device": "sha256",
     "test_ios_device": "md5",

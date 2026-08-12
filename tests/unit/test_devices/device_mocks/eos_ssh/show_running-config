@@ -1,0 +1,48 @@
+! Command: show running-config
+! device: eos-spine1 (vEOS, EOS-4.14.7M)
+!
+! boot system flash:/new_image.swi
+!
+transceiver qsfp default-mode 4x10G
+!
+hostname eos-spine1
+ip domain-name ntc.com
+!
+snmp-server community public ro
+!
+spanning-tree mode mstp
+!
+no aaa root
+!
+username admin privilege 15 role network-admin secret 5 $1$7yUmRiH6$9F1Io4WMwAWSc2GMjeK3h/
+username ntc privilege 15 role network-admin secret 5 $1$yLXNmzh4$eltlOr6yIb8IpRGCjp8Bj/
+!
+interface Ethernet1
+!
+interface Ethernet2
+!
+interface Ethernet3
+!
+interface Ethernet4
+!
+interface Ethernet5
+!
+interface Ethernet6
+!
+interface Ethernet7
+!
+interface Ethernet8
+!
+interface Management1
+   ip address 10.0.0.11/24
+!
+ip route 0.0.0.0/0 10.0.0.2
+!
+ip routing
+!
+management api http-commands
+   protocol http
+   no shutdown
+!
+!
+end
