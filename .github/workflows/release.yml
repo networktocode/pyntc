@@ -55,6 +55,7 @@ jobs:
     runs-on: "ubuntu-latest"
     if: "startsWith(github.ref, 'refs/tags/v')"
     needs: "build"
+    environment: "pypi"
     # IMPORTANT: this permission is mandatory for trusted publishing.
     permissions:
       id-token: "write"
