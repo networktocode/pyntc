@@ -66,13 +66,14 @@ def task(function=None, *args, **kwargs):
     return task_wrapper
 
 
-def run_command(context, exec_cmd, port=None):
+def run_command(context, exec_cmd, port=None, rm=True):
     """Wrapper to run the invoke task commands.
 
     Args:
         context ([invoke.task]): Invoke task object.
         exec_cmd ([str]): Command to run.
         port (int): Used to serve local docs.
+        rm (bool): Whether to remove the container after running the command.
 
     Returns:
         result (obj): Contains Invoke result from running task.
@@ -84,12 +85,12 @@ def run_command(context, exec_cmd, port=None):
         print(f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}")
         if port:
             result = context.run(
-                f"docker run -it -p {port} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
+                f"docker run -it {'--rm' if rm else ''} -p {port} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
                 pty=True,
             )
         else:
             result = context.run(
-                f"docker run -it -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
+                f"docker run -it {'--rm' if rm else ''} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
                 pty=True,
             )
 
@@ -165,10 +166,26 @@ def coverage(context):
     run_command(context, "coverage html")
 
 
-@task
-def pytest(context):
+@task(
+    help={
+        "pattern": "Only run tests which match the given substring. Can be used multiple times.",
+        "label": "Module path to run (e.g., tests/unit/test_foo.py). Can be used multiple times.",
+    },
+    iterable=["pattern", "label"],
+)
+def pytest(context, pattern=None, label=None):
     """Run pytest test cases."""
     exec_cmd = "coverage run --source=pyntc -m pytest && coverage report"
+    run_command(context, exec_cmd)
+
+    doc_test_cmd = "pytest -vv --doctest-modules pyntc/"
+    pytest_cmd = "coverage run --source=pyntc -m pytest"
+    if pattern:
+        pytest_cmd += "".join([f" -k {_pattern}" for _pattern in pattern])
+    if label:
+        pytest_cmd += "".join([f" {_label}" for _label in label])
+    coverage_cmd = "coverage report"
+    exec_cmd = " && ".join([doc_test_cmd, pytest_cmd, coverage_cmd])
     run_command(context, exec_cmd)
 
 
@@ -308,14 +325,19 @@ def docs(context):
 @task(
     help={
         "version": "Version of pyntc to generate the release notes for.",
+        "date": "Date of the release (default: today).",
     }
 )
-def generate_release_notes(context, version=""):
+def generate_release_notes(context, version="", date=""):
     """Generate Release Notes using Towncrier."""
-    command = "poetry run towncrier build"
-    if version:
-        command += f" --version {version}"
-    else:
-        command += " --version `poetry version -s`"
+    if not version:
+        version = context.run("poetry version --short", hide=True).stdout.strip()
+
+    version_major_minor = ".".join(version.split(".")[:2])
+    context.run(f"poetry run python bin/ensure_release_notes.py --version {version_major_minor}")
+
+    command = f"poetry run towncrier build --version {version} --yes"
+    if date:
+        command += f" --date {date}"
     # Due to issues with git repo ownership in the containers, this must always run locally.
     context.run(command)

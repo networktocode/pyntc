@@ -20,10 +20,14 @@
             "template_dir": "python",
             "template_ref": "main",
             "cookie_dir": "",
-            "pull_request_strategy": "create",
+            "pull_request_strategy": "update-or-create",
             "post_actions": [],
             "draft": false,
+<<<<<<< HEAD
             "baked_commit_ref": "a5add2662f26a3b877635bbf1fd787682414d2bf",
+=======
+            "baked_commit_ref": "0bac2e8ca365aea9a730bfc06c5e5029b25dcf50",
+>>>>>>> 1cad760 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             "drift_managed_branch": "develop"
         }
     }

@@ -2,7 +2,11 @@
 
 
 <p align="center">
+<<<<<<< HEAD
   <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/pyntc_logo.png" class="logo" height="200px">
+=======
+  <img src="https://raw.githubusercontent.com/networktocode/pyntc/develop/docs/images/icon-pyntc.png" class="logo" height="200px">
+>>>>>>> 1cad760 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
   <br>
   <a href="https://github.com/networktocode/pyntc/actions"><img src="https://github.com/networktocode/pyntc/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://pyntc.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/pyntc/badge/"></a>
@@ -19,9 +23,15 @@ A Python library that is a SDK to simplify common workflows for Network Devices.
 
 Full web-based HTML documentation for this library can be found over on the [Pyntc Docs](https://pyntc.readthedocs.io) website:
 
+<<<<<<< HEAD
 - [User Guide](https://pyntc.readthedocs.io/en/latest/user/lib_overview/) - Overview, Using the library, Getting Started.
 - [Administrator Guide](https://pyntc.readthedocs.io/en/latest/admin/install/) - How to Install, Configure, Upgrade, or Uninstall the library.
 - [Developer Guide](https://pyntc.readthedocs.io/en/latest/dev/contributing/) - Extending the library, Code Reference, Contribution Guide.
+=======
+- [User Guide](https://pyntc.readthedocs.io/en/latest/user/app_overview/) - Overview, Using the Library, Getting Started.
+- [Administrator Guide](https://pyntc.readthedocs.io/en/latest/admin/install/) - How to Install, Configure, Upgrade, or Uninstall the Library.
+- [Developer Guide](https://pyntc.readthedocs.io/en/latest/dev/contributing/) - Extending the Library, Code Reference, Contribution Guide.
+>>>>>>> 1cad760 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 - [Release Notes / Changelog](https://pyntc.readthedocs.io/en/latest/admin/release_notes/).
 - [Frequently Asked Questions](https://pyntc.readthedocs.io/en/latest/user/faq/).
 
