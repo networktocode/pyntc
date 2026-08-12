@@ -11,15 +11,18 @@ The first way is to use the `ntc_device` object. Just pass in all required param
 
 Like many libraries, we need to pass in the host/IP and credentials.  Because this is a multi-vendor/API library, we also use the `device_type` parameter to identify which device we are building an instance of.
 
-pyntc currently supports seven device types:
+pyntc currently supports the following device types:
 
 - cisco_aireos_ssh
 - cisco_asa_ssh
 - cisco_ios_ssh
 - cisco_nxos_nxapi
 - arista_eos_eapi
+- arista_eos_ssh
 - juniper_junos_netconf
 - f5_tmos_icontrol
+
+Arista EOS is supported over two transports. `arista_eos_eapi` uses eAPI (JSON-RPC over HTTP/HTTPS) and requires `management api http-commands` to be enabled on the device. `arista_eos_ssh` uses SSH only, for environments where eAPI is not available; it exposes exactly the same methods and properties as the eAPI driver, so the two are interchangeable.
 
 The example below shows how to build a device object when working with a Cisco IOS router.
 

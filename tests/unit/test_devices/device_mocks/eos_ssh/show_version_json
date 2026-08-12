@@ -1,0 +1,20 @@
+{
+    "imageFormatVersion": "3.0",
+    "uptime": 254314.71,
+    "modelName": "DCS-7050TX-64-R",
+    "internalVersion": "4.28.5M-29792660.4285M",
+    "memTotal": 3982512,
+    "mfgName": "Arista",
+    "serialNumber": "JPE00000000",
+    "systemMacAddress": "00:1c:73:00:00:01",
+    "bootupTimestamp": 1785963023.376446,
+    "memFree": 2485644,
+    "version": "4.28.5M",
+    "configMacAddress": "00:00:00:00:00:00",
+    "isIntlVersion": false,
+    "imageOptimization": "Strata-4GB",
+    "internalBuildId": "d9aad8b6-4e46-4507-8815-ada0b879f38a",
+    "hardwareRevision": "01.01",
+    "hwMacAddress": "00:1c:73:00:00:01",
+    "architecture": "i686"
+}

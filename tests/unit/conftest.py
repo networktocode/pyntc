@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from pyntc.devices import AIREOSDevice, ASADevice, EOSDevice, IOSDevice, IOSXEWLCDevice
+from pyntc.devices import AIREOSDevice, ASADevice, EOSDevice, EOSSSHDevice, IOSDevice, IOSXEWLCDevice
 
 
 def get_side_effects(mock_path, side_effects):
@@ -54,6 +54,65 @@ def eos_send_command_timing(eos_device, eos_mock_path):
         device.native_ssh.send_command_timing.side_effect = get_side_effects(
             f"{eos_mock_path}/send_command", side_effects
         )
+        return device
+
+    return _mock
+
+
+# EOS SSH fixtures
+
+
+@pytest.fixture
+def eos_ssh_device():
+    with mock.patch("pyntc.devices.eos_ssh_device.ConnectHandler") as ch:
+        device = EOSSSHDevice("host", "user", "password")
+        device.native = ch
+        # Model the normal steady state: already privileged, not parked in config mode.
+        # Without this the inherited enable() would call exit_config_mode() on every
+        # show()/config(), polluting call-count assertions.
+        device.native.check_enable_mode.return_value = True
+        device.native.check_config_mode.return_value = False
+        yield device
+
+
+@pytest.fixture
+def eos_ssh_device_path():
+    return "pyntc.devices.eos_ssh_device.EOSSSHDevice"
+
+
+@pytest.fixture
+def eos_ssh_mock_path(mock_path):
+    return f"{mock_path}/eos_ssh"
+
+
+@pytest.fixture
+def eos_ssh_send_command(eos_ssh_device, eos_ssh_mock_path):
+    def _mock(side_effects, existing_device=None, device=eos_ssh_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command.side_effect = get_side_effects(eos_ssh_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def eos_ssh_send_command_timing(eos_ssh_device, eos_ssh_mock_path):
+    def _mock(side_effects, existing_device=None, device=eos_ssh_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_command_timing.side_effect = get_side_effects(eos_ssh_mock_path, side_effects)
+        return device
+
+    return _mock
+
+
+@pytest.fixture
+def eos_ssh_config(eos_ssh_device, eos_ssh_mock_path):
+    def _mock(side_effects, existing_device=None, device=eos_ssh_device):
+        if existing_device is not None:
+            device = existing_device
+        device.native.send_config_set.side_effect = get_side_effects(eos_ssh_mock_path, side_effects)
         return device
 
     return _mock

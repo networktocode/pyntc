@@ -1,0 +1,18 @@
+{
+    "upgradeCert": "",
+    "userCert": "",
+    "securebootSupported": false,
+    "tpmPassword": false,
+    "fileChecksum": "0a2c4f1390395f61a042f46c3fe19b86152fc2ca",
+    "aristaCertEnabled": false,
+    "spiUpdateEnabled": false,
+    "abootPassword": "(not set)",
+    "memTestIterations": 0,
+    "softwareImage": "flash:/EOS-4.28.5M.swi",
+    "aristaCert": "",
+    "fileChecksumAlg": "sha1",
+    "securebootEnabled": false,
+    "measuredbootEnabled": false,
+    "certsLoaded": false,
+    "spiFlashWriteProtected": false
+}

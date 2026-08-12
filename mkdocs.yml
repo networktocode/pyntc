@@ -162,6 +162,7 @@ nav:
           - pyntc.devices.asa_device: "code-reference/pyntc/devices/asa_device.md"
           - pyntc.devices.base_device: "code-reference/pyntc/devices/base_device.md"
           - pyntc.devices.eos_device: "code-reference/pyntc/devices/eos_device.md"
+          - pyntc.devices.eos_ssh_device: "code-reference/pyntc/devices/eos_ssh_device.md"
           - pyntc.devices.f5_device: "code-reference/pyntc/devices/f5_device.md"
           - pyntc.devices.ios_device: "code-reference/pyntc/devices/ios_device.md"
           - pyntc.devices.iosxewlc_device: "code-reference/pyntc/devices/iosxewlc_device.md"
