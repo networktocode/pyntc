@@ -1,1 +1,0 @@
-Added the `arista_eos_ssh` device type, an SSH-only Arista EOS driver for environments where eAPI is not enabled; it exposes the same API as `arista_eos_eapi` and obtains structured data via the CLI's `| json` pipe.
