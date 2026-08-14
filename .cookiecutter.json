@@ -24,10 +24,14 @@
             "post_actions": [],
             "draft": false,
 <<<<<<< HEAD
+<<<<<<< HEAD
             "baked_commit_ref": "a5add2662f26a3b877635bbf1fd787682414d2bf",
 =======
             "baked_commit_ref": "0bac2e8ca365aea9a730bfc06c5e5029b25dcf50",
 >>>>>>> 1cad760 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+            "baked_commit_ref": "1c8e2eb54eafb18e541e80793a2e71d1fcb3b067",
+>>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             "drift_managed_branch": "develop"
         }
     }
