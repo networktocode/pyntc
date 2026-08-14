@@ -308,7 +308,15 @@ docs/CHANGELOG.md
 public
 /compose.yaml
 /dump.sql
+<<<<<<< HEAD
+<<<<<<< HEAD
 /pyntc/static/pyntc/docs
 
 # Exception for pynxos/lib
 !/pyntc/devices/pynxos/lib/
+=======
+/pyntc/static/*
+>>>>>>> 1cad760 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+/pyntc/static/*
+>>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
