@@ -210,6 +210,10 @@ class NotEnoughFreeSpaceError(NTCError):
         """
         Error for not having enough free space to transfer a file.
 
+        The byte counts are kept as attributes so callers can render their own message
+        (or compute the shortfall) without parsing ``message``. They are ``None`` when the
+        error is raised in the legacy ``min_space`` form.
+
         Args:
             hostname (str): The hostname of the device being checked.
             min_space (str, optional): The minimum amount of space required. Retained for
@@ -217,10 +221,28 @@ class NotEnoughFreeSpaceError(NTCError):
             required (int, optional): Required bytes for the pending transfer.
             available (int, optional): Free bytes currently available on the target filesystem.
             file_system (str, optional): The target filesystem that was checked.
+
+        Attributes:
+            hostname (str): The hostname of the device being checked.
+            min_space (str, optional): The minimum amount of space required, legacy form only.
+            required (int, optional): Required bytes for the pending transfer.
+            available (int, optional): Free bytes currently available on the target filesystem.
+            file_system (str, optional): The target filesystem that was checked.
+            shortfall (int, optional): Bytes still needed for the transfer to succeed.
         """
-        if required is not None and available is not None:
+        self.hostname = hostname
+        self.min_space = min_space
+        self.required = required
+        self.available = available
+        self.file_system = file_system
+        self.shortfall = required - available if required is not None and available is not None else None
+
+        if self.shortfall is not None:
             location = f"{file_system} " if file_system else ""
-            message = f"{hostname}: {location}has {available} bytes free; {required} bytes required for transfer"
+            message = (
+                f"{hostname}: {location}has {available:,} bytes free; {required:,} bytes required for transfer "
+                f"({self.shortfall:,} more bytes required to succeed)"
+            )
         else:
             message = f"{hostname} does not meet the minimum disk space requirements of {min_space}"
         super().__init__(message)
