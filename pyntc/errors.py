@@ -211,8 +211,8 @@ class NotEnoughFreeSpaceError(NTCError):
         Error for not having enough free space to transfer a file.
 
         The byte counts are kept as attributes so callers can render their own message
-        (or compute the shortfall) without parsing ``message``. They are ``None`` when the
-        error is raised in the legacy ``min_space`` form.
+        (or compute the shortfall) without parsing `message`. They are `None` when the
+        error is raised in the legacy `min_space` form.
 
         Args:
             hostname (str): The hostname of the device being checked.
