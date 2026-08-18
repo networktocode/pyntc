@@ -138,6 +138,47 @@ def test_not_enough_free_space_error():
     assert err.value.message == error_message
 
 
+def test_not_enough_free_space_error_legacy_form_leaves_byte_counts_unset():
+    error = ntc_errors.NotEnoughFreeSpaceError("host1", 1000)
+
+    assert error.min_space == 1000
+    assert error.required is None
+    assert error.available is None
+    assert error.file_system is None
+    assert error.shortfall is None
+
+
+def test_not_enough_free_space_error_keeps_byte_counts_as_attributes():
+    error = ntc_errors.NotEnoughFreeSpaceError(
+        hostname="host1", required=313456789, available=13456789, file_system="bootflash:"
+    )
+
+    assert error.hostname == "host1"
+    assert error.required == 313456789
+    assert error.available == 13456789
+    assert error.file_system == "bootflash:"
+    assert error.shortfall == 300000000
+
+
+def test_not_enough_free_space_error_message_reports_counts_and_shortfall():
+    error = ntc_errors.NotEnoughFreeSpaceError(
+        hostname="host1", required=313456789, available=13456789, file_system="bootflash:"
+    )
+
+    assert error.message == (
+        "host1: bootflash: has 13,456,789 bytes free; 313,456,789 bytes required for transfer "
+        "(300,000,000 more bytes required to succeed)"
+    )
+
+
+def test_not_enough_free_space_error_message_omits_file_system_when_unknown():
+    error = ntc_errors.NotEnoughFreeSpaceError(hostname="host1", required=2500, available=500)
+
+    assert error.message == (
+        "host1: has 500 bytes free; 2,500 bytes required for transfer (2,000 more bytes required to succeed)"
+    )
+
+
 def test_os_install_error():
     error_message = "host1 was unable to boot into v1.2.3"
     error_class = ntc_errors.OSInstallError
