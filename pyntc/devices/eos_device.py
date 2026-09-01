@@ -405,7 +405,7 @@ class EOSDevice(BaseDevice):
         """
         if self._os_version is None:
             sh_version_output = self.show("show version")
-            self._os_version = sh_version_output["internalVersion"]
+            self._os_version = sh_version_output["version"]
 
         log.debug("Host %s: OS version %s", self.host, self._os_version)
         return self._os_version
@@ -676,10 +676,10 @@ class EOSDevice(BaseDevice):
 
         if self.check_file_exists(dest, file_system):
             if self.verify_optimized_image(dest, file_system):
-                log.debug("Host %s: File `%s` already exists in `%s`", self.host, dest, file_system)
+                log.debug("Host %s: File '%s' already exists in '%s'", self.host, dest, file_system)
                 return
             else:
-                log.debug("Host %s: File `%s` is present but cannot be verified", self.host, dest)
+                log.debug("Host %s: File '%s' is present but cannot be verified", self.host, dest)
                 self.native_ssh.send_command(f"delete {file_system}{dest}")
 
         log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
