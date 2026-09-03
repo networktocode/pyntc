@@ -20,7 +20,14 @@ from netmiko import ConnectHandler
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.devices.eos_device import DEFAULT_REBOOT_TIMEOUT, EOSDevice
-from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, SocketClosedError, RebootTimeoutError
+from pyntc.errors import (
+    CommandError,
+    CommandListError,
+    FileTransferError,
+    OSInstallError,
+    SocketClosedError,
+    RebootTimeoutError,
+)
 
 DEFAULT_SSH_PORT = 22
 
@@ -285,45 +292,6 @@ class EOSSSHDevice(EOSDevice):
 
         log.info("Host %s: Device configured with commands %s.", self.host, commands)
 
-    def reboot(self, wait_for_reload=False, timeout=DEFAULT_REBOOT_TIMEOUT, **kwargs):
-        """Reload the device.
-
-        Unlike eAPI, the SSH session dies as the reload executes, so the command is sent
-        with ``send_command_timing`` and the resulting transport error is expected.
-
-        Args:
-            wait_for_reload (bool): When True, block until the device's boot time advances
-                past the pre-reboot value. Defaults to False.
-            timeout (int): Max seconds to poll when ``wait_for_reload`` is True.
-            kwargs (dict): Additional keyword arguments, such as confirm.
-
-        Raises:
-            RebootTimeoutError: When the device does not return within ``timeout``.
-
-        Example:
-            >>> device = EOSSSHDevice(**connection_args)
-            >>> device.reboot()
-            >>>
-        """
-        if kwargs.get("confirm"):
-            log.warning("Passing 'confirm' to reboot method is deprecated.")
-
-        original_boot_time = self.boot_time if wait_for_reload else None
-        try:
-            self.native.send_command_timing("reload now")
-        except Exception as err:  # pylint: disable=broad-except
-            log.debug("Host %s: Session dropped during reload, as expected (%s).", self.host, err)
-
-        # The socket is gone regardless of how the command returned; force the next
-        # operation to reconnect rather than reuse a dead handle.
-        self._connected = False
-        log.info("Host %s: Device rebooted.", self.host)
-
-        if wait_for_reload:
-            # Both arguments are numeric; naming them prevents a transposition from
-            # silently satisfying the "boot time advanced" check on the first poll.
-            self._wait_for_device_reboot(original_boot_time=original_boot_time, timeout=timeout)
-
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
         """Check whether ``src`` already exists on the device with a matching checksum.
 
@@ -439,11 +407,26 @@ class EOSSSHDevice(EOSDevice):
         log.debug("Host %s: Vlans %s", self.host, self._vlans)
         return self._vlans
 
-    def install_os(self, image_name: str, file_system: str | None=None, reboot=True, **vendor_specifics) -> bool:
-        """TODO."""
+    def install_os(self, image_name: str, file_system: str | None = None, reboot=True, **vendor_specifics) -> bool:
+        """Install a different OS version.
+
+        Args:
+            image_name (str): The target image filename to install.
+            file_system (str | None): The device's target file system
+              where the software image is stored, defaults to None.
+            reboot (bool): Reloads the device when True.
+            vendor_specifics: Any pre-loaded vendor-specific kwargs.
+
+        Returns:
+            True when the installation is successful, False when the
+              target image is already installed.
+
+        Raises:
+            OSInstallError: If the image installation fails.
+        """
         if self._image_booted(image_name):
             log.info("Host %s: OS image '%s' already installed", self.host, image_name)
-            return False # should this be false?
+            return False
 
         file_system = file_system or self._get_file_system()
         command = f"install source {file_system}{image_name}"
@@ -456,7 +439,7 @@ class EOSSSHDevice(EOSDevice):
             version = version_output["version"]
             uptime = version_output["uptime"]
             self._send_command(command, read_timeout=300, expect_string=r"going down for reboot|%")
-            self._wait_for_reload(uptime, timeout)
+            self._wait_for_device_reboot(uptime, timeout)
             if self._os_updated(version):
                 log.info("Host %s: OS image '%s' installed successfully", self.host, image_name)
                 return True
@@ -476,8 +459,27 @@ class EOSSSHDevice(EOSDevice):
         log.error("Host %s: Still running version %s", self.host, prev_version)
         return False
 
-    def _wait_for_reload(self, prev_uptime: float, timeout: int) -> None:
-        """TODO."""
+    def _wait_for_device_reboot(self, prev_uptime: float, timeout: int) -> None:
+        """Block until device successfully reloads.
+
+        Tries to retrieve and compare the current uptime to the previous
+        uptime. If the current uptime is less than the previous uptime,
+        the reload is considered successful. If the current uptime is
+        greater than the previous uptime or the device is unreachable
+        and the timeout value has not expired, the comparison will be
+        reattempted again in 15 seconds. The method fails if the reload
+        doesn't succeed before the timeout value expires.
+
+        Args:
+            prev_uptime (float): The uptime value prior to device reload
+              in seconds.
+            timeout (int): The maximum time in seconds to wait before
+              flagging the reload as a failure.
+
+        Raises:
+            RebootTimeoutError: If the reload doesn't succeed before the
+              timeout value expires.
+        """
         start = time.time()
         while time.time() - start < timeout:
             try:
@@ -487,7 +489,7 @@ class EOSSSHDevice(EOSDevice):
                         "Host %s: Device reload successful (current uptime %s < previous uptime %s)",
                         self.host,
                         current_uptime,
-                        prev_uptime
+                        prev_uptime,
                     )
                     return
             except Exception as exc:
