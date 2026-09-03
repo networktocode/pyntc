@@ -13,13 +13,14 @@ whole file-transfer family are inherited from ``EOSDevice`` unchanged.
 import json
 import os
 import re
+import time
 
 from netmiko import ConnectHandler
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
 from pyntc.devices.eos_device import DEFAULT_REBOOT_TIMEOUT, EOSDevice
-from pyntc.errors import CommandError, CommandListError, FileTransferError, SocketClosedError
+from pyntc.errors import CommandError, CommandListError, FileTransferError, OSInstallError, SocketClosedError, RebootTimeoutError
 
 DEFAULT_SSH_PORT = 22
 
@@ -416,6 +417,11 @@ class EOSSSHDevice(EOSDevice):
             raise FileTransferError
 
     @property
+    def uptime(self):
+        """Get device uptime in seconds."""
+        return self.show("show version")["uptime"]
+
+    @property
     def vlans(self):
         """Get list of VLANs on device.
 
@@ -432,3 +438,61 @@ class EOSSSHDevice(EOSDevice):
 
         log.debug("Host %s: Vlans %s", self.host, self._vlans)
         return self._vlans
+
+    def install_os(self, image_name: str, file_system: str | None, reboot=True, **vendor_specifics) -> bool:
+        """TODO."""
+        if self._image_booted(image_name):
+            log.info("Host %s: OS image '%s' already installed", self.host, image_name)
+            return False # should this be false?
+
+        file_system = file_system or self._get_file_system()
+        command = f"install source {file_system}{image_name}"
+        self.open()
+        self.enable()
+        if reboot:
+            timeout = vendor_specifics.get("timeout", 900)
+            command += " reload now"
+            version_output = self.show("show version")
+            version = version_output["version"]
+            uptime = version_output["uptime"]
+            self._send_command(command, read_timeout=300, expect_string=r"going down for reboot|%")
+            self._wait_for_reload(uptime, timeout)
+            if self._os_updated(version):
+                log.info("Host %s: OS image '%s' installed successfully", self.host, image_name)
+                return True
+            log.error("Host %s: Failed to install OS image '%s'", self.host, image_name)
+            raise OSInstallError(self.hostname, image_name)
+        self._send_command(command, read_timeout=300)
+        log.info("Host %s: OS image '%s' installed, reload device to finalize", self.host, image_name)
+        return True
+
+    def _os_updated(self, prev_version: str) -> bool:
+        """TODO."""
+        current_version = self.show("show version")["version"]
+        if current_version != prev_version:
+            log.info("Host %s: Version changed from %s to %s", self.host, prev_version, current_version)
+            return True
+
+        log.error("Host %s: Still running version %s", self.host, prev_version)
+        return False
+
+    def _wait_for_reload(self, prev_uptime: float, timeout: int) -> None:
+        """TODO."""
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                current_uptime = self.uptime
+                if current_uptime < prev_uptime:
+                    log.info(
+                        "Host %s: Device reload successful (current uptime %s < previous uptime %s)",
+                        self.host,
+                        current_uptime,
+                        prev_uptime
+                    )
+                    return
+            except Exception as exc:
+                log.debug("Host %s: Reload probe failed (%s); will retry", self.host, exc)
+            time.sleep(15)
+
+        log.error("Host %s: Reload timer exceeded (%ss)", self.host, timeout)
+        raise RebootTimeoutError(self.hostname, timeout)
