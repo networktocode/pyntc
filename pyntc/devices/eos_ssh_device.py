@@ -439,7 +439,7 @@ class EOSSSHDevice(EOSDevice):
         log.debug("Host %s: Vlans %s", self.host, self._vlans)
         return self._vlans
 
-    def install_os(self, image_name: str, file_system: str | None, reboot=True, **vendor_specifics) -> bool:
+    def install_os(self, image_name: str, file_system: str | None=None, reboot=True, **vendor_specifics) -> bool:
         """TODO."""
         if self._image_booted(image_name):
             log.info("Host %s: OS image '%s' already installed", self.host, image_name)
