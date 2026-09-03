@@ -439,7 +439,7 @@ class EOSSSHDevice(EOSDevice):
             version = version_output["version"]
             uptime = version_output["uptime"]
             self._send_command(command, read_timeout=300, expect_string=r"going down for reboot|%")
-            self._wait_for_device_reboot(uptime, timeout)
+            self._wait_for_reload(uptime, timeout)
             if self._os_updated(version):
                 log.info("Host %s: OS image '%s' installed successfully", self.host, image_name)
                 return True
@@ -450,7 +450,16 @@ class EOSSSHDevice(EOSDevice):
         return True
 
     def _os_updated(self, prev_version: str) -> bool:
-        """TODO."""
+        """Confirm the running OS version changed.
+
+        Args:
+            prev_version (str): The previous running OS version used for
+              comparison.
+
+        Returns:
+            True if the running OS version has changed, False if it has
+              not.
+        """
         current_version = self.show("show version")["version"]
         if current_version != prev_version:
             log.info("Host %s: Version changed from %s to %s", self.host, prev_version, current_version)
@@ -459,7 +468,7 @@ class EOSSSHDevice(EOSDevice):
         log.error("Host %s: Still running version %s", self.host, prev_version)
         return False
 
-    def _wait_for_device_reboot(self, prev_uptime: float, timeout: int) -> None:
+    def _wait_for_reload(self, prev_uptime: float, timeout: int) -> None:
         """Block until device successfully reloads.
 
         Tries to retrieve and compare the current uptime to the previous
