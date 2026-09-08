@@ -24,6 +24,7 @@ from pyntc.errors import (
     CommandError,
     CommandListError,
     FileTransferError,
+    MaintModeTimeoutError,
     OSInstallError,
     SocketClosedError,
     RebootTimeoutError,
@@ -88,6 +89,29 @@ class EOSSSHDevice(EOSDevice):
         log.init(host=host)
 
     @property
+    def uptime(self):
+        """Get device uptime in seconds."""
+        return self.show("show version")["uptime"]
+
+    @property
+    def vlans(self):
+        """Get list of VLANs on device.
+
+        ``EOSDevice`` delegates to ``EOSVlans``, which is pyeapi-only
+        (``device.native.api("vlans")``). Over SSH the same data comes from
+        ``show vlan | json``, whose ``vlans`` key is a dict keyed by VLAN id.
+
+        Returns:
+            (list): List of VLAN ids as strings.
+        """
+        if self._vlans is None:
+            # sorted() over str keys, matching EOSVlans.get_list()'s lexicographic ordering.
+            self._vlans = sorted(self.show("show vlan")["vlans"].keys())
+
+        log.debug("Host %s: Vlans %s", self.host, self._vlans)
+        return self._vlans
+
+    @property
     def native_ssh(self):
         """Alias for ``native`` so inherited Netmiko-backed code works unchanged.
 
@@ -150,6 +174,25 @@ class EOSSSHDevice(EOSDevice):
             log.error("Host %s: Command %s did not return JSON: %s", self.host, command, output)
             raise CommandError(command, f"Command does not support JSON output: {output}")
 
+    def _os_updated(self, prev_version: str) -> bool:
+        """Confirm the running OS version changed.
+
+        Args:
+            prev_version (str): The previous running OS version used for
+              comparison.
+
+        Returns:
+            True if the running OS version has changed, False if it has
+              not.
+        """
+        current_version = self.show("show version")["version"]
+        if current_version != prev_version:
+            log.info("Host %s: Version changed from %s to %s", self.host, prev_version, current_version)
+            return True
+
+        log.error("Host %s: Still running version %s", self.host, prev_version)
+        return False
+
     def _send_command(self, command, error_command=None, **netmiko_args):
         """Send a single command and check the response for errors.
 
@@ -169,28 +212,45 @@ class EOSSSHDevice(EOSDevice):
         self._check_output_for_errors(error_command or command, response)
         return response
 
-    def open(self):
-        """Open, or re-validate, the Netmiko SSH connection to the device."""
-        if self._connected:
+    def _wait_for_reload(self, prev_uptime: float, timeout: int) -> None:
+        """Block until device successfully reloads.
+
+        Tries to retrieve and compare the current uptime to the previous
+        uptime. If the current uptime is less than the previous uptime,
+        the reload is considered successful. If the current uptime is
+        greater than the previous uptime or the device is unreachable
+        and the timeout value has not expired, the comparison will be
+        reattempted again in 15 seconds. The method fails if the reload
+        doesn't succeed before the timeout value expires.
+
+        Args:
+            prev_uptime (float): The uptime value prior to device reload
+              in seconds.
+            timeout (int): The maximum time in seconds to wait before
+              flagging the reload as a failure.
+
+        Raises:
+            RebootTimeoutError: If the reload doesn't succeed before the
+              timeout value expires.
+        """
+        start = time.time()
+        while time.time() - start < timeout:
             try:
-                self.native.find_prompt()
-            except Exception:  # pylint: disable=broad-except
-                self._connected = False
+                current_uptime = self.uptime
+                if current_uptime < prev_uptime:
+                    log.info(
+                        "Host %s: Device reload successful (current uptime %s < previous uptime %s)",
+                        self.host,
+                        current_uptime,
+                        prev_uptime,
+                    )
+                    return
+            except Exception as exc:
+                log.debug("Host %s: Reload probe failed (%s); will retry", self.host, exc)
+            time.sleep(15)
 
-        if not self._connected:
-            self.native = ConnectHandler(
-                device_type="arista_eos",
-                host=self.host,
-                username=self.username,
-                password=self.password,
-                port=self.port,
-                secret=self.secret,
-                verbose=False,
-                **self.netmiko_kwargs,
-            )
-            self._connected = True
-
-        log.debug("Host %s: Connection to device was opened successfully.", self.host)
+        log.error("Host %s: Reload timer exceeded (%ss)", self.host, timeout)
+        raise RebootTimeoutError(self.hostname, timeout)
 
     def close(self):
         """Disconnect from the device.
@@ -203,60 +263,7 @@ class EOSSSHDevice(EOSDevice):
             self._connected = False
             log.debug("Host %s: Connection closed.", self.host)
 
-    def show(self, commands, raw_text=False):
-        """Send show command(s) to the device.
-
-        Args:
-            commands (str, list): String with single command, or list with multiple commands.
-            raw_text (bool, optional): False to return structured data via the ``| json``
-                pipe, True to return the raw CLI text. Defaults to False.
-
-        Returns:
-            (dict): When ``commands`` is a str and ``raw_text`` is False. Non-show commands
-                cannot be piped to ``| json``; they run as plain text and return an empty dict.
-            (str): When ``commands`` is a str and ``raw_text`` is True.
-            (list): When ``commands`` is a list.
-
-        Raises:
-            CommandError: When ``commands`` is a str and the device reports an error.
-            CommandListError: When ``commands`` is a list and one command reports an error.
-        """
-        self.open()
-        self.enable()
-
-        original_commands_is_str = isinstance(commands, str)
-        command_list = [commands] if original_commands_is_str else list(commands)
-
-        responses = []
-        entered_commands = []
-        for command in command_list:
-            entered_commands.append(command)
-            as_json = not raw_text and bool(RE_JSON_ELIGIBLE.match(command))
-            cli_command = f"{command} | json" if as_json else command
-            try:
-                output = self._send_command(cli_command, error_command=command)
-                if as_json:
-                    output = self._load_json(command, output)
-            except CommandError as err:
-                if original_commands_is_str:
-                    raise
-                raise CommandListError(entered_commands, command, err.cli_error_msg) from err
-
-            if raw_text or as_json:
-                responses.append(output)
-            else:
-                # Non-show command sent with raw_text=False (checkpoint, save, rollback,
-                # reboot, set_boot_options). Every inherited caller discards the result,
-                # so an empty dict preserves EOSDevice's contract.
-                responses.append({})
-
-        if original_commands_is_str:
-            return responses[0]
-
-        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
-        return responses
-
-    def config(self, commands):
+    def config(self, commands: str | list):
         """Send configuration commands to a device.
 
         Args:
@@ -291,35 +298,6 @@ class EOSSSHDevice(EOSDevice):
             self.native.exit_config_mode()
 
         log.info("Host %s: Device configured with commands %s.", self.host, commands)
-
-    def file_copy_remote_exists(self, src, dest=None, file_system=None):
-        """Check whether ``src`` already exists on the device with a matching checksum.
-
-        ``EOSDevice`` answers this through Netmiko's ``AristaFileTransfer``, which drops into
-        the switch's Linux shell (``bash`` then ``/bin/ls``). That requires shell privileges
-        the connecting account may not have. This override uses the CLI instead --
-        ``dir <file_system>/<file>`` and ``verify /md5 <file_system><file>`` -- matching how
-        ``IOSDevice`` already behaves.
-
-        Args:
-            src (str): Path to the local file to check for.
-            dest (str, optional): Remote filename. Defaults to the basename of ``src``.
-            file_system (str, optional): Target filesystem. Auto-detected when omitted.
-
-        Returns:
-            (bool): True when the remote file exists and its checksum matches ``src``.
-        """
-        self.open()
-        self.enable()
-        if file_system is None:
-            file_system = self._get_file_system()
-
-        dest = dest or os.path.basename(src)
-        local_checksum = self.get_local_checksum(src)
-        exists = self.verify_file(local_checksum, dest, file_system=file_system)
-
-        log.debug("Host %s: File %s already on remote: %s.", self.host, src, exists)
-        return exists
 
     def file_copy(self, src, dest=None, file_system=None):
         """Copy a local file to the device over SCP.
@@ -384,28 +362,34 @@ class EOSSSHDevice(EOSDevice):
             )
             raise FileTransferError
 
-    @property
-    def uptime(self):
-        """Get device uptime in seconds."""
-        return self.show("show version")["uptime"]
+    def file_copy_remote_exists(self, src, dest=None, file_system=None):
+        """Check whether ``src`` already exists on the device with a matching checksum.
 
-    @property
-    def vlans(self):
-        """Get list of VLANs on device.
+        ``EOSDevice`` answers this through Netmiko's ``AristaFileTransfer``, which drops into
+        the switch's Linux shell (``bash`` then ``/bin/ls``). That requires shell privileges
+        the connecting account may not have. This override uses the CLI instead --
+        ``dir <file_system>/<file>`` and ``verify /md5 <file_system><file>`` -- matching how
+        ``IOSDevice`` already behaves.
 
-        ``EOSDevice`` delegates to ``EOSVlans``, which is pyeapi-only
-        (``device.native.api("vlans")``). Over SSH the same data comes from
-        ``show vlan | json``, whose ``vlans`` key is a dict keyed by VLAN id.
+        Args:
+            src (str): Path to the local file to check for.
+            dest (str, optional): Remote filename. Defaults to the basename of ``src``.
+            file_system (str, optional): Target filesystem. Auto-detected when omitted.
 
         Returns:
-            (list): List of VLAN ids as strings.
+            (bool): True when the remote file exists and its checksum matches ``src``.
         """
-        if self._vlans is None:
-            # sorted() over str keys, matching EOSVlans.get_list()'s lexicographic ordering.
-            self._vlans = sorted(self.show("show vlan")["vlans"].keys())
+        self.open()
+        self.enable()
+        if file_system is None:
+            file_system = self._get_file_system()
 
-        log.debug("Host %s: Vlans %s", self.host, self._vlans)
-        return self._vlans
+        dest = dest or os.path.basename(src)
+        local_checksum = self.get_local_checksum(src)
+        exists = self.verify_file(local_checksum, dest, file_system=file_system)
+
+        log.debug("Host %s: File %s already on remote: %s.", self.host, src, exists)
+        return exists
 
     def install_os(self, image_name: str, file_system: str | None = None, reboot=True, **vendor_specifics) -> bool:
         """Install a different OS version.
@@ -449,61 +433,127 @@ class EOSSSHDevice(EOSDevice):
         log.info("Host %s: OS image '%s' installed, reload device to finalize", self.host, image_name)
         return True
 
-    def _os_updated(self, prev_version: str) -> bool:
-        """Confirm the running OS version changed.
+    def maintenance_mode(self, unit: str = "System", quiesce: bool = True, transition_timer: int = 300):
+        """Enter or exit maintenance mode.
+
+        Sends config commands to transition the maintenance mode state,
+        entering or exiting based on the `quiesce` value. Attempts to
+        confirm successful transition in the alloted time based on the
+        provided `transition_timer` value. Raises an error if the
+        `transition_timer` elapses without successful confirmation.
 
         Args:
-            prev_version (str): The previous running OS version used for
-              comparison.
-
-        Returns:
-            True if the running OS version has changed, False if it has
-              not.
-        """
-        current_version = self.show("show version")["version"]
-        if current_version != prev_version:
-            log.info("Host %s: Version changed from %s to %s", self.host, prev_version, current_version)
-            return True
-
-        log.error("Host %s: Still running version %s", self.host, prev_version)
-        return False
-
-    def _wait_for_reload(self, prev_uptime: float, timeout: int) -> None:
-        """Block until device successfully reloads.
-
-        Tries to retrieve and compare the current uptime to the previous
-        uptime. If the current uptime is less than the previous uptime,
-        the reload is considered successful. If the current uptime is
-        greater than the previous uptime or the device is unreachable
-        and the timeout value has not expired, the comparison will be
-        reattempted again in 15 seconds. The method fails if the reload
-        doesn't succeed before the timeout value expires.
-
-        Args:
-            prev_uptime (float): The uptime value prior to device reload
-              in seconds.
-            timeout (int): The maximum time in seconds to wait before
-              flagging the reload as a failure.
+            unit (str): The specified unit to use when entering or
+              exiting maintenance mode, defaults to `System`.
+            quiesce (bool): Enters maintenance mode when True, exits
+              maintenace mode when False.
+            transition_timer (int): Duration in seconds to wait for
+              maintenance state to succesfully transition, defaults to
+              300 seconds.
 
         Raises:
-            RebootTimeoutError: If the reload doesn't succeed before the
-              timeout value expires.
+            MaintModeTimeoutError: If the state transition doesn't
+              succeed before the `transition_timer` expires.
         """
-        start = time.time()
-        while time.time() - start < timeout:
-            try:
-                current_uptime = self.uptime
-                if current_uptime < prev_uptime:
-                    log.info(
-                        "Host %s: Device reload successful (current uptime %s < previous uptime %s)",
-                        self.host,
-                        current_uptime,
-                        prev_uptime,
-                    )
-                    return
-            except Exception as exc:
-                log.debug("Host %s: Reload probe failed (%s); will retry", self.host, exc)
-            time.sleep(15)
+        commands = [
+            "maintenance",
+            f"unit {unit}",
+        ]
+        desired_state = "underMaintenance"
 
-        log.error("Host %s: Reload timer exceeded (%ss)", self.host, timeout)
-        raise RebootTimeoutError(self.hostname, timeout)
+        if quiesce:
+            commands.append("quiesce")
+        else:
+            commands.append("no quiesce")
+            desired_state = "active"
+
+        self.config(commands)
+        start = time.time()
+        while time.time() - start < transition_timer:
+            state_output = self.show("show maintenance")
+            if state_output["units"][unit]["state"] == desired_state:
+                log.debug("Host %s: Maintenance state successfully transitioned to '%s'", self.host, unit)
+                return
+            log.debug(
+                "Host %s: Maintenance state currently '%s', will retry", self.host, state_output["units"][unit]["state"]
+            )
+            time.sleep(10)
+
+        log.error("Host %s: Transition state timer (%s s) has expired", self.host, transition_timer)
+        raise MaintModeTimeoutError(self.hostname, transition_timer)
+
+    def open(self):
+        """Open, or re-validate, the Netmiko SSH connection to the device."""
+        if self._connected:
+            try:
+                self.native.find_prompt()
+            except Exception:  # pylint: disable=broad-except
+                self._connected = False
+
+        if not self._connected:
+            self.native = ConnectHandler(
+                device_type="arista_eos",
+                host=self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                secret=self.secret,
+                verbose=False,
+                **self.netmiko_kwargs,
+            )
+            self._connected = True
+
+        log.debug("Host %s: Connection to device was opened successfully.", self.host)
+
+    def show(self, commands: str | list, raw_text: bool = False):
+        """Send show command(s) to the device.
+
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
+            raw_text (bool, optional): False to return structured data via the ``| json``
+                pipe, True to return the raw CLI text. Defaults to False.
+
+        Returns:
+            (dict): When ``commands`` is a str and ``raw_text`` is False. Non-show commands
+                cannot be piped to ``| json``; they run as plain text and return an empty dict.
+            (str): When ``commands`` is a str and ``raw_text`` is True.
+            (list): When ``commands`` is a list.
+
+        Raises:
+            CommandError: When ``commands`` is a str and the device reports an error.
+            CommandListError: When ``commands`` is a list and one command reports an error.
+        """
+        self.open()
+        self.enable()
+
+        original_commands_is_str = isinstance(commands, str)
+        command_list = [commands] if original_commands_is_str else list(commands)
+
+        responses = []
+        entered_commands = []
+        for command in command_list:
+            entered_commands.append(command)
+            as_json = not raw_text and bool(RE_JSON_ELIGIBLE.match(command))
+            cli_command = f"{command} | json" if as_json else command
+            try:
+                output = self._send_command(cli_command, error_command=command)
+                if as_json:
+                    output = self._load_json(command, output)
+            except CommandError as err:
+                if original_commands_is_str:
+                    raise
+                raise CommandListError(entered_commands, command, err.cli_error_msg) from err
+
+            if raw_text or as_json:
+                responses.append(output)
+            else:
+                # Non-show command sent with raw_text=False (checkpoint, save, rollback,
+                # reboot, set_boot_options). Every inherited caller discards the result,
+                # so an empty dict preserves EOSDevice's contract.
+                responses.append({})
+
+        if original_commands_is_str:
+            return responses[0]
+
+        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
+        return responses

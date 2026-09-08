@@ -335,3 +335,18 @@ class WLANDisableError(NTCError):
             f"Found:    {sorted(actual_wlans)}\n"
         )
         super().__init__(message)
+
+
+class MaintModeTimeoutError(NTCError):
+    """Error for failing to transition maintenance mode state before the timer expires."""
+
+    def __init__(self, hostname, transition_time):
+        """
+        Error for failing to transition maintenance mode state before the timer expires.
+
+        Args:
+            hostname (str): The hostname of the device that failed to transition states.
+            transition_time (int): The maximum time in seconds alotted for state transition.
+        """
+        message = f"{hostname} failed to transition maint-mode states in {transition_time} seconds"
+        super().__init__(message)
