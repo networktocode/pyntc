@@ -126,7 +126,7 @@ class EOSSSHDevice(EOSDevice):
         return self.native
 
     @staticmethod
-    def _read_timeout_for(command):
+    def _read_timeout_for(command: str):
         """Resolve the Netmiko read timeout to use for ``command``.
 
         Args:
@@ -140,7 +140,7 @@ class EOSSSHDevice(EOSDevice):
                 return timeout
         return DEFAULT_READ_TIMEOUT
 
-    def _check_output_for_errors(self, command, output):
+    def _check_output_for_errors(self, command: str, output: str):
         """Raise ``CommandError`` when the device reported a CLI error.
 
         Args:
@@ -154,7 +154,7 @@ class EOSSSHDevice(EOSDevice):
             log.error("Host %s: Error in %s with response: %s", self.host, command, output)
             raise CommandError(command, output)
 
-    def _load_json(self, command, output):
+    def _load_json(self, command: str, output: str):
         """Parse ``| json`` output.
 
         Args:
@@ -402,8 +402,8 @@ class EOSSSHDevice(EOSDevice):
             vendor_specifics: Any pre-loaded vendor-specific kwargs.
 
         Returns:
-            True when the installation is successful, False when the
-              target image is already installed.
+            (bool): True when the installation is successful, False when
+              the target image is already installed.
 
         Raises:
             OSInstallError: If the image installation fails.
@@ -433,14 +433,13 @@ class EOSSSHDevice(EOSDevice):
         log.info("Host %s: OS image '%s' installed, reload device to finalize", self.host, image_name)
         return True
 
-    def maintenance_mode(self, unit: str = "System", quiesce: bool = True, transition_timer: int = 300):
+    def maintenance_mode(self, unit: str = "System", quiesce: bool = True, transition_timer: int = 300) -> bool:
         """Enter or exit maintenance mode.
 
         Sends config commands to transition the maintenance mode state,
         entering or exiting based on the `quiesce` value. Attempts to
         confirm successful transition in the alloted time based on the
-        provided `transition_timer` value. Raises an error if the
-        `transition_timer` elapses without successful confirmation.
+        provided `transition_timer` value.
 
         Args:
             unit (str): The specified unit to use when entering or
@@ -451,9 +450,8 @@ class EOSSSHDevice(EOSDevice):
               maintenance state to succesfully transition, defaults to
               300 seconds.
 
-        Raises:
-            MaintModeTimeoutError: If the state transition doesn't
-              succeed before the `transition_timer` expires.
+        Returns:
+            (bool): True if state transition successful, else False.
         """
         commands = [
             "maintenance",
@@ -471,16 +469,20 @@ class EOSSSHDevice(EOSDevice):
         start = time.time()
         while time.time() - start < transition_timer:
             state_output = self.show("show maintenance")
-            if state_output["units"][unit]["state"] == desired_state:
+            actual_state = state_output["units"][unit]["state"]
+            if actual_state == desired_state:
                 log.debug("Host %s: Maintenance state successfully transitioned to '%s'", self.host, unit)
-                return
-            log.debug(
-                "Host %s: Maintenance state currently '%s', will retry", self.host, state_output["units"][unit]["state"]
-            )
+                return True
+            log.debug("Host %s: Maintenance state currently '%s', will retry", self.host, actual_state)
             time.sleep(10)
 
-        log.error("Host %s: Transition state timer (%s s) has expired", self.host, transition_timer)
-        raise MaintModeTimeoutError(self.hostname, transition_timer)
+        log.error(
+            "Host %s: Transition state timer (%s s) has expired, maintenance state currrently '%s'",
+            self.host,
+            transition_timer,
+            actual_state,
+        )
+        return False
 
     def open(self):
         """Open, or re-validate, the Netmiko SSH connection to the device."""
