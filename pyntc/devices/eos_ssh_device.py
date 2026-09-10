@@ -25,6 +25,7 @@ from pyntc.errors import (
     CommandListError,
     FileTransferError,
     MaintModeTimeoutError,
+    NTCError,
     OSInstallError,
     SocketClosedError,
     RebootTimeoutError,
@@ -458,13 +459,15 @@ class EOSSSHDevice(EOSDevice):
             f"unit {unit}",
         ]
         desired_state = "underMaintenance"
-
         if quiesce:
             commands.append("quiesce")
         else:
             commands.append("no quiesce")
             desired_state = "active"
 
+        units = self.show("show maintenance")["units"]
+        if unit not in units.keys():
+            raise NTCError(f"Unit {unit} does not exist.")
         self.config(commands)
         start = time.time()
         while time.time() - start < transition_timer:
