@@ -461,9 +461,9 @@ class EOSSSHDevice(EOSDevice):
             "maintenance",
             f"unit {unit}",
         ]
-        desired_state = "underMaintenance"
         if enable:
             commands.append("quiesce")
+            desired_state = "underMaintenance"
         else:
             commands.append("no quiesce")
             desired_state = "active"
