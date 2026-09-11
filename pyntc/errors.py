@@ -337,16 +337,19 @@ class WLANDisableError(NTCError):
         super().__init__(message)
 
 
-class MaintModeTimeoutError(NTCError):
-    """Error for failing to transition maintenance mode state before the timer expires."""
+class MaintModeProfileError(NTCError):
+    """Error if selected maintenance mode profile does not exist."""
 
-    def __init__(self, hostname, transition_time):
+    def __init__(self, hostname, profile, message=None):
         """
-        Error for failing to transition maintenance mode state before the timer expires.
+        Error if selected maintenance mode profile does not exist.
 
         Args:
-            hostname (str): The hostname of the device that failed to transition states.
-            transition_time (int): The maximum time in seconds alotted for state transition.
+            hostname (str): The hostname of the device.
+            profile (str): The name of the missing maint-mode
+              profile/unit.
+            message (str | None): Optional custom message which
+              overrides the default_message.
         """
-        message = f"{hostname} failed to transition maint-mode states in {transition_time} seconds"
-        super().__init__(message)
+        default_message = f"{hostname} has no maintenance profile '{profile}'"
+        super().__init__(message or default_message)

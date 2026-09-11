@@ -24,8 +24,7 @@ from pyntc.errors import (
     CommandError,
     CommandListError,
     FileTransferError,
-    MaintModeTimeoutError,
-    NTCError,
+    MaintModeProfileError,
     OSInstallError,
     SocketClosedError,
     RebootTimeoutError,
@@ -434,18 +433,18 @@ class EOSSSHDevice(EOSDevice):
         log.info("Host %s: OS image '%s' installed, reload device to finalize", self.host, image_name)
         return True
 
-    def maintenance_mode(self, unit: str = "System", quiesce: bool = True, transition_timer: int = 300) -> bool:
+    def maintenance_mode(self, unit: str = "System", enable: bool = True, transition_timer: int = 300) -> bool:
         """Enter or exit maintenance mode.
 
         Sends config commands to transition the maintenance mode state,
-        entering or exiting based on the `quiesce` value. Attempts to
+        entering or exiting based on the `enable` value. Attempts to
         confirm successful transition in the alloted time based on the
         provided `transition_timer` value.
 
         Args:
             unit (str): The specified unit to use when entering or
               exiting maintenance mode, defaults to `System`.
-            quiesce (bool): Enters maintenance mode when True, exits
+            enable (bool): Enters maintenance mode when True, exits
               maintenace mode when False.
             transition_timer (int): Duration in seconds to wait for
               maintenance state to succesfully transition, defaults to
@@ -453,13 +452,17 @@ class EOSSSHDevice(EOSDevice):
 
         Returns:
             (bool): True if state transition successful, else False.
+
+        Raises:
+            MaintModeProfileError: If the provided unit name does not
+              already exist on the target device.
         """
         commands = [
             "maintenance",
             f"unit {unit}",
         ]
         desired_state = "underMaintenance"
-        if quiesce:
+        if enable:
             commands.append("quiesce")
         else:
             commands.append("no quiesce")
@@ -467,12 +470,11 @@ class EOSSSHDevice(EOSDevice):
 
         units = self.show("show maintenance")["units"]
         if unit not in units.keys():
-            raise NTCError(f"Unit {unit} does not exist.")
+            raise MaintModeProfileError(self.hostname, unit)
         self.config(commands)
         start = time.time()
         while time.time() - start < transition_timer:
-            state_output = self.show("show maintenance")
-            actual_state = state_output["units"][unit]["state"]
+            actual_state = self.show("show maintenance")["units"][unit]["state"]
             if actual_state == desired_state:
                 log.debug("Host %s: Maintenance state successfully transitioned to '%s'", self.host, unit)
                 return True
@@ -480,7 +482,7 @@ class EOSSSHDevice(EOSDevice):
             time.sleep(10)
 
         log.error(
-            "Host %s: Transition state timer (%s s) has expired, maintenance state currrently '%s'",
+            "Host %s: Transition state timer (%ss) has expired, maintenance state currrently '%s'",
             self.host,
             transition_timer,
             actual_state,
