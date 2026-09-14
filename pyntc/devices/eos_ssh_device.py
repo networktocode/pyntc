@@ -263,7 +263,7 @@ class EOSSSHDevice(EOSDevice):
             self._connected = False
             log.debug("Host %s: Connection closed.", self.host)
 
-    def config(self, commands: str | list):
+    def config(self, command: str | list):
         """Send configuration commands to a device.
 
         Args:
@@ -276,28 +276,28 @@ class EOSSSHDevice(EOSDevice):
         self.open()
         self.enable()
 
-        original_commands_is_str = isinstance(commands, str)
-        command_list = [commands] if original_commands_is_str else list(commands)
+        original_commands_is_str = isinstance(command, str)
+        command_list = [command] if original_commands_is_str else list(command)
 
         entered_commands = []
         try:
-            for command in command_list:
-                entered_commands.append(command)
+            for cmd in command_list:
+                entered_commands.append(cmd)
                 # Multi-line commands (e.g. "banner motd\n...\nEOF") drop the CLI into an
                 # input mode whose echo Netmiko's cmd_verify cannot match; verification must
                 # be disabled for them or send_config_set raises ReadTimeout.
-                output = self.native.send_config_set(command, exit_config_mode=False, cmd_verify="\n" not in command)
+                output = self.native.send_config_set(cmd, exit_config_mode=False, cmd_verify="\n" not in cmd)
                 try:
-                    self._check_output_for_errors(command, output)
+                    self._check_output_for_errors(cmd, output)
                 except CommandError as err:
                     if original_commands_is_str:
                         raise
-                    raise CommandListError(entered_commands, command, err.cli_error_msg) from err
+                    raise CommandListError(entered_commands, cmd, err.cli_error_msg) from err
         finally:
             # Never leave the session parked in config mode, even on failure.
             self.native.exit_config_mode()
 
-        log.info("Host %s: Device configured with commands %s.", self.host, commands)
+        log.info("Host %s: Device configured with commands %s.", self.host, command)
 
     def file_copy(self, src, dest=None, file_system=None):
         """Copy a local file to the device over SCP.
