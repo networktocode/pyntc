@@ -573,6 +573,22 @@ class TestIOSXRDevice(unittest.TestCase):
         with self.assertRaises(FileTransferError):
             self.device.remote_file_copy(src)
 
+    @mock.patch.object(IOSXRDevice, "check_file_exists", side_effect=[False])
+    @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
+    def test_remote_file_copy_error_carries_device_output(self, *_mocks):
+        """The raised error repeats what the device said, with the token removed."""
+        self.device.native.find_prompt.return_value = PROMPT
+        self.device.native.send_command.return_value = (
+            "%Error opening ftp://ntc:ntc1234@192.0.2.1/image.iso (Incorrect Login/Password)"
+        )
+        src = FileCopyModel(download_url=ISO_URL, checksum="", file_name=ISO, username="ntc", token="ntc1234")
+
+        with self.assertRaises(FileTransferError) as err:
+            self.device.remote_file_copy(src)
+
+        self.assertIn("Incorrect Login/Password", err.exception.message)
+        self.assertNotIn("ntc1234", err.exception.message)
+
     @mock.patch.object(IOSXRDevice, "_get_file_system", return_value="harddisk:")
     def test_get_remote_checksum_md5(self, *_mocks):
         self.device.native.send_command.return_value = RUN_MD5SUM

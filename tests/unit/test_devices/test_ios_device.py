@@ -826,6 +826,53 @@ class TestIOSDevice(unittest.TestCase):
             read_timeout=900,
         )
 
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_error_carries_device_output(self, mock_verify):
+        """The raised error repeats what the device said, with the token removed."""
+        from pyntc.errors import FileTransferError
+
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.return_value = False
+        self.device.native.find_prompt.return_value = "Router#"
+        self.device.native.send_command.return_value = (
+            "%Error opening ftp://ntc:ntc1234@10.1.100.220/IOS-XE/test.bin (Incorrect Login/Password)"
+        )
+
+        with self.assertRaises(FileTransferError) as err:
+            self.device.remote_file_copy(src, file_system="flash:")
+
+        self.assertIn("Incorrect Login/Password", err.exception.message)
+        self.assertNotIn("ntc1234", err.exception.message)
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_raises_on_unrecognized_output(self, mock_verify):
+        """Output matching no prompt and no marker raises instead of looping forever."""
+        from pyntc.errors import FileTransferError
+
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.return_value = False
+        self.device.native.find_prompt.return_value = "Router#"
+        self.device.native.send_command.return_value = "something the driver has never seen"
+
+        with self.assertRaises(FileTransferError) as err:
+            self.device.remote_file_copy(src, file_system="flash:")
+
+        self.assertIn("Unexpected output", err.exception.message)
+
 
 if __name__ == "__main__":
     unittest.main()

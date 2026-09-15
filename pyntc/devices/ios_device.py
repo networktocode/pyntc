@@ -810,6 +810,11 @@ class IOSDevice(BaseDevice):
         """Return the file path from the URL, falling back to dest if empty."""
         return src.path if src.path and src.path != "/" else f"/{dest}"
 
+    @staticmethod
+    def _mask_token(output: str, src: FileCopyModel) -> str:
+        """Replace the token in device output, so it is safe to log or raise."""
+        return output.replace(src.token, "*****") if src.token else output
+
     def _build_url_copy_command_simple(self, src: FileCopyModel, file_system: str, dest: str) -> str:
         """Build the copy command for transfers where IOS prompts for the credentials it needs.
 
@@ -888,8 +893,9 @@ class IOSDevice(BaseDevice):
                     break
                 # Check for errors explicitly to avoid infinite loops on failure
                 if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
-                    log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
-                    raise FileTransferError
+                    masked_output = self._mask_token(output, src)
+                    log.error("Host %s: File transfer error for %s: %s", self.host, src.file_name, masked_output)
+                    raise FileTransferError(f"Error detected in copy command output: {masked_output}")
                 for prompt, answer in prompt_answers.items():
                     if re.search(prompt, output, re.IGNORECASE):
                         is_password = "Password" in prompt
@@ -897,16 +903,30 @@ class IOSDevice(BaseDevice):
                             answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
                         )
                         break  # Exit the for loop and check the new output for the next prompt
+                else:
+                    # No prompt matched and no marker was found. Without this the loop
+                    # never reassigns output and spins on the same string forever.
+                    masked_output = self._mask_token(output, src)
+                    log.error(
+                        "Host %s: Unexpected output during file transfer of %s: %s",
+                        self.host,
+                        src.file_name,
+                        masked_output,
+                    )
+                    raise FileTransferError(f"Unexpected output during file transfer: {masked_output}")
 
             if not self.verify_file(
                 src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
             ):
                 log.error(
-                    "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
+                    "Host %s: Attempted remote file copy, but could not validate %s%s after transfer.",
                     self.host,
-                    FileTransferError.default_message,
+                    file_system,
+                    dest,
                 )
-                raise FileTransferError
+                raise FileTransferError(
+                    f"Could not validate {file_system}{dest} existed and matched the expected checksum after transfer."
+                )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):

@@ -503,6 +503,11 @@ class IOSXRDevice(BaseDevice):
             checksum, filename, hashing_algorithm, file_system=file_system, read_timeout=read_timeout
         )
 
+    @staticmethod
+    def _mask_token(output: str, src: FileCopyModel) -> str:
+        """Replace the token in device output, so it is safe to log or raise."""
+        return output.replace(src.token, "*****") if src.token else output
+
     def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
         """Copy a file from a remote URL onto the device filesystem.
 
@@ -568,8 +573,9 @@ class IOSXRDevice(BaseDevice):
                 output,
                 flags=re.IGNORECASE,
             ):
-                log.error("Host %s: File transfer error for %s: %s", self.host, dest, output)
-                raise FileTransferError
+                masked_output = self._mask_token(output, src)
+                log.error("Host %s: File transfer error for %s: %s", self.host, dest, masked_output)
+                raise FileTransferError(f"Error detected in copy command output: {masked_output}")
             for prompt, answer in prompt_answers.items():
                 if re.search(prompt, output, re.IGNORECASE):
                     is_password = "password" in output.lower()
@@ -583,12 +589,13 @@ class IOSXRDevice(BaseDevice):
 
         if not self.verify_file(src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system):
             log.error(
-                "Host %s: File %s could not be verified after transfer (missing or checksum mismatch). %s",
+                "Host %s: File %s could not be verified after transfer (missing or checksum mismatch).",
                 self.host,
                 dest,
-                FileTransferError.default_message,
             )
-            raise FileTransferError
+            raise FileTransferError(
+                f"Could not validate {file_system}/{dest} existed and matched the expected checksum after transfer."
+            )
 
         log.info("Host %s: File %s copied to %s and checksum verified.", self.host, dest, file_system)
 
