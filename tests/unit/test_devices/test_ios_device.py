@@ -694,6 +694,138 @@ class TestIOSDevice(unittest.TestCase):
         mock_check_free_space.assert_not_called()
         self.device.native.send_command.assert_called()
 
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_ftp_embeds_credentials(self, mock_verify):
+        """IOS reads FTP credentials from the URL and never prompts for them."""
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.return_value = "94038 bytes copied in 0.357 secs"
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_called_once_with(
+            "copy ftp://ntc:ntc1234@10.1.100.220/IOS-XE/test.bin flash:test.bin",
+            expect_string=mock.ANY,
+            read_timeout=900,
+        )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_ftp_keeps_non_default_port(self, mock_verify):
+        """A non-default port on the source URL survives into the copy command."""
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220:2121/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.return_value = "94038 bytes copied in 0.357 secs"
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_called_once_with(
+            "copy ftp://ntc:ntc1234@10.1.100.220:2121/IOS-XE/test.bin flash:test.bin",
+            expect_string=mock.ANY,
+            read_timeout=900,
+        )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_scp_keeps_bare_url_and_walks_prompts(self, mock_verify):
+        """IOS prompts for SCP credentials, so its URL stays free of them."""
+        src = FileCopyModel(
+            download_url="scp://10.1.100.220:2022/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.side_effect = [
+            "Source username [ntc]?",
+            "Password:",
+            "94038 bytes copied in 3.017 secs",
+        ]
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_has_calls(
+            [
+                mock.call(
+                    "copy scp://10.1.100.220:2022/IOS-XE/test.bin flash:test.bin",
+                    expect_string=mock.ANY,
+                    read_timeout=900,
+                ),
+                mock.call("ntc", expect_string=mock.ANY, read_timeout=900, cmd_verify=True),
+                mock.call("ntc1234", expect_string=mock.ANY, read_timeout=900, cmd_verify=False),
+            ]
+        )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_appends_vrf_for_ftp(self, mock_verify):
+        """The copy command carries the VRF for schemes whose parser accepts it."""
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+            username="ntc",
+            token="ntc1234",
+            vrf="Mgmt-vrf",
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.return_value = "94038 bytes copied in 0.357 secs"
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_called_once_with(
+            "copy ftp://ntc:ntc1234@10.1.100.220/IOS-XE/test.bin flash:test.bin vrf Mgmt-vrf",
+            expect_string=mock.ANY,
+            read_timeout=900,
+        )
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_omits_vrf_for_http(self, mock_verify):
+        """The HTTP copy command rejects a trailing vrf keyword, so it is never added."""
+        src = FileCopyModel(
+            download_url="http://10.1.100.220:8081/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+            username="ntc",
+            token="ntc1234",
+            vrf="Mgmt-vrf",
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.return_value = "94038 bytes copied in 0.357 secs"
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_called_once_with(
+            "copy http://ntc:ntc1234@10.1.100.220:8081/IOS-XE/test.bin flash:test.bin",
+            expect_string=mock.ANY,
+            read_timeout=900,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

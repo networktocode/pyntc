@@ -36,6 +36,11 @@ RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
 INSTALL_MODE_FILE_NAME = "packages.conf"
+# Schemes where IOS reads the credentials out of the URL and never prompts for them.
+# Sending a bare URL for one of these makes the device attempt an anonymous login.
+IOS_URL_CREDENTIAL_SCHEMES = {"ftp", "http", "https"}
+# Schemes whose copy command rejects a trailing "vrf" keyword.
+IOS_NO_VRF_SCHEMES = {"http", "https"}
 
 
 @fix_docs
@@ -795,7 +800,38 @@ class IOSDevice(BaseDevice):
                 )
                 raise FileTransferError
 
-    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
+    @staticmethod
+    def _netloc(src: FileCopyModel) -> str:
+        """Return host:port or just host from a FileCopyModel."""
+        return f"{src.hostname}:{src.port}" if src.port else src.hostname
+
+    @staticmethod
+    def _source_path(src: FileCopyModel, dest: str) -> str:
+        """Return the file path from the URL, falling back to dest if empty."""
+        return src.path if src.path and src.path != "/" else f"/{dest}"
+
+    def _build_url_copy_command_simple(self, src: FileCopyModel, file_system: str, dest: str) -> str:
+        """Build the copy command for transfers where IOS prompts for the credentials it needs.
+
+        SCP and SFTP prompt for the source username and the password, and
+        `remote_file_copy` answers both from the model.
+        """
+        return f"copy {src.clean_url} {file_system}{dest}"
+
+    def _build_url_copy_command_with_creds(self, src: FileCopyModel, file_system: str, dest: str) -> str:
+        """Build the copy command for transfers where IOS reads the credentials from the URL.
+
+        FTP, HTTP and HTTPS never prompt. A URL without credentials makes the device
+        attempt an anonymous login, which the server rejects.
+        """
+        netloc = self._netloc(src)
+        path = self._source_path(src, dest)
+        credentials = f"{src.username}:{src.token}" if src.token else src.username
+        return f"copy {src.scheme}://{credentials}@{netloc}{path} {file_system}{dest}"
+
+    def remote_file_copy(  # noqa: R0912 pylint: disable=too-many-branches
+        self, src: FileCopyModel, dest=None, file_system=None, **kwargs
+    ):
         """Copy a file to a remote device.
 
         Args:
@@ -824,16 +860,19 @@ class IOSDevice(BaseDevice):
 
             # Define prompt mapping for expected prompts during file copy
             prompt_answers = {
-                r"Password": src.token,
-                r"Source username": src.username,
+                r"Password": src.token or "",
+                r"Source username": src.username or "",
                 r"yes/no|Are you sure you want to continue connecting": "yes",
                 r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",  # Press Enter
             }
             keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
             expect_regex = f"({'|'.join(keys)})"
 
-            command = f"copy {src.clean_url} {file_system}{dest}"
-            if src.vrf and src.scheme not in {"http", "https"}:
+            if src.username and src.scheme in IOS_URL_CREDENTIAL_SCHEMES:
+                command = self._build_url_copy_command_with_creds(src, file_system, dest)
+            else:
+                command = self._build_url_copy_command_simple(src, file_system, dest)
+            if src.vrf and src.scheme not in IOS_NO_VRF_SCHEMES:
                 command = f"{command} vrf {src.vrf}"
 
             # _send_command currently checks for % and raises an error, but during the file copy
