@@ -1,0 +1,1 @@
+Kept the byte counts on `NotEnoughFreeSpaceError` as attributes (`required`, `available`, `file_system`, `shortfall`) so callers no longer have to parse the message, and its message now reports those counts with thousands separators along with the remaining shortfall.
