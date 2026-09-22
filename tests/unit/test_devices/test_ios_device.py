@@ -1,9 +1,11 @@
+import logging
 import os
 import time
 import unittest
 
 import mock
 import pytest
+from netmiko.base_connection import SecretsFilter
 
 from pyntc.devices import IOSDevice
 from pyntc.devices import ios_device as ios_module
@@ -74,6 +76,8 @@ class TestIOSDevice(unittest.TestCase):
 
         mock_miko.send_command_timing.side_effect = send_command
         mock_miko.send_command_expect.side_effect = send_command_expect
+        # Match a real connection, whose filter is seeded with the device password.
+        mock_miko._secrets_filter = SecretsFilter(no_log={"password": "pass"})
         self.device.native = mock_miko
 
     def tearDown(self):
@@ -850,6 +854,91 @@ class TestIOSDevice(unittest.TestCase):
 
         self.assertIn("Incorrect Login/Password", err.exception.message)
         self.assertNotIn("ntc1234", err.exception.message)
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_hides_url_token_from_logs(self, mock_verify):
+        """The token in the copy URL is scrubbed from log records and unregistered afterwards."""
+        from pyntc.errors import FileTransferError
+
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.return_value = False
+        self.device.native.find_prompt.return_value = "Router#"
+        self.device.native.send_command.return_value = (
+            "%Error opening ftp://ntc:ntc1234@10.1.100.220/IOS-XE/test.bin (Incorrect Login/Password)"
+        )
+        pyntc_log = ios_module.log.get_log()
+
+        with self.assertLogs(pyntc_log, level=logging.ERROR) as captured:
+            with self.assertRaises(FileTransferError):
+                self.device.remote_file_copy(src, file_system="flash:")
+
+        logged = "\n".join(captured.output)
+        self.assertIn("Incorrect Login/Password", logged)
+        self.assertNotIn("ntc1234", logged)
+        self.assertEqual(pyntc_log.filters, [])
+        self.assertNotIn("file_copy_token", self.device.native._secrets_filter.no_log)
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_ftp_registers_token_with_netmiko(self, mock_verify):
+        """The token joins netmiko's no_log mapping while the copy runs, and leaves afterwards."""
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.side_effect = [False, True]
+        no_log = self.device.native._secrets_filter.no_log
+        registered = {}
+
+        def capture_no_log(*args, **kwargs):
+            registered.update(no_log)
+            return "94038 bytes copied in 0.357 secs"
+
+        self.device.native.find_prompt.return_value = "Router#"
+        self.device.native.send_command.side_effect = capture_no_log
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.assertEqual(registered, {"password": "pass", "file_copy_token": "ntc1234"})
+        self.assertEqual(no_log, {"password": "pass"})
+
+    @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_scp_keeps_token_out_of_netmiko(self, mock_verify):
+        """SCP answers a prompt for its password, so the token never joins the mapping."""
+        src = FileCopyModel(
+            download_url="scp://10.1.100.220:2022/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            username="ntc",
+            token="ntc1234",
+        )
+        mock_verify.side_effect = [False, True]
+        no_log = self.device.native._secrets_filter.no_log
+        registered = {}
+        responses = iter(["Source username [ntc]?", "Password:", "94038 bytes copied in 3.017 secs"])
+
+        def capture_no_log(*args, **kwargs):
+            registered.update(no_log)
+            return next(responses)
+
+        self.device.native.find_prompt.return_value = "Router#"
+        self.device.native.send_command.side_effect = capture_no_log
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.assertEqual(registered, {"password": "pass"})
+        self.assertEqual(no_log, {"password": "pass"})
 
     @mock.patch.object(IOSDevice, "verify_file")
     def test_remote_file_copy_raises_on_unrecognized_output(self, mock_verify):
