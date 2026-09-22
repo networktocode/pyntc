@@ -960,6 +960,13 @@ class IOSDevice(BaseDevice):
                             raise OSInstallError(
                                 hostname=self.hostname, desired_boot=image_name, detail=install_message
                             )
+                    except ReadTimeout:
+                        log.warning(
+                            "Host %s: Timed out waiting for the install command prompt for image %s; "
+                            "checking for reboot and verifying the running image.",
+                            self.host,
+                            image_name,
+                        )
                     except IOError:
                         log.error("Host %s: IO error for image %s", self.host, image_name)
                     except CommandError as original_error:
@@ -990,9 +997,6 @@ class IOSDevice(BaseDevice):
             # TODO: This was moved into reboot method as well, should cause issues running again, but should be removed in future versions.
             self._wait_for_device_reboot(timeout=timeout)
 
-            # Set FastCLI back to originally set when using install mode
-            if use_install_mode:
-                image_name = INSTALL_MODE_FILE_NAME
             # Verify the OS level
             if not self._image_booted(image_name):
                 log.error("Host %s: OS install error for image %s", self.host, image_name)
