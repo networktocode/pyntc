@@ -19,12 +19,17 @@ jobs:
         uses: "networktocode/gh-action-setup-poetry-environment@v7"
         with:
 <<<<<<< HEAD
+<<<<<<< HEAD
           poetry-version: "2.1.3"
           python-version: "3.12"
 =======
           poetry-version: "${{ env.POETRY_VERSION }}"
           python-version: "${{ env.PYTHON_VERSION }}"
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+          poetry-version: "${{ env.POETRY_VERSION }}"
+          python-version: "${{ env.PYTHON_VERSION }}"
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
           poetry-install-options: "--no-root"
       - name: "Build Documentation"
         run: "poetry run invoke build-and-check-docs"
@@ -68,12 +73,17 @@ jobs:
     needs: "build"
     environment: "pypi"
 <<<<<<< HEAD
+<<<<<<< HEAD
     # IMPORTANT: this permission is mandatory for trusted publishing.
     permissions:
 =======
     permissions:
       # IMPORTANT: this permission is mandatory for Trusted Publishing
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+    permissions:
+      # IMPORTANT: this permission is mandatory for Trusted Publishing
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
       id-token: "write"
     steps:
       - name: "Retrieve built package from cache"
@@ -125,15 +135,20 @@ jobs:
       contents: "write"
       pull-requests: "write"
 <<<<<<< HEAD
+<<<<<<< HEAD
     name: "Create a PR from main into develop"
 =======
     name: "${{ github.event.release.target_commitish == 'main' && 'Create a PR from main into develop' || format('Create a PR to merge into {0}', github.event.release.target_commitish) }}"
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+    name: "${{ github.event.release.target_commitish == 'main' && 'Create a PR from main into develop' || format('Create a PR to merge into {0}', github.event.release.target_commitish) }}"
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
     needs:
       - "publish-github"
       - "publish-pypi"
     runs-on: "ubuntu-latest"
     steps:
+<<<<<<< HEAD
 <<<<<<< HEAD
       - name: "Checkout main"
         uses: "actions/checkout@v4"
@@ -149,6 +164,8 @@ jobs:
 
       - name: "Create release branch from main"
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
       - name: "Checkout source branch"
         uses: "actions/checkout@v4"
         with:
@@ -162,7 +179,10 @@ jobs:
           poetry-install-options: "--no-root"
 
       - name: "Create release branch and bump version"
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         id: "branch"
         run: |
 
@@ -170,11 +190,14 @@ jobs:
           git config user.email "${{ github.actor }}@users.noreply.github.com"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
           TAG_NAME="${{ github.event.release.tag_name }}"
           VERSION="${TAG_NAME#v}"
 
           BRANCH_NAME="release-${VERSION}-to-develop"
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
           SOURCE_BRANCH="${{ github.event.release.target_commitish }}"
           if [ "$SOURCE_BRANCH" = "main" ]; then
             TARGET_BRANCH="develop"
@@ -186,7 +209,10 @@ jobs:
           VERSION="${TAG_NAME#v}"
 
           BRANCH_NAME="release-${VERSION}-to-${TARGET_BRANCH}"
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
           # Ensure release branch doesn't already exist
           if git rev-parse --verify origin/$BRANCH_NAME > /dev/null 2>&1; then
@@ -197,14 +223,19 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
           poetry version prepatch
 =======
           poetry version prerelease
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+          poetry version prerelease
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
           git add pyproject.toml && git commit -m "Bump version"
           git push origin "$BRANCH_NAME"
 
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+<<<<<<< HEAD
 <<<<<<< HEAD
 
       - name: "Create Pull Request to develop"
@@ -213,13 +244,21 @@ jobs:
 
       - name: "Create Pull Request"
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: "Create Pull Request"
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           gh pr create \
 <<<<<<< HEAD
+<<<<<<< HEAD
             --title "Post release ${{ github.event.release.tag_name }} to develop" \
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             --title "Post release ${{ github.event.release.tag_name }} to ${{ steps.branch.outputs.target_branch }}" \
             --body "Please do a merge commit." \
             --base "${{ steps.branch.outputs.target_branch }}" \
@@ -232,7 +271,10 @@ jobs:
         run: |
           gh pr create \
             --title "Sync release notes from ${{ github.event.release.target_commitish }} (${{ github.event.release.tag_name }}) to develop" \
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             --body "Please do a merge commit." \
             --base "develop" \
             --head "${{ steps.branch.outputs.branch_name }}"

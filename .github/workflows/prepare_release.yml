@@ -22,12 +22,18 @@ on: # yamllint disable-line rule:truthy rule:comments
         required: false
         default: ""
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
       previous_version:
         description: "The previous version tag to use for generating release notes (defaults to the latest tag or initial commit if no tags exist)."
         required: false
         default: ""
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 jobs:
   prepare-release:
@@ -46,10 +52,14 @@ jobs:
 
       - name: "Setup environment"
 <<<<<<< HEAD
+<<<<<<< HEAD
         uses: "networktocode/gh-action-setup-poetry-environment@v6"
 =======
         uses: "networktocode/gh-action-setup-poetry-environment@v7"
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+        uses: "networktocode/gh-action-setup-poetry-environment@v7"
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         with:
           poetry-version: "2.1.3"
           poetry-install-options: "--with dev"
@@ -65,14 +75,20 @@ jobs:
           # 2. Try to get the previous version tag
           # If it fails (no tags), get the hash of the first commit
 <<<<<<< HEAD
+<<<<<<< HEAD
           if PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
           if [ -n "${{ github.event.inputs.previous_version }}" ]; then
             PREV_TAG="${{ github.event.inputs.previous_version }}"
             echo "Using user-specified previous version: $PREV_TAG"
             echo "PREVIOUS_TAG=$PREV_TAG" >> $GITHUB_ENV
           elif PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             echo "PREVIOUS_TAG=$PREV_TAG" >> $GITHUB_ENV
             echo "Found previous tag: $PREV_TAG"
           else
@@ -85,10 +101,13 @@ jobs:
       - name: "Determine New Version"
         id: "versioning"
 <<<<<<< HEAD
+<<<<<<< HEAD
         run: |
           # Perform the bump based on the user input
           poetry version ${{ github.event.inputs.bump_rule }}
 =======
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
@@ -108,7 +127,10 @@ jobs:
           else
             poetry version ${{ github.event.inputs.bump_rule }}
           fi
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
           # Capture the New version string for use in other steps
           NEW_VER=$(poetry version --short)
@@ -180,10 +202,14 @@ jobs:
           echo "$FINAL_NOTES" > ../consolidated_notes.md
 
 <<<<<<< HEAD
+<<<<<<< HEAD
       - name: "Generate Release Notes"
 =======
       - name: "Generate App Release Notes and update mkdocs.yml"
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+      - name: "Generate App Release Notes and update mkdocs.yml"
+>>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         run: "poetry run inv generate-release-notes --version '${{ env.NEW_VERSION }}' --date '${{ env.RELEASE_DATE }}'"
 
       - name: "Commit Changes and Push"
