@@ -469,6 +469,50 @@ def test_init_pass_port_and_timeout(mock_eos_connect):
     )
 
 
+def test_close_disconnects_netmiko_session(eos_device):
+    # open() creates a real SSH session for the file-transfer paths; close() has to
+    # release it or long-lived callers leak a socket per device.
+    eos_device.native_ssh = mock.MagicMock()
+    eos_device._connected = True
+
+    eos_device.close()
+
+    eos_device.native_ssh.disconnect.assert_called_once()
+    assert eos_device._connected is False
+
+
+def test_close_is_noop_when_never_opened(eos_device):
+    # native_ssh is only assigned inside open(), so close() must not reach for it
+    # on a device that has only ever spoken eAPI.
+    assert not hasattr(eos_device, "native_ssh")
+
+    eos_device.close()
+
+    assert eos_device._connected is False
+
+
+def test_close_is_idempotent(eos_device):
+    eos_device.native_ssh = mock.MagicMock()
+    eos_device._connected = True
+
+    eos_device.close()
+    eos_device.close()
+
+    eos_device.native_ssh.disconnect.assert_called_once()
+
+
+@mock.patch("pyntc.devices.eos_device.ConnectHandler")
+def test_close_does_not_strand_the_device(mock_connect_handler, eos_device):
+    # Closing must stay safe for a reusable object: every SSH-backed method calls
+    # open() first, and open() has to rebuild the session a previous close() tore down.
+    eos_device.open()
+    eos_device.close()
+    eos_device.open()
+
+    assert mock_connect_handler.call_count == 2
+    assert eos_device._connected is True
+
+
 class EOSDeviceMockedTestCase(unittest.TestCase):
     """Base test case wiring a mocked ``pyeapi`` node onto an ``EOSDevice``."""
 
