@@ -208,6 +208,16 @@ def pytest(context, pattern=None, label=None):
     exec_cmd = " && ".join([doc_test_cmd, pytest_cmd, coverage_cmd])
     run_command(context, exec_cmd)
 
+    doc_test_cmd = "pytest -vv --doctest-modules pyntc/"
+    pytest_cmd = "coverage run --source=pyntc -m pytest"
+    if pattern:
+        pytest_cmd += "".join([f" -k {_pattern}" for _pattern in pattern])
+    if label:
+        pytest_cmd += "".join([f" {_label}" for _label in label])
+    coverage_cmd = "coverage report"
+    exec_cmd = " && ".join([doc_test_cmd, pytest_cmd, coverage_cmd])
+    run_command(context, exec_cmd)
+
 
 @task(aliases=("a",))
 def autoformat(context):
@@ -348,6 +358,7 @@ def docs(context):
         "date": "Date of the release (default: today).",
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     }
 )
 def generate_release_notes(context, version="", date=""):
@@ -370,6 +381,11 @@ def generate_release_notes(context, version="", date=""):
     }
 )
 >>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+        "keep": "Keep existing release notes files. Useful for testing. (default: False).",
+    }
+)
+>>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 def generate_release_notes(context, version="", date="", keep=False):
     """Generate Release Notes using Towncrier."""
     command = "poetry run towncrier build"
@@ -384,8 +400,11 @@ def generate_release_notes(context, version="", date="", keep=False):
     context.run(f"poetry run python development/bin/ensure_release_notes.py --version {version_major_minor}")
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 =======
 >>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+>>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
     # Due to issues with git repo ownership in the containers, this must always run locally.
     context.run(command)

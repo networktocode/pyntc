@@ -298,6 +298,7 @@ fabric.properties
 # Rando
 creds.env
 development/*.txt
+!development/towncrier_header.txt
 
 # Invoke overrides
 invoke.yml
@@ -308,6 +309,7 @@ docs/CHANGELOG.md
 public
 /compose.yaml
 /dump.sql
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -324,3 +326,6 @@ public
 =======
 /pyntc/static/*
 >>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+=======
+/pyntc/static/*
+>>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
