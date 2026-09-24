@@ -4,6 +4,8 @@ import os
 import re
 import time
 import warnings
+from typing import Optional
+from urllib.parse import ParseResult, quote, urlparse
 
 from netmiko import ConnectHandler, FileTransfer
 from netmiko.base_connection import SecretsFilter
@@ -56,44 +58,46 @@ class HideUrlCredentials:
     the token joins the mapping the connection's own filter and session log share.
     """
 
-    def __init__(self, native, token):
-        """Capture the registries the token is added to and removed from.
+    def __init__(self, native, secrets):
+        """Capture the registries the secrets are added to and removed from.
 
         Args:
-            native (BaseConnection): The netmiko connection whose no_log mapping the token joins.
-            token (str): The password sent in the copy URL. A falsy value is a no-op.
+            native (BaseConnection): The netmiko connection whose no_log mapping the secrets join.
+            secrets (dict): Values to hide, keyed by the name each takes in netmiko's no_log
+                mapping. An empty mapping is a no-op.
         """
-        self.token = token
+        self.secrets = secrets
         self.netmiko_no_log = native._secrets_filter.no_log  # pylint: disable=protected-access
         self.pyntc_log = log.get_log()
         self.pyntc_filter = None
 
     def __enter__(self):
-        """Add a `SecretsFilter` to the pyntc logger and the token to netmiko's mapping.
+        """Add a `SecretsFilter` to the pyntc logger and the secrets to netmiko's mapping.
 
         The pyntc filter covers the messages logged here. The netmiko mapping is the one
-        its own `SecretsFilter` and its `SessionLog` read from, so writing the token
+        its own `SecretsFilter` and its `SessionLog` read from, so writing the secrets
         there covers the copy command as netmiko sends it.
 
         Returns:
             (HideUrlCredentials): This instance.
         """
-        if not self.token:
+        if not self.secrets:
             return self
-        self.pyntc_filter = SecretsFilter(no_log={FILE_COPY_NO_LOG_KEY: self.token})
-        self.netmiko_no_log[FILE_COPY_NO_LOG_KEY] = self.token
+        self.pyntc_filter = SecretsFilter(no_log=self.secrets)
+        self.netmiko_no_log.update(self.secrets)
         self.pyntc_log.addFilter(self.pyntc_filter)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        """Unregister the token.
+        """Unregister the secrets.
 
         Returns:
             (bool): False, so an exception is never suppressed.
         """
         if self.pyntc_filter is None:
             return False
-        self.netmiko_no_log.pop(FILE_COPY_NO_LOG_KEY, None)
+        for key in self.secrets:
+            self.netmiko_no_log.pop(key, None)
         self.pyntc_log.removeFilter(self.pyntc_filter)
         return False
 
@@ -861,17 +865,40 @@ class IOSDevice(BaseDevice):
         return f"{src.hostname}:{src.port}" if src.port else src.hostname
 
     @staticmethod
-    def _source_path(src: FileCopyModel, dest: str) -> str:
-        """Return the file path from the URL, falling back to dest if empty."""
-        return src.path if src.path and src.path != "/" else f"/{dest}"
+    def _source_path(parsed: ParseResult, dest: str) -> str:
+        """Return the path and query from the parsed URL, falling back to dest when the path is empty."""
+        path = parsed.path if parsed.path and parsed.path != "/" else f"/{dest}"
+        return f"{path}?{parsed.query}" if parsed.query else path
 
     @staticmethod
-    def _mask_token(output: str, src: FileCopyModel) -> str:
+    def _url_credential(value: str, url_value: Optional[str]) -> str:
+        """Return a credential as it must appear in a copy URL, percent-encoded exactly once.
+
+        A value equal to the one `urlparse` read from the download URL is already encoded
+        and passes through. Any other value arrived as an argument in plain text.
+        """
+        return value if value == url_value else quote(value, safe="")
+
+    @classmethod
+    def _url_secrets(cls, src: FileCopyModel) -> dict:
+        """Return the copy URL password in each form that can reach a log, keyed for netmiko's no_log."""
+        if not src.token:
+            return {}
+        secrets = {FILE_COPY_NO_LOG_KEY: src.token}
+        encoded = cls._url_credential(src.token, urlparse(src.download_url).password)
+        if encoded != src.token:
+            secrets[f"{FILE_COPY_NO_LOG_KEY}_encoded"] = encoded
+        return secrets
+
+    @classmethod
+    def _mask_token(cls, output: str, src: FileCopyModel) -> str:
         """Replace the token in device output, so it is safe to put in an exception message.
 
         A logging filter cannot reach an exception message, so the masking happens here.
         """
-        return output.replace(src.token, "*****") if src.token else output
+        for secret in cls._url_secrets(src).values():
+            output = output.replace(secret, "*****")
+        return output
 
     def _build_url_copy_command_simple(self, src: FileCopyModel, file_system: str, dest: str) -> str:
         """Build the copy command for transfers where IOS prompts for the credentials it needs.
@@ -887,9 +914,11 @@ class IOSDevice(BaseDevice):
         FTP, HTTP and HTTPS never prompt. A URL without credentials makes the device
         attempt an anonymous login, which the server rejects.
         """
+        parsed = urlparse(src.download_url)
         netloc = self._netloc(src)
-        path = self._source_path(src, dest)
-        credentials = f"{src.username}:{src.token}" if src.token else src.username
+        path = self._source_path(parsed, dest)
+        username = self._url_credential(src.username, parsed.username)
+        credentials = f"{username}:{self._url_credential(src.token, parsed.password)}" if src.token else username
         return f"copy {src.scheme}://{credentials}@{netloc}{path} {file_system}{dest}"
 
     def remote_file_copy(  # noqa: R0912 pylint: disable=too-many-branches,too-many-locals
@@ -939,7 +968,7 @@ class IOSDevice(BaseDevice):
             if src.vrf and src.scheme not in IOS_NO_VRF_SCHEMES:
                 command = f"{command} vrf {src.vrf}"
 
-            with HideUrlCredentials(self.native, src.token if credentials_in_url else None):
+            with HideUrlCredentials(self.native, self._url_secrets(src) if credentials_in_url else {}):
                 # _send_command raises on "% ", and a % warning during a copy is not a failure.
                 output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
 
