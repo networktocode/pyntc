@@ -723,6 +723,29 @@ class TestIOSDevice(unittest.TestCase):
         )
 
     @mock.patch.object(IOSDevice, "verify_file")
+    def test_remote_file_copy_ftp_without_credentials_keeps_bare_url(self, mock_verify):
+        """A model with no username sends the FTP URL as given, so device-side credentials apply."""
+        src = FileCopyModel(
+            download_url="ftp://10.1.100.220/IOS-XE/test.bin",
+            checksum="12345",
+            file_name="test.bin",
+            hashing_algorithm="md5",
+            timeout=900,
+        )
+        mock_verify.side_effect = [False, True]
+        self.device.native.send_command.return_value = "94038 bytes copied in 0.357 secs"
+        self.device.native.find_prompt.return_value = "Router#"
+
+        self.device.remote_file_copy(src, file_system="flash:")
+
+        self.device.native.send_command.assert_called_once_with(
+            "copy ftp://10.1.100.220/IOS-XE/test.bin flash:test.bin",
+            expect_string=mock.ANY,
+            read_timeout=900,
+        )
+        self.assertEqual(self.device.native._secrets_filter.no_log, {"password": "pass"})
+
+    @mock.patch.object(IOSDevice, "verify_file")
     def test_remote_file_copy_ftp_keeps_non_default_port(self, mock_verify):
         """A non-default port on the source URL survives into the copy command."""
         src = FileCopyModel(
