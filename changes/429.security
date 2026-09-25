@@ -1,0 +1,1 @@
+Stopped the source server password appearing in the logs during an FTP, HTTP or HTTPS file copy to Cisco IOS devices.

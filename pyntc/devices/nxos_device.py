@@ -419,6 +419,11 @@ class NXOSDevice(BaseDevice):
         """Return the file path from the URL, falling back to dest if empty."""
         return src.path if src.path and src.path != "/" else f"/{dest}"
 
+    @staticmethod
+    def _mask_token(output: str, src: FileCopyModel) -> str:
+        """Replace the token in device output, so it is safe to log or raise."""
+        return output.replace(src.token, "*****") if src.token else output
+
     def _build_url_copy_command_simple(self, src, file_system, dest):
         """Build copy command for simple URL-based transfers (TFTP, HTTP, HTTPS without credentials)."""
         netloc = self._netloc(src)
@@ -538,7 +543,9 @@ class NXOSDevice(BaseDevice):
             raise CommandError(command, f"Could not parse checksum from device output: {result}")
         return match.group(1)
 
-    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):  # noqa: R0912 pylint: disable=too-many-branches
+    def remote_file_copy(  # noqa: R0912 pylint: disable=too-many-branches,too-many-locals
+        self, src: FileCopyModel, dest=None, file_system=None, **kwargs
+    ):
         """Copy a file from remote source to device.  Skips if file already exists and is verified on remote device.
 
         Args:
@@ -614,8 +621,9 @@ class NXOSDevice(BaseDevice):
                     break
                 # Check for errors explicitly to avoid infinite loops on failure
                 if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
-                    log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
-                    raise FileTransferError
+                    masked_output = self._mask_token(output, src)
+                    log.error("Host %s: File transfer error for %s: %s", self.host, src.file_name, masked_output)
+                    raise FileTransferError(f"Error detected in copy command output: {masked_output}")
                 for prompt, answer in prompt_answers.items():
                     if re.search(prompt, output, re.IGNORECASE):
                         is_password = "Password" in prompt
@@ -623,6 +631,17 @@ class NXOSDevice(BaseDevice):
                             answer, expect_string=expect_regex, read_timeout=timeout, cmd_verify=not is_password
                         )
                         break  # Exit the for loop and check the new output for the next prompt
+                else:
+                    # No prompt matched and no marker was found. Without this the loop
+                    # never reassigns output and spins on the same string forever.
+                    masked_output = self._mask_token(output, src)
+                    log.error(
+                        "Host %s: Unexpected output during file transfer of %s: %s",
+                        self.host,
+                        src.file_name,
+                        masked_output,
+                    )
+                    raise FileTransferError(f"Unexpected output during file transfer: {masked_output}")
 
             # Verify file after transfer
             if not self.verify_file(

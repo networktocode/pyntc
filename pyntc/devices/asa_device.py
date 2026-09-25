@@ -1039,6 +1039,11 @@ class ASADevice(BaseDevice):
 
         log.debug("Host %s: reboot standby with timeout %s.", self.host, timeout)
 
+    @staticmethod
+    def _mask_token(output: str, src: FileCopyModel) -> str:
+        """Replace the token in device output, so it is safe to log or raise."""
+        return output.replace(src.token, "*****") if src.token else output
+
     def remote_file_copy(self, src: FileCopyModel = None, dest=None, **kwargs: Any):
         """Copy a file from a remote server to the device.
 
@@ -1104,8 +1109,9 @@ class ASADevice(BaseDevice):
                     break
 
                 if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
-                    log.error("Host %s: File transfer error for %s: %s", self.host, src.file_name, output)
-                    raise FileTransferError
+                    masked_output = self._mask_token(output, src)
+                    log.error("Host %s: File transfer error for %s: %s", self.host, src.file_name, masked_output)
+                    raise FileTransferError(f"Error detected in copy command output: {masked_output}")
 
                 for prompt, answer in prompt_answers.items():
                     if re.search(prompt, output, re.IGNORECASE):
@@ -1117,16 +1123,22 @@ class ASADevice(BaseDevice):
                         )
                         break
                 else:
+                    masked_output = self._mask_token(output, src)
                     log.error(
-                        "Host %s: Unexpected output during file transfer of %s: %s", self.host, src.file_name, output
+                        "Host %s: Unexpected output during file transfer of %s: %s",
+                        self.host,
+                        src.file_name,
+                        masked_output,
                     )
-                    raise FileTransferError
+                    raise FileTransferError(f"Unexpected output during file transfer: {masked_output}")
 
             if not self.verify_file(
                 src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
             ):
                 log.error("Host %s: File %s could not be verified after transfer.", self.host, src.file_name)
-                raise FileTransferError
+                raise FileTransferError(
+                    f"Could not validate {src.file_name} existed and matched the expected checksum after transfer."
+                )
 
     @property
     def redundancy_mode(self):

@@ -4,8 +4,11 @@ import os
 import re
 import time
 import warnings
+from typing import Optional
+from urllib.parse import ParseResult, quote, urlparse
 
 from netmiko import ConnectHandler, FileTransfer
+from netmiko.base_connection import SecretsFilter
 from netmiko.exceptions import ReadTimeout
 
 from pyntc import log
@@ -36,6 +39,67 @@ RE_REDUNDANCY_OPERATION_MODE = re.compile(r"^\s*Operating\s+Redundancy\s+Mode\s*
 RE_REDUNDANCY_STATE = re.compile(r"^\s*Current\s+Software\s+state\s*=\s*(.+?)\s*$", re.M)
 SHOW_DIR_RETRY_COUNT = 5
 INSTALL_MODE_FILE_NAME = "packages.conf"
+# Schemes where IOS reads the credentials out of the URL and never prompts for them.
+# Sending a bare URL for one of these makes the device attempt an anonymous login.
+IOS_URL_CREDENTIAL_SCHEMES = {"ftp", "http", "https"}
+# Schemes whose copy command rejects a trailing "vrf" keyword.
+IOS_NO_VRF_SCHEMES = {"http", "https"}
+# Key the copy URL password is filed under in netmiko's no_log mapping.
+FILE_COPY_NO_LOG_KEY = "file_copy_token"
+
+
+class HideUrlCredentials:
+    """Hide a copy URL password from pyntc and netmiko log records.
+
+    FTP, HTTP and HTTPS carry the password in the copy command itself, so it reaches
+    netmiko's channel logging, netmiko's session log, and the device output this
+    module logs. Netmiko's `SecretsFilter` rewrites the message of each record logged
+    through the logger it is attached to, so one filter goes on the pyntc logger, and
+    the token joins the mapping the connection's own filter and session log share.
+    """
+
+    def __init__(self, native, secrets):
+        """Capture the registries the secrets are added to and removed from.
+
+        Args:
+            native (BaseConnection): The netmiko connection whose no_log mapping the secrets join.
+            secrets (dict): Values to hide, keyed by the name each takes in netmiko's no_log
+                mapping. An empty mapping is a no-op.
+        """
+        self.secrets = secrets
+        self.netmiko_no_log = native._secrets_filter.no_log  # pylint: disable=protected-access
+        self.pyntc_log = log.get_log()
+        self.pyntc_filter = None
+
+    def __enter__(self):
+        """Add a `SecretsFilter` to the pyntc logger and the secrets to netmiko's mapping.
+
+        The pyntc filter covers the messages logged here. The netmiko mapping is the one
+        its own `SecretsFilter` and its `SessionLog` read from, so writing the secrets
+        there covers the copy command as netmiko sends it.
+
+        Returns:
+            (HideUrlCredentials): This instance.
+        """
+        if not self.secrets:
+            return self
+        self.pyntc_filter = SecretsFilter(no_log=self.secrets)
+        self.netmiko_no_log.update(self.secrets)
+        self.pyntc_log.addFilter(self.pyntc_filter)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Unregister the secrets.
+
+        Returns:
+            (bool): False, so an exception is never suppressed.
+        """
+        if self.pyntc_filter is None:
+            return False
+        for key in self.secrets:
+            self.netmiko_no_log.pop(key, None)
+        self.pyntc_log.removeFilter(self.pyntc_filter)
+        return False
 
 
 @fix_docs
@@ -795,7 +859,71 @@ class IOSDevice(BaseDevice):
                 )
                 raise FileTransferError
 
-    def remote_file_copy(self, src: FileCopyModel, dest=None, file_system=None, **kwargs):
+    @staticmethod
+    def _netloc(src: FileCopyModel) -> str:
+        """Return host:port or just host from a FileCopyModel."""
+        return f"{src.hostname}:{src.port}" if src.port else src.hostname
+
+    @staticmethod
+    def _source_path(parsed: ParseResult, dest: str) -> str:
+        """Return the path and query from the parsed URL, falling back to dest when the path is empty."""
+        path = parsed.path if parsed.path and parsed.path != "/" else f"/{dest}"
+        return f"{path}?{parsed.query}" if parsed.query else path
+
+    @staticmethod
+    def _url_credential(value: str, url_value: Optional[str]) -> str:
+        """Return a credential as it must appear in a copy URL, percent-encoded exactly once.
+
+        A value equal to the one `urlparse` read from the download URL is already encoded
+        and passes through. Any other value arrived as an argument in plain text.
+        """
+        return value if value == url_value else quote(value, safe="")
+
+    @classmethod
+    def _url_secrets(cls, src: FileCopyModel) -> dict:
+        """Return the copy URL password in each form that can reach a log, keyed for netmiko's no_log."""
+        if not src.token:
+            return {}
+        secrets = {FILE_COPY_NO_LOG_KEY: src.token}
+        encoded = cls._url_credential(src.token, urlparse(src.download_url).password)
+        if encoded != src.token:
+            secrets[f"{FILE_COPY_NO_LOG_KEY}_encoded"] = encoded
+        return secrets
+
+    @classmethod
+    def _mask_token(cls, output: str, src: FileCopyModel) -> str:
+        """Replace the token in device output, so it is safe to put in an exception message.
+
+        A logging filter cannot reach an exception message, so the masking happens here.
+        """
+        for secret in cls._url_secrets(src).values():
+            output = output.replace(secret, "*****")
+        return output
+
+    def _build_url_copy_command_simple(self, src: FileCopyModel, file_system: str, dest: str) -> str:
+        """Build the copy command for transfers where IOS prompts for the credentials it needs.
+
+        SCP and SFTP prompt for the source username and the password, and
+        `remote_file_copy` answers both from the model.
+        """
+        return f"copy {src.clean_url} {file_system}{dest}"
+
+    def _build_url_copy_command_with_creds(self, src: FileCopyModel, file_system: str, dest: str) -> str:
+        """Build the copy command for transfers where IOS reads the credentials from the URL.
+
+        FTP, HTTP and HTTPS never prompt. A URL without credentials makes the device
+        attempt an anonymous login, which the server rejects.
+        """
+        parsed = urlparse(src.download_url)
+        netloc = self._netloc(src)
+        path = self._source_path(parsed, dest)
+        username = self._url_credential(src.username, parsed.username)
+        credentials = f"{username}:{self._url_credential(src.token, parsed.password)}" if src.token else username
+        return f"copy {src.scheme}://{credentials}@{netloc}{path} {file_system}{dest}"
+
+    def remote_file_copy(  # noqa: R0912 pylint: disable=too-many-branches,too-many-locals
+        self, src: FileCopyModel, dest=None, file_system=None, **kwargs
+    ):
         """Copy a file to a remote device.
 
         Args:
@@ -824,50 +952,72 @@ class IOSDevice(BaseDevice):
 
             # Define prompt mapping for expected prompts during file copy
             prompt_answers = {
-                r"Password": src.token,
-                r"Source username": src.username,
+                r"Password": src.token or "",
+                r"Source username": src.username or "",
                 r"yes/no|Are you sure you want to continue connecting": "yes",
                 r"(confirm|Address or name of remote host|Source filename|Destination filename)": "",  # Press Enter
             }
             keys = list(prompt_answers.keys()) + [re.escape(current_prompt)]
             expect_regex = f"({'|'.join(keys)})"
 
-            command = f"copy {src.clean_url} {file_system}{dest}"
-            if src.vrf and src.scheme not in {"http", "https"}:
+            credentials_in_url = bool(src.username) and src.scheme in IOS_URL_CREDENTIAL_SCHEMES
+            if credentials_in_url:
+                command = self._build_url_copy_command_with_creds(src, file_system, dest)
+            else:
+                command = self._build_url_copy_command_simple(src, file_system, dest)
+            if src.vrf and src.scheme not in IOS_NO_VRF_SCHEMES:
                 command = f"{command} vrf {src.vrf}"
 
-            # _send_command currently checks for % and raises an error, but during the file copy
-            # there may be a % warning that does not indicate a failure so we will use send_command directly.
-            output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
+            with HideUrlCredentials(self.native, self._url_secrets(src) if credentials_in_url else {}):
+                # _send_command raises on "% ", and a % warning during a copy is not a failure.
+                output = self.native.send_command(command, expect_string=expect_regex, read_timeout=src.timeout)
 
-            while current_prompt not in output:
-                # Check for success message in output to break loop and avoid waiting for next prompt
-                if re.search(r"Copy complete|bytes copied in|File transfer successful", output, re.IGNORECASE):
-                    log.info(
-                        "Host %s: File %s transferred successfully with output: %s", self.host, src.file_name, output
-                    )
-                    break
-                # Check for errors explicitly to avoid infinite loops on failure
-                if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
-                    log.error("Host %s: File transfer error %s", self.host, FileTransferError.default_message)
-                    raise FileTransferError
-                for prompt, answer in prompt_answers.items():
-                    if re.search(prompt, output, re.IGNORECASE):
-                        is_password = "Password" in prompt
-                        output = self.native.send_command(
-                            answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
+                while current_prompt not in output:
+                    # Break on the success marker rather than waiting for the next prompt.
+                    if re.search(r"Copy complete|bytes copied in|File transfer successful", output, re.IGNORECASE):
+                        # SecretsFilter rewrites a record's message and never its args, so output goes in the message.
+                        message = (
+                            f"Host {self.host}: File {src.file_name} transferred successfully with output: {output}"
                         )
-                        break  # Exit the for loop and check the new output for the next prompt
+                        log.info(message)
+                        break
+                    # Raise on an error marker so the failure reports what the device said.
+                    if re.search(r"(Error|Invalid|Failed|Aborted|denied)", output, re.IGNORECASE):
+                        message = f"Host {self.host}: File transfer error for {src.file_name}: {output}"
+                        log.error(message)
+                        raise FileTransferError(
+                            f"Error detected in copy command output: {self._mask_token(output, src)}"
+                        )
+                    for prompt, answer in prompt_answers.items():
+                        if re.search(prompt, output, re.IGNORECASE):
+                            is_password = "Password" in prompt
+                            output = self.native.send_command(
+                                answer, expect_string=expect_regex, read_timeout=src.timeout, cmd_verify=not is_password
+                            )
+                            # output has been replaced, so re-test it instead of the remaining prompts.
+                            break
+                    else:
+                        # Nothing matched, so output never changes and the loop would spin forever.
+                        message = (
+                            f"Host {self.host}: Unexpected output during file transfer of {src.file_name}: {output}"
+                        )
+                        log.error(message)
+                        raise FileTransferError(
+                            f"Unexpected output during file transfer: {self._mask_token(output, src)}"
+                        )
 
             if not self.verify_file(
                 src.checksum, dest, hashing_algorithm=src.hashing_algorithm, file_system=file_system
             ):
                 log.error(
-                    "Host %s: Attempted remote file copy, but could not validate file existed after transfer %s",
+                    "Host %s: Attempted remote file copy, but could not validate %s%s after transfer.",
                     self.host,
-                    FileTransferError.default_message,
+                    file_system,
+                    dest,
                 )
-                raise FileTransferError
+                raise FileTransferError(
+                    f"Could not validate {file_system}{dest} existed and matched the expected checksum after transfer."
+                )
 
     # TODO: Make this an internal method since exposing file_copy should be sufficient
     def file_copy_remote_exists(self, src, dest=None, file_system=None):
