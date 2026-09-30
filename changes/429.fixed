@@ -1,0 +1,1 @@
+Fixed FTP, HTTP and HTTPS file transfers to Cisco IOS devices failing to authenticate.
