@@ -156,8 +156,8 @@ jobs:
           cache-to: "type=gha,scope=${{ env.INVOKE_PYNTC_IMAGE_NAME }}-${{ env.INVOKE_PYNTC_IMAGE_VER }}-py${{ matrix.python-version }}"
           build-args: |
             PYTHON_VER=${{ matrix.python-version }}
-      - name: "Linting: Pylint"
-        run: "poetry run invoke pylint"
+      - name: "Run Tests"
+        run: "poetry run invoke pytest"
   changelog:
     if: >
       contains(fromJson('["develop"]'), github.base_ref) &&
