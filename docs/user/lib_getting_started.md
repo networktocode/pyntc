@@ -287,6 +287,17 @@ Before using this feature you may need to configure a client on the device. For 
 >>>
 ```
 
+!!! warning
+    Some devices read the FTP, HTTP and HTTPS credentials from the `copy` command instead of prompting for them. On those devices the credentials are placed in the command sent to the device whether they come from the URL, such as `ftp://username:password@10.1.1.10/path/to/file.bin`, or from the `username` and `token` fields. The command can appear in the device's command history and in AAA command accounting. To keep the credentials off the session, configure them on the device and pass a URL without them, such as `ftp://10.1.1.10/path/to/file.bin`:
+
+    ```python
+    >>> csr1.config('ip ftp username ntc')
+    >>> csr1.config('ip ftp password ntc123')
+    >>>
+    ```
+
+    This impacts Cisco IOS, Cisco NX-OS, Arista EOS and Juniper Junos.
+
 ### Save Configs
 
 - `save` method
@@ -367,7 +378,7 @@ export PYNTC_LOG_LEVEL=debug
 New in 0.15 there is support for [Install Mode](https://content.cisco.com/chapter.sjs?uri=/searchable/chapter/c/en/us/td/docs/switches/lan/Denali_16-1/ConfigExamples_Technotes/Config_Examples/Misc/qos/m_install_vs_bundle.html.xml) upgrades. To execute this there is an option (defaults to False) to run install mode. **file_copy must be executed before install_os**
 
 ```python
-device.install_os('cat9k_iosxe.16.12.04.SPA.bin', install_mode=True)
+device.install_os("cat9k_iosxe.16.12.04.SPA.bin", install_mode=True)
 ```
 
 Workflow Example

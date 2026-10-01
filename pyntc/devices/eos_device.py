@@ -250,8 +250,20 @@ class EOSDevice(BaseDevice):
         self.show(f"copy running-config {checkpoint_file}")
 
     def close(self):
-        """Not implemented. Just ``passes``."""
-        pass  # pylint: disable=unnecessary-pass
+        """Release the Netmiko SSH session opened by ``open``.
+
+        The eAPI transport itself is stateless HTTP and needs no teardown, but
+        ``open`` builds a real SSH session for the file-transfer paths
+        (``file_copy``, ``check_file_exists``, ``get_remote_checksum``,
+        ``remote_file_copy``). Without this, a caller holding many device objects
+        accumulates one open socket per device.
+
+        Does nothing when no SSH session was ever opened.
+        """
+        if self._connected:
+            self.native_ssh.disconnect()
+            self._connected = False
+            log.debug("Host %s: Connection closed.", self.host)
 
     def config(self, commands):
         """Send configuration commands to a device.

@@ -184,17 +184,6 @@ class EOSSSHDevice(EOSDevice):
 
         log.debug("Host %s: Connection to device was opened successfully.", self.host)
 
-    def close(self):
-        """Disconnect from the device.
-
-        Note this differs from ``EOSDevice.close``, which is a no-op because eAPI is
-        stateless. An SSH session holds a real socket that should be released.
-        """
-        if self._connected:
-            self.native.disconnect()
-            self._connected = False
-            log.debug("Host %s: Connection closed.", self.host)
-
     def show(self, commands, raw_text=False):
         """Send show command(s) to the device.
 
