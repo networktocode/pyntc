@@ -252,6 +252,59 @@ class EOSSSHDevice(EOSDevice):
         log.error("Host %s: Reload timer exceeded (%ss)", self.host, timeout)
         raise RebootTimeoutError(self.hostname, timeout)
 
+    def show(self, commands, raw_text=False):
+        """Send show command(s) to the device.
+
+        Args:
+            commands (str, list): String with single command, or list with multiple commands.
+            raw_text (bool, optional): False to return structured data via the ``| json``
+                pipe, True to return the raw CLI text. Defaults to False.
+
+        Returns:
+            (dict): When ``commands`` is a str and ``raw_text`` is False. Non-show commands
+                cannot be piped to ``| json``; they run as plain text and return an empty dict.
+            (str): When ``commands`` is a str and ``raw_text`` is True.
+            (list): When ``commands`` is a list.
+
+        Raises:
+            CommandError: When ``commands`` is a str and the device reports an error.
+            CommandListError: When ``commands`` is a list and one command reports an error.
+        """
+        self.open()
+        self.enable()
+
+        original_commands_is_str = isinstance(commands, str)
+        command_list = [commands] if original_commands_is_str else list(commands)
+
+        responses = []
+        entered_commands = []
+        for command in command_list:
+            entered_commands.append(command)
+            as_json = not raw_text and bool(RE_JSON_ELIGIBLE.match(command))
+            cli_command = f"{command} | json" if as_json else command
+            try:
+                output = self._send_command(cli_command, error_command=command)
+                if as_json:
+                    output = self._load_json(command, output)
+            except CommandError as err:
+                if original_commands_is_str:
+                    raise
+                raise CommandListError(entered_commands, command, err.cli_error_msg) from err
+
+            if raw_text or as_json:
+                responses.append(output)
+            else:
+                # Non-show command sent with raw_text=False (checkpoint, save, rollback,
+                # reboot, set_boot_options). Every inherited caller discards the result,
+                # so an empty dict preserves EOSDevice's contract.
+                responses.append({})
+
+        if original_commands_is_str:
+            return responses[0]
+
+        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
+        return responses
+
     def close(self):
         """Disconnect from the device.
 

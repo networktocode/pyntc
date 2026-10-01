@@ -514,6 +514,47 @@ Usage for log://sup-local
         call_args = self.device.native_ssh.send_command.call_args
         self.assertIn("expect_string", call_args.kwargs)
 
+    def test_remote_file_copy_error_carries_device_output(self):
+        """The raised error repeats what the device said, with the token removed."""
+        src = FileCopyModel(
+            download_url="ftp://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+            username="ntc",
+            token="ntc1234",
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        self.device.native_ssh.send_command.side_effect = None
+        self.device.native_ssh.send_command.return_value = (
+            "%Error opening ftp://ntc:ntc1234@example.com/nxos.bin (Incorrect Login/Password)"
+        )
+        with mock.patch.object(NXOSDevice, "verify_file", return_value=False):
+            with self.assertRaises(FileTransferError) as err:
+                self.device.remote_file_copy(src, file_system="bootflash:")
+
+        self.assertIn("Incorrect Login/Password", err.exception.message)
+        self.assertNotIn("ntc1234", err.exception.message)
+
+    def test_remote_file_copy_raises_on_unrecognized_output(self):
+        """Output matching no prompt and no marker raises instead of looping forever."""
+        src = FileCopyModel(
+            download_url="ftp://example.com/nxos.bin",
+            checksum="abc123",
+            file_name="nxos.bin",
+            hashing_algorithm="md5",
+            timeout=30,
+        )
+        self.device.native_ssh.find_prompt.return_value = "host#"
+        self.device.native_ssh.send_command.side_effect = None
+        self.device.native_ssh.send_command.return_value = "something the driver has never seen"
+        with mock.patch.object(NXOSDevice, "verify_file", return_value=False):
+            with self.assertRaises(FileTransferError) as err:
+                self.device.remote_file_copy(src, file_system="bootflash:")
+
+        self.assertIn("Unexpected output", err.exception.message)
+
     def test_remote_file_copy_transfer_fails_verification(self):
         src = FileCopyModel(
             download_url="http://example.com/nxos.bin",

@@ -1155,6 +1155,33 @@ def test_remote_file_copy_error_in_output(mock_verify, mock_fs, asa_device):
 
 
 @mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=False)
+def test_remote_file_copy_error_carries_device_output(mock_verify, mock_fs, asa_device):
+    """The raised error repeats what the device said, with the token removed."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.return_value = (
+        "%Error opening ftp://example-user:example-password@192.0.2.1/asa.bin (Incorrect Login/Password)"
+    )
+    with pytest.raises(FileTransferError) as err:
+        asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+
+    assert "Incorrect Login/Password" in err.value.message
+    assert "example-password" not in err.value.message
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
+@mock.patch.object(ASADevice, "verify_file", return_value=False)
+def test_remote_file_copy_unrecognized_output_carries_device_output(mock_verify, mock_fs, asa_device):
+    """The guard against an endless prompt loop names what the device actually sent."""
+    asa_device.native.find_prompt.return_value = "asa5512#"
+    asa_device.native.send_command.return_value = "something the driver has never seen"
+    with pytest.raises(FileTransferError) as err:
+        asa_device.remote_file_copy(FILE_COPY_MODEL_FTP)
+
+    assert "Unexpected output" in err.value.message
+
+
+@mock.patch.object(ASADevice, "_get_file_system", return_value="disk0:")
 @mock.patch.object(ASADevice, "verify_file", side_effect=[False, False])
 def test_remote_file_copy_verify_fails_after_copy(mock_verify, mock_fs, asa_device):
     asa_device.native.find_prompt.return_value = "asa5512#"
