@@ -173,7 +173,7 @@ addopts = "-vv --doctest-modules -p no:warnings -p no:f5sdk_fixtures --ignore-gl
 package = "pyntc"
 directory = "changes"
 filename = "docs/admin/release_notes/version_3.3.md"
-template = "towncrier_template.j2"
+template = "development/towncrier_template.j2"
 start_string = "<!-- towncrier release notes start -->"
 issue_format = "[#{issue}](https://github.com/networktocode/pyntc/issues/{issue})"
 
