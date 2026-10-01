@@ -57,7 +57,6 @@ jobs:
 
           # 2. Try to get the previous version tag
           # If it fails (no tags), get the hash of the first commit
-          if PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
           if [ -n "${{ github.event.inputs.previous_version }}" ]; then
             PREV_TAG="${{ github.event.inputs.previous_version }}"
             echo "Using user-specified previous version: $PREV_TAG"
@@ -74,9 +73,6 @@ jobs:
 
       - name: "Determine New Version"
         id: "versioning"
-        run: |
-          # Perform the bump based on the user input
-          poetry version ${{ github.event.inputs.bump_rule }}
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
@@ -96,6 +92,7 @@ jobs:
           else
             poetry version ${{ github.event.inputs.bump_rule }}
           fi
+
           # Capture the New version string for use in other steps
           NEW_VER=$(poetry version --short)
           echo "NEW_VERSION=$NEW_VER" >> $GITHUB_ENV
