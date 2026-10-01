@@ -82,7 +82,9 @@ def run_command(context, exec_cmd, port=None, rm=True):
         print(f"LOCAL - Running command {exec_cmd}")
         result = context.run(exec_cmd, pty=True)
     else:
-        print(f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}")
+        print(
+            f"DOCKER - Running command: {exec_cmd} container: {context.pyntc.image_name}:{context.pyntc.image_ver}"
+        )
         if port:
             result = context.run(
                 f"docker run -it {'--rm' if rm else ''} -p {port} -v {context.pyntc.pwd}:/local {context.pyntc.image_name}:{context.pyntc.image_ver} sh -c '{exec_cmd}'",
@@ -119,7 +121,9 @@ def build(context, cache=True, force_rm=False, hide=False):
 
     result = context.run(command, hide=hide)
     if result.exited != 0:
-        print(f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}")
+        print(
+            f"Failed to build image {context.pyntc.image_name}:{context.pyntc.image_ver}\nError: {result.stderr}"
+        )
 
 
 @task
@@ -145,9 +149,15 @@ def lock(context, check=False):
 @task
 def clean(context):
     """Remove the project specific image."""
-    print(f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}")
-    context.run(f"docker rmi {context.pyntc.image_name}:{context.pyntc.image_ver} --force")
-    print(f"Successfully removed image {context.pyntc.image_name}:{context.pyntc.image_ver}")
+    print(
+        f"Attempting to forcefully remove image {context.pyntc.image_name}:{context.pyntc.image_ver}"
+    )
+    context.run(
+        f"docker rmi {context.pyntc.image_name}:{context.pyntc.image_ver} --force"
+    )
+    print(
+        f"Successfully removed image {context.pyntc.image_name}:{context.pyntc.image_ver}"
+    )
 
 
 @task
@@ -339,7 +349,13 @@ def build_and_check_docs(context):
     if match:
         major = match.group(1)
         minor = match.group(2)
-        release_notes_file = Path(__file__).parent / "docs" / "admin" / "release_notes" / f"version_{major}.{minor}.md"
+        release_notes_file = (
+            Path(__file__).parent
+            / "docs"
+            / "admin"
+            / "release_notes"
+            / f"version_{major}.{minor}.md"
+        )
         if not release_notes_file.exists():
             print(f"Release notes file `version_{major}.{minor}.md` does not exist.")
             raise Exit(code=1)
@@ -356,36 +372,9 @@ def docs(context):
     help={
         "version": "Version of pyntc to generate the release notes for.",
         "date": "Date of the release (default: today).",
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    }
-)
-def generate_release_notes(context, version="", date=""):
-    """Generate Release Notes using Towncrier."""
-    if not version:
-        version = context.run("poetry version --short", hide=True).stdout.strip()
-
-    version_major_minor = ".".join(version.split(".")[:2])
-    context.run(f"poetry run python bin/ensure_release_notes.py --version {version_major_minor}")
-
-    command = f"poetry run towncrier build --version {version} --yes"
-    if date:
-        command += f" --date {date}"
-=======
         "keep": "Keep existing release notes files. Useful for testing. (default: False).",
     }
 )
-=======
-        "keep": "Keep existing release notes files. Useful for testing. (default: False).",
-    }
-)
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
-        "keep": "Keep existing release notes files. Useful for testing. (default: False).",
-    }
-)
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 def generate_release_notes(context, version="", date="", keep=False):
     """Generate Release Notes using Towncrier."""
     command = "poetry run towncrier build"
@@ -397,14 +386,8 @@ def generate_release_notes(context, version="", date="", keep=False):
     command += " --keep" if keep else " --yes"
 
     version_major_minor = ".".join(version.split(".")[:2])
-    context.run(f"poetry run python development/bin/ensure_release_notes.py --version {version_major_minor}")
-
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
+    context.run(
+        f"poetry run python development/bin/ensure_release_notes.py --version {version_major_minor}"
+    )
     # Due to issues with git repo ownership in the containers, this must always run locally.
     context.run(command)

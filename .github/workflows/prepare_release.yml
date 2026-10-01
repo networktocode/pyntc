@@ -21,25 +21,10 @@ on: # yamllint disable-line rule:truthy rule:comments
         description: "Date of the release YYYY-MM-DD (defaults to today's date in the US Eastern TZ)."
         required: false
         default: ""
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
       previous_version:
         description: "The previous version tag to use for generating release notes (defaults to the latest tag or initial commit if no tags exist)."
         required: false
         default: ""
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
 
 jobs:
   prepare-release:
@@ -50,30 +35,14 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - name: "Checkout code"
-<<<<<<< HEAD
-        uses: "actions/checkout@v4"
-=======
         uses: "actions/checkout@v7"
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         with:
           # If target_branch is 'main', use 'develop' as the source branch. Otherwise, the source and target branch are the same.
           ref: "${{ github.event.inputs['target_branch'] == 'main' && 'develop' || github.event.inputs['target_branch'] }}"
           fetch-depth: 0  # Fetch all history for git tags
 
       - name: "Setup environment"
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-        uses: "networktocode/gh-action-setup-poetry-environment@v6"
-=======
         uses: "networktocode/gh-action-setup-poetry-environment@v7"
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
-        uses: "networktocode/gh-action-setup-poetry-environment@v7"
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
-        uses: "networktocode/gh-action-setup-poetry-environment@v7"
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         with:
           poetry-version: "2.1.3"
           poetry-install-options: "--with dev"
@@ -88,27 +57,12 @@ jobs:
 
           # 2. Try to get the previous version tag
           # If it fails (no tags), get the hash of the first commit
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
           if PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
-=======
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
           if [ -n "${{ github.event.inputs.previous_version }}" ]; then
             PREV_TAG="${{ github.event.inputs.previous_version }}"
             echo "Using user-specified previous version: $PREV_TAG"
             echo "PREVIOUS_TAG=$PREV_TAG" >> $GITHUB_ENV
           elif PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
             echo "PREVIOUS_TAG=$PREV_TAG" >> $GITHUB_ENV
             echo "Found previous tag: $PREV_TAG"
           else
@@ -120,17 +74,9 @@ jobs:
 
       - name: "Determine New Version"
         id: "versioning"
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
         run: |
           # Perform the bump based on the user input
           poetry version ${{ github.event.inputs.bump_rule }}
-=======
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         env:
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
@@ -150,14 +96,6 @@ jobs:
           else
             poetry version ${{ github.event.inputs.bump_rule }}
           fi
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-
           # Capture the New version string for use in other steps
           NEW_VER=$(poetry version --short)
           echo "NEW_VERSION=$NEW_VER" >> $GITHUB_ENV
@@ -227,19 +165,7 @@ jobs:
           # 7. Save to a temporary file to avoid shell argument length limits
           echo "$FINAL_NOTES" > ../consolidated_notes.md
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-      - name: "Generate Release Notes"
-=======
       - name: "Generate App Release Notes and update mkdocs.yml"
->>>>>>> 45de4a7 (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
-      - name: "Generate App Release Notes and update mkdocs.yml"
->>>>>>> b5401ea (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
-=======
-      - name: "Generate App Release Notes and update mkdocs.yml"
->>>>>>> 5cce21d (Cookie updated targeting develop by NetworkToCode Cookie Drift Manager Tool)
         run: "poetry run inv generate-release-notes --version '${{ env.NEW_VERSION }}' --date '${{ env.RELEASE_DATE }}'"
 
       - name: "Commit Changes and Push"
