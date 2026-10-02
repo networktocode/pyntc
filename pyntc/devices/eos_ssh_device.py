@@ -19,7 +19,7 @@ from netmiko import ConnectHandler
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
-from pyntc.devices.eos_device import EOSDevice
+from pyntc.devices.eos_device import DEFAULT_REBOOT_TIMEOUT, EOSDevice
 from pyntc.errors import (
     CommandError,
     CommandListError,
@@ -179,11 +179,11 @@ class EOSSSHDevice(EOSDevice):
 
         Args:
             prev_version (str): The previous running OS version used for
-              comparison.
+                comparison.
 
         Returns:
             True if the running OS version has changed, False if it has
-              not.
+                not.
         """
         current_version = self.show("show version")["version"]
         if current_version != prev_version:
@@ -225,13 +225,13 @@ class EOSSSHDevice(EOSDevice):
 
         Args:
             prev_uptime (float): The uptime value prior to device reload
-              in seconds.
+                in seconds.
             timeout (int): The maximum time in seconds to wait before
-              flagging the reload as a failure.
+                flagging the reload as a failure.
 
         Raises:
             RebootTimeoutError: If the reload doesn't succeed before the
-              timeout value expires.
+                timeout value expires.
         """
         start = time.time()
         while time.time() - start < timeout:
@@ -245,65 +245,12 @@ class EOSSSHDevice(EOSDevice):
                         prev_uptime,
                     )
                     return
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 log.debug("Host %s: Reload probe failed (%s); will retry", self.host, exc)
             time.sleep(15)
 
         log.error("Host %s: Reload timer exceeded (%ss)", self.host, timeout)
         raise RebootTimeoutError(self.hostname, timeout)
-
-    def show(self, commands, raw_text=False):
-        """Send show command(s) to the device.
-
-        Args:
-            commands (str, list): String with single command, or list with multiple commands.
-            raw_text (bool, optional): False to return structured data via the ``| json``
-                pipe, True to return the raw CLI text. Defaults to False.
-
-        Returns:
-            (dict): When ``commands`` is a str and ``raw_text`` is False. Non-show commands
-                cannot be piped to ``| json``; they run as plain text and return an empty dict.
-            (str): When ``commands`` is a str and ``raw_text`` is True.
-            (list): When ``commands`` is a list.
-
-        Raises:
-            CommandError: When ``commands`` is a str and the device reports an error.
-            CommandListError: When ``commands`` is a list and one command reports an error.
-        """
-        self.open()
-        self.enable()
-
-        original_commands_is_str = isinstance(commands, str)
-        command_list = [commands] if original_commands_is_str else list(commands)
-
-        responses = []
-        entered_commands = []
-        for command in command_list:
-            entered_commands.append(command)
-            as_json = not raw_text and bool(RE_JSON_ELIGIBLE.match(command))
-            cli_command = f"{command} | json" if as_json else command
-            try:
-                output = self._send_command(cli_command, error_command=command)
-                if as_json:
-                    output = self._load_json(command, output)
-            except CommandError as err:
-                if original_commands_is_str:
-                    raise
-                raise CommandListError(entered_commands, command, err.cli_error_msg) from err
-
-            if raw_text or as_json:
-                responses.append(output)
-            else:
-                # Non-show command sent with raw_text=False (checkpoint, save, rollback,
-                # reboot, set_boot_options). Every inherited caller discards the result,
-                # so an empty dict preserves EOSDevice's contract.
-                responses.append({})
-
-        if original_commands_is_str:
-            return responses[0]
-
-        log.debug("Host %s: Successfully executed command 'show' with responses %s.", self.host, responses)
-        return responses
 
     def close(self):
         """Disconnect from the device.
@@ -452,7 +399,7 @@ class EOSSSHDevice(EOSDevice):
             file_system (str | None): The device's target file system
                 where the software image is stored, defaults to None.
             reboot (bool): Reloads the device when True.
-                vendor_specifics: Any pre-loaded vendor-specific kwargs.
+            vendor_specifics (dict): Any pre-loaded vendor-specific kwargs.
 
         Returns:
             (bool): True when the installation is successful, False when
@@ -486,7 +433,7 @@ class EOSSSHDevice(EOSDevice):
         log.info("Host %s: OS image '%s' installed, reload device to finalize", self.host, image_name)
         return True
 
-    def maintenance_mode(self, unit: str = "System", enable: bool = True, transition_timer: int = 300) -> bool:
+    def maintenance_mode(self, unit="System", enable=True, transition_timer=300):
         """Enter or exit maintenance mode.
 
         Sends config commands to transition the maintenance mode state,
@@ -497,8 +444,8 @@ class EOSSSHDevice(EOSDevice):
         Args:
             unit (str): The specified unit to use when entering or
                 exiting maintenance mode, defaults to `System`.
-                enable (bool): Enters maintenance mode when True, exits
-                maintenace mode when False.
+            enable (bool): Enters maintenance mode when True, exits
+                maintenance mode when False.
             transition_timer (int): Duration in seconds to wait for
                 maintenance state to succesfully transition, defaults to
                 300 seconds.
@@ -564,6 +511,45 @@ class EOSSSHDevice(EOSDevice):
             self._connected = True
 
         log.debug("Host %s: Connection to device was opened successfully.", self.host)
+
+    def reboot(self, wait_for_reload=False, timeout=DEFAULT_REBOOT_TIMEOUT, **kwargs):
+        """Reload the device.
+
+        Unlike eAPI, the SSH session dies as the reload executes, so the command is sent
+        with ``send_command_timing`` and the resulting transport error is expected.
+
+        Args:
+            wait_for_reload (bool): When True, block until the device's boot time advances
+                past the pre-reboot value. Defaults to False.
+            timeout (int): Max seconds to poll when ``wait_for_reload`` is True.
+            kwargs (dict): Additional keyword arguments, such as confirm.
+
+        Raises:
+            RebootTimeoutError: When the device does not return within ``timeout``.
+
+        Example:
+            >>> device = EOSSSHDevice(**connection_args)
+            >>> device.reboot()
+            >>>
+        """
+        if kwargs.get("confirm"):
+            log.warning("Passing 'confirm' to reboot method is deprecated.")
+
+        original_boot_time = self.boot_time if wait_for_reload else None
+        try:
+            self.native.send_command_timing("reload now")
+        except Exception as err:  # pylint: disable=broad-except
+            log.debug("Host %s: Session dropped during reload, as expected (%s).", self.host, err)
+
+        # The socket is gone regardless of how the command returned; force the next
+        # operation to reconnect rather than reuse a dead handle.
+        self._connected = False
+        log.info("Host %s: Device rebooted.", self.host)
+
+        if wait_for_reload:
+            # Both arguments are numeric; naming them prevents a transposition from
+            # silently satisfying the "boot time advanced" check on the first poll.
+            self._wait_for_device_reboot(original_boot_time=original_boot_time, timeout=timeout)
 
     def show(self, commands: str | list, raw_text: bool = False):
         """Send show command(s) to the device.

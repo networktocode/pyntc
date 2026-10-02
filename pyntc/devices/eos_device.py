@@ -648,7 +648,7 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error detected in copy command output: %s", self.host, output)
             raise FileTransferError(f"Error detected in copy command output: {output}")
 
-    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):
+    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):  # pylint: disable=too-many-branches
         """Copy a file from remote source to device.
 
         Args:
@@ -690,9 +690,8 @@ class EOSDevice(BaseDevice):
             if self.verify_optimized_image(dest, file_system):
                 log.debug("Host %s: File '%s' already exists in '%s'", self.host, dest, file_system)
                 return
-            else:
-                log.debug("Host %s: File '%s' is present but cannot be verified", self.host, dest)
-                self.native_ssh.send_command(f"delete {file_system}{dest}")
+            log.debug("Host %s: File '%s' is present but cannot be verified", self.host, dest)
+            self.native_ssh.send_command(f"delete {file_system}{dest}")
 
         log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
 
