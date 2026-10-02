@@ -369,9 +369,9 @@ class MaintModeProfileError(NTCError):
         Args:
             hostname (str): The hostname of the device.
             profile (str): The name of the missing maint-mode
-              profile/unit.
+                profile/unit.
             message (str | None): Optional custom message which
-              overrides the default_message.
+                overrides the default_message.
         """
         default_message = f"{hostname} has no maintenance profile '{profile}'"
         super().__init__(message or default_message)

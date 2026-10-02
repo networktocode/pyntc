@@ -19,15 +19,15 @@ from netmiko import ConnectHandler
 
 from pyntc import log
 from pyntc.devices.base_device import BaseDevice, fix_docs
-from pyntc.devices.eos_device import DEFAULT_REBOOT_TIMEOUT, EOSDevice
+from pyntc.devices.eos_device import EOSDevice
 from pyntc.errors import (
     CommandError,
     CommandListError,
     FileTransferError,
     MaintModeProfileError,
     OSInstallError,
-    SocketClosedError,
     RebootTimeoutError,
+    SocketClosedError,
 )
 
 DEFAULT_SSH_PORT = 22
@@ -320,7 +320,7 @@ class EOSSSHDevice(EOSDevice):
         """Send configuration commands to a device.
 
         Args:
-            commands (str, list): String with single command, or list with multiple commands.
+            command (str, list): String with single command, or list with multiple commands.
 
         Raises:
             CommandError: When ``commands`` is a str and the device reports an error.
@@ -450,13 +450,13 @@ class EOSSSHDevice(EOSDevice):
         Args:
             image_name (str): The target image filename to install.
             file_system (str | None): The device's target file system
-              where the software image is stored, defaults to None.
+                where the software image is stored, defaults to None.
             reboot (bool): Reloads the device when True.
-            vendor_specifics: Any pre-loaded vendor-specific kwargs.
+                vendor_specifics: Any pre-loaded vendor-specific kwargs.
 
         Returns:
             (bool): True when the installation is successful, False when
-              the target image is already installed.
+                the target image is already installed.
 
         Raises:
             OSInstallError: If the image installation fails.
@@ -496,19 +496,19 @@ class EOSSSHDevice(EOSDevice):
 
         Args:
             unit (str): The specified unit to use when entering or
-              exiting maintenance mode, defaults to `System`.
-            enable (bool): Enters maintenance mode when True, exits
-              maintenace mode when False.
+                exiting maintenance mode, defaults to `System`.
+                enable (bool): Enters maintenance mode when True, exits
+                maintenace mode when False.
             transition_timer (int): Duration in seconds to wait for
-              maintenance state to succesfully transition, defaults to
-              300 seconds.
+                maintenance state to succesfully transition, defaults to
+                300 seconds.
 
         Returns:
             (bool): True if state transition successful, else False.
 
         Raises:
             MaintModeProfileError: If the provided unit name does not
-              already exist on the target device.
+                already exist on the target device.
         """
         commands = [
             "maintenance",
