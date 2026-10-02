@@ -1,0 +1,2 @@
+Added install_os method for EOSSSHDevice class.
+Added maintenance_mode method for EOSSSHDevice class.
