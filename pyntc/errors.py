@@ -357,3 +357,21 @@ class WLANDisableError(NTCError):
             f"Found:    {sorted(actual_wlans)}\n"
         )
         super().__init__(message)
+
+
+class MaintModeProfileError(NTCError):
+    """Error if selected maintenance mode profile does not exist."""
+
+    def __init__(self, hostname, profile, message=None):
+        """
+        Error if selected maintenance mode profile does not exist.
+
+        Args:
+            hostname (str): The hostname of the device.
+            profile (str): The name of the missing maint-mode
+                profile/unit.
+            message (str | None): Optional custom message which
+                overrides the default_message.
+        """
+        default_message = f"{hostname} has no maintenance profile '{profile}'"
+        super().__init__(message or default_message)

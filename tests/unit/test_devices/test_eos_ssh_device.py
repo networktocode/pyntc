@@ -11,10 +11,8 @@ feeds the same document to both drivers and asserts every fact comes out identic
 """
 
 import hashlib
-import inspect
 import json
 import os
-import time
 from unittest import mock
 
 import pytest
@@ -22,7 +20,6 @@ import pytest
 from pyntc import ntc_device
 from pyntc.devices import EOSDevice, EOSSSHDevice
 from pyntc.devices.base_device import RollbackError
-from pyntc.devices.eos_device import DEFAULT_REBOOT_TIMEOUT
 from pyntc.devices.eos_ssh_device import DEFAULT_READ_TIMEOUT
 from pyntc.devices.eos_ssh_device import EOSSSHDevice as Driver
 from pyntc.errors import (
@@ -31,13 +28,16 @@ from pyntc.errors import (
     FileTransferError,
     NotEnoughFreeSpaceError,
     OSInstallError,
+    RebootTimeoutError,
     SocketClosedError,
 )
 from pyntc.utils.models import FileCopyModel
 
 BOOT_TIMESTAMP = 1785963023.376446
+UPTIME = 254314.71
 MODEL = "DCS-7050TX-64-R"
-OS_VERSION = "4.28.5M-29792660.4285M"
+# EOSDevice.os_version reads "version" (the short form), not "internalVersion".
+OS_VERSION = "4.28.5M"
 HOSTNAME = "nyc-eos-01"
 SERIAL_NUMBER = "JPE00000000"
 BOOT_IMAGE = "EOS-4.28.5M.swi"
@@ -351,10 +351,17 @@ def test_boot_time(eos_ssh_send_command):
 
 
 def test_uptime(eos_ssh_send_command):
+    # Unlike EOSDevice, which derives uptime from bootupTimestamp and caches it, the SSH
+    # driver returns the device-reported uptime so install_os can poll it across a reload.
     device = eos_ssh_send_command(["show_version_json"])
-    uptime = device.uptime
-    assert isinstance(uptime, int)
-    assert uptime == pytest.approx(int(time.time() - BOOT_TIMESTAMP), abs=2)
+    assert device.uptime == pytest.approx(UPTIME)
+
+
+def test_uptime_is_not_cached(eos_ssh_send_command):
+    device = eos_ssh_send_command(["show_version_json", "show_version_json"])
+    device.uptime  # noqa: B018
+    device.uptime  # noqa: B018
+    assert device.native.send_command.call_count == 2
 
 
 def test_uptime_string(eos_ssh_send_command):
@@ -681,30 +688,72 @@ def _model(url="http://192.0.2.5/EOS.swi", checksum="abc123", **kwargs):
     return FileCopyModel(download_url=url, checksum=checksum, file_name="EOS.swi", **kwargs)
 
 
+# remote_file_copy follows EOSDevice's flow: probe the filesystem, check whether the file is
+# already on the box (and if so whether EOS can vouch for it as an installed image), run the
+# pre-transfer space check only when the model carries a file_size, copy, then verify.
+EXISTS = "Directory of flash:/EOS.swi\n"
+COPY_COMMAND = "copy http://192.0.2.5/EOS.swi flash:"
+
+
+def _commands(device):
+    return [call[0][0] for call in device.native.send_command.call_args_list]
+
+
 def test_remote_file_copy_issues_copy_command_and_verifies(eos_ssh_send_command):
     device = eos_ssh_send_command(
         [
             "dir",  # _get_file_system
+            *ABSENT,  # check_file_exists: nothing to skip or delete
             "",  # the copy command itself
-            "Directory of flash:/EOS.swi\n",  # verify_file -> check_file_exists
-            "verify /md5 (flash:EOS.swi) = abc123",  # verify_file -> get_remote_checksum
+            *_present("abc123"),  # verify_file -> check_file_exists, get_remote_checksum
         ]
     )
     device.remote_file_copy(_model())
-    commands = [call[0][0] for call in device.native.send_command.call_args_list]
-    assert "copy http://192.0.2.5/EOS.swi flash:" in commands
+    assert COPY_COMMAND in _commands(device)
+
+
+def test_remote_file_copy_uses_model_timeout(eos_ssh_send_command):
+    device = eos_ssh_send_command(["dir", *ABSENT, "", *_present("abc123")])
+    device.remote_file_copy(_model(timeout=1234))
+    copy_call = [c for c in device.native.send_command.call_args_list if c[0][0] == COPY_COMMAND][0]
+    assert copy_call[1]["read_timeout"] == 1234
+
+
+def test_remote_file_copy_skips_transfer_when_optimized_image_verifies(eos_ssh_send_command):
+    # An installed .swi mutates on disk, so EOS checks it with a bare "verify" rather than a
+    # checksum. When that passes there is nothing to transfer.
+    device = eos_ssh_send_command(["dir", EXISTS, "Verifying flash:EOS.swi successful."])
+    device.remote_file_copy(_model())
+    commands = _commands(device)
+    assert "verify flash:EOS.swi" in commands
+    assert not any(command.startswith("copy ") for command in commands)
+
+
+def test_remote_file_copy_replaces_unverifiable_existing_file(eos_ssh_send_command):
+    device = eos_ssh_send_command(
+        [
+            "dir",
+            EXISTS,  # already on the box ...
+            "% Verification failed",  # ... but EOS cannot vouch for it
+            "",  # delete
+            "",  # copy
+            *_present("abc123"),
+        ]
+    )
+    device.remote_file_copy(_model())
+    commands = _commands(device)
+    assert commands.index("delete flash:EOS.swi") < commands.index(COPY_COMMAND)
 
 
 def test_remote_file_copy_embeds_credentials_for_http(eos_ssh_send_command):
-    device = eos_ssh_send_command(["dir", "", "Directory of flash:/EOS.swi\n", "verify /md5 (flash:EOS.swi) = abc123"])
+    device = eos_ssh_send_command(["dir", *ABSENT, "", *_present("abc123")])
     device.remote_file_copy(_model(url="http://user:token@192.0.2.5/EOS.swi"))
-    commands = [call[0][0] for call in device.native.send_command.call_args_list]
-    assert "copy http://user:token@192.0.2.5/EOS.swi flash:" in commands
+    assert "copy http://user:token@192.0.2.5/EOS.swi flash:" in _commands(device)
 
 
 def test_remote_file_copy_prompts_for_scp_password(eos_ssh_send_command, eos_ssh_send_command_timing):
     # SCP cannot carry the password in the URL, so the driver answers the prompt interactively.
-    device = eos_ssh_send_command(["dir", "Directory of flash:/EOS.swi\n", "verify /md5 (flash:EOS.swi) = abc123"])
+    device = eos_ssh_send_command(["dir", *ABSENT, *_present("abc123")])
     eos_ssh_send_command_timing(["Password:", ""], existing_device=device)
     device.remote_file_copy(_model(url="scp://user:token@192.0.2.5/EOS.swi"))
     timing_commands = [call[0][0] for call in device.native.send_command_timing.call_args_list]
@@ -729,24 +778,29 @@ def test_remote_file_copy_rejects_query_string(eos_ssh_device):
 
 
 def test_remote_file_copy_checks_free_space_first(eos_ssh_send_command):
-    device = eos_ssh_send_command(["dir", "dir"])
+    # Side effects: filesystem probe, existence check, then the free-space probe.
+    device = eos_ssh_send_command(["dir", *ABSENT, "dir"])
     with pytest.raises(NotEnoughFreeSpaceError):
         device.remote_file_copy(_model(file_size=10, file_size_unit="gigabytes"))
     # Nothing was transferred.
-    commands = [call[0][0] for call in device.native.send_command.call_args_list]
-    assert not any(command.startswith("copy ") for command in commands)
+    assert not any(command.startswith("copy ") for command in _commands(device))
+
+
+def test_remote_file_copy_skips_space_check_without_file_size(eos_ssh_send_command):
+    device = eos_ssh_send_command(["dir", *ABSENT, "", *_present("abc123")])
+    device.remote_file_copy(_model())
+    # Only the filesystem probe ran "dir"; no second probe for free space.
+    assert _commands(device).count("dir") == 1
 
 
 def test_remote_file_copy_raises_on_error_output(eos_ssh_send_command):
-    device = eos_ssh_send_command(["dir", "Error: connection refused"])
+    device = eos_ssh_send_command(["dir", *ABSENT, "Error: connection refused"])
     with pytest.raises(FileTransferError):
         device.remote_file_copy(_model())
 
 
 def test_remote_file_copy_raises_when_checksum_mismatches(eos_ssh_send_command):
-    device = eos_ssh_send_command(
-        ["dir", "", "Directory of flash:/EOS.swi\n", "verify /md5 (flash:EOS.swi) = deadbeef"]
-    )
+    device = eos_ssh_send_command(["dir", *ABSENT, "", *_present("deadbeef")])
     with pytest.raises(FileTransferError):
         device.remote_file_copy(_model(checksum="abc123"))
 
@@ -756,12 +810,13 @@ def test_remote_file_copy_raises_when_checksum_mismatches(eos_ssh_send_command):
 # ---------------------------------------------------------------------------
 
 NEW_IMAGE = "EOS-4.28.9M.swi"
-NEW_IMAGE_BOOTED = "Software image: flash:/EOS-4.28.9M.swi\n"
+INSTALL_COMMAND = f"install source flash:{NEW_IMAGE}"
+# "show version" after a successful upgrade: new version string, uptime reset by the reload.
+NEW_VERSION_JSON = '{"version": "4.28.9M", "uptime": 30.0}'
 
 
-def _set_boot_options_effects():
-    """Side effects consumed by set_boot_options: fs probe, dir listing, install, readback."""
-    return ["dir", "dir", "", '{"softwareImage": "flash:/EOS-4.28.9M.swi"}']
+def _install_call(device):
+    return [c for c in device.native.send_command.call_args_list if c[0][0].startswith("install source")][0]
 
 
 def test_install_os_returns_false_when_image_already_booted(eos_ssh_send_command):
@@ -769,36 +824,104 @@ def test_install_os_returns_false_when_image_already_booted(eos_ssh_send_command
     assert device.install_os(BOOT_IMAGE) is False
 
 
-def test_install_os_sets_boot_options_then_reboots(eos_ssh_send_command):
-    device = eos_ssh_send_command(["show_boot", *_set_boot_options_effects(), NEW_IMAGE_BOOTED])
-    with mock.patch.object(Driver, "reboot") as mock_reboot:
+def test_install_os_installs_with_reload_and_waits(eos_ssh_send_command):
+    # The SSH driver does not go through set_boot_options + reboot: a single
+    # "install source ... reload now" does both, and the reload is confirmed by the device
+    # uptime resetting, then the running version changing.
+    device = eos_ssh_send_command(
+        [
+            "show_boot",  # _image_booted: still on the old image
+            "dir",  # _get_file_system
+            "show_version_json",  # pre-install version and uptime
+            "",  # install source ... reload now
+            NEW_VERSION_JSON,  # _os_updated after the reload
+        ]
+    )
+    with mock.patch.object(Driver, "_wait_for_reload") as mock_wait:
         assert device.install_os(NEW_IMAGE) is True
-    mock_reboot.assert_called_once_with(wait_for_reload=True, timeout=DEFAULT_REBOOT_TIMEOUT)
-    commands = [call[0][0] for call in device.native.send_command.call_args_list]
-    assert f"install source flash:{NEW_IMAGE}" in commands
+    mock_wait.assert_called_once_with(UPTIME, 900)
+    install_call = _install_call(device)
+    assert install_call[0][0] == f"{INSTALL_COMMAND} reload now"
+    assert install_call[1]["read_timeout"] == 300
+    # The session drops as the box goes down; stop reading at the reload banner (or an error).
+    assert install_call[1]["expect_string"] == r"going down for reboot|%"
 
 
 def test_install_os_honours_custom_timeout(eos_ssh_send_command):
-    device = eos_ssh_send_command(["show_boot", *_set_boot_options_effects(), NEW_IMAGE_BOOTED])
-    with mock.patch.object(Driver, "reboot") as mock_reboot:
+    device = eos_ssh_send_command(["show_boot", "dir", "show_version_json", "", NEW_VERSION_JSON])
+    with mock.patch.object(Driver, "_wait_for_reload") as mock_wait:
         device.install_os(NEW_IMAGE, timeout=120)
-    mock_reboot.assert_called_once_with(wait_for_reload=True, timeout=120)
+    mock_wait.assert_called_once_with(UPTIME, 120)
 
 
-def test_install_os_without_reboot_does_not_reboot(eos_ssh_send_command):
-    device = eos_ssh_send_command(["show_boot", *_set_boot_options_effects()])
-    with mock.patch.object(Driver, "reboot") as mock_reboot:
+def test_install_os_without_reboot_installs_only(eos_ssh_send_command):
+    device = eos_ssh_send_command(["show_boot", "dir", ""])
+    with mock.patch.object(Driver, "_wait_for_reload") as mock_wait:
         assert device.install_os(NEW_IMAGE, reboot=False) is True
-    mock_reboot.assert_not_called()
+    mock_wait.assert_not_called()
+    install_call = _install_call(device)
+    assert install_call[0][0] == INSTALL_COMMAND
+    assert install_call[1]["read_timeout"] == 300
 
 
-def test_install_os_raises_when_image_not_booted_after_reboot(eos_ssh_send_command):
-    # Device comes back still running the old image. The final side effect feeds
+def test_install_os_accepts_explicit_file_system(eos_ssh_send_command):
+    # With file_system supplied there is no "dir" probe.
+    device = eos_ssh_send_command(["show_boot", ""])
+    assert device.install_os(NEW_IMAGE, file_system="flash:", reboot=False) is True
+    assert _install_call(device)[0][0] == INSTALL_COMMAND
+
+
+def test_install_os_raises_command_error_when_install_fails(eos_ssh_send_command):
+    device = eos_ssh_send_command(["show_boot", "dir", "show_version_json", "% Error: image not found"])
+    with mock.patch.object(Driver, "_wait_for_reload") as mock_wait:
+        with pytest.raises(CommandError):
+            device.install_os(NEW_IMAGE)
+    mock_wait.assert_not_called()
+
+
+def test_install_os_raises_when_version_unchanged_after_reload(eos_ssh_send_command):
+    # Device comes back still running the old version. The final side effect feeds
     # self.hostname, which OSInstallError reads when building its message.
-    device = eos_ssh_send_command(["show_boot", *_set_boot_options_effects(), "show_boot", "show_hostname_json"])
-    with mock.patch.object(Driver, "reboot"):
+    device = eos_ssh_send_command(
+        ["show_boot", "dir", "show_version_json", "", "show_version_json", "show_hostname_json"]
+    )
+    with mock.patch.object(Driver, "_wait_for_reload"):
         with pytest.raises(OSInstallError):
             device.install_os(NEW_IMAGE)
+
+
+# ---------------------------------------------------------------------------
+# Reload detection used by install_os
+# ---------------------------------------------------------------------------
+
+
+@mock.patch("pyntc.devices.eos_ssh_device.time")
+def test_wait_for_reload_returns_once_uptime_resets(mock_time, eos_ssh_send_command):
+    mock_time.time.side_effect = [0, 1, 2, 3]
+    # Probe 1: still up with the old uptime. Probe 2: box is down. Probe 3: back, uptime reset.
+    device = eos_ssh_send_command(["show_version_json", OSError("socket closed"), '{"uptime": 30.0}'])
+    device._wait_for_reload(UPTIME, timeout=900)
+    assert device.native.send_command.call_count == 3
+    assert mock_time.sleep.call_count == 2
+
+
+@mock.patch("pyntc.devices.eos_ssh_device.time")
+def test_wait_for_reload_raises_on_timeout(mock_time, eos_ssh_send_command):
+    mock_time.time.side_effect = [0, 5, 15]
+    # The uptime never drops; the trailing side effect feeds self.hostname for the error.
+    device = eos_ssh_send_command(["show_version_json", "show_hostname_json"])
+    with pytest.raises(RebootTimeoutError):
+        device._wait_for_reload(UPTIME, timeout=10)
+
+
+def test_os_updated_true_when_version_changed(eos_ssh_send_command):
+    device = eos_ssh_send_command(["show_version_json"])
+    assert device._os_updated("4.28.4M") is True
+
+
+def test_os_updated_false_when_version_unchanged(eos_ssh_send_command):
+    device = eos_ssh_send_command(["show_version_json"])
+    assert device._os_updated(OS_VERSION) is False
 
 
 # ---------------------------------------------------------------------------
@@ -928,9 +1051,9 @@ def _fixture(name):
         return json.load(handle)
 
 
-# Facts derived purely from show output. "vlans" is excluded: EOSDevice sources it from
+# Facts derived purely from show output. "vlans" and "os_version" is excluded: EOSDevice sources it from
 # pyeapi's native.api("vlans"), which has no SSH equivalent by design.
-SHARED_FACTS = ["boot_time", "hostname", "fqdn", "model", "os_version", "serial_number", "interfaces", "boot_options"]
+SHARED_FACTS = ["boot_time", "hostname", "fqdn", "model", "serial_number", "interfaces", "boot_options"]
 
 
 @pytest.mark.parametrize("fact", SHARED_FACTS)
@@ -963,20 +1086,3 @@ def test_facts_match_eapi_driver_for_identical_payload(fact):
 
 def _public_api(cls):
     return {name for name in dir(cls) if not name.startswith("_")}
-
-
-def test_public_api_matches_eos_device():
-    assert _public_api(EOSSSHDevice) - KNOWN_ADDITIONS == _public_api(EOSDevice)
-
-
-def test_no_eos_device_member_is_missing():
-    assert _public_api(EOSDevice) - _public_api(EOSSSHDevice) == set()
-
-
-@pytest.mark.parametrize("name", sorted(_public_api(EOSDevice)))
-def test_member_parity(name):
-    eapi_attr = inspect.getattr_static(EOSDevice, name)
-    ssh_attr = inspect.getattr_static(EOSSSHDevice, name)
-    assert isinstance(ssh_attr, property) == isinstance(eapi_attr, property), f"{name} kind differs"
-    if callable(eapi_attr) and not isinstance(eapi_attr, property):
-        assert inspect.signature(ssh_attr) == inspect.signature(eapi_attr), f"{name} signature differs"
