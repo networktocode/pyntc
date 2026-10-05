@@ -4,7 +4,8 @@ This document describes all new features and changes in the release. The format 
 
 ## Release Overview
 
-- Major features or milestones
+- Added install_os method override for the SSH Arista driver.
+- Add a method to check for Arista maintenance_mode.
 
 <!-- towncrier release notes start -->
 ## [v3.4.0 (2026-10-05)](https://github.com/networktocode/pyntc/releases/tag/v3.4.0)
