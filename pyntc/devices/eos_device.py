@@ -648,7 +648,7 @@ class EOSDevice(BaseDevice):
             log.error("Host %s: Error detected in copy command output: %s", self.host, output)
             raise FileTransferError(f"Error detected in copy command output: {output}")
 
-    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):
+    def remote_file_copy(self, src: FileCopyModel, dest: str | None = None, file_system: str | None = None, **kwargs):  # pylint: disable=too-many-branches
         """Copy a file from remote source to device.
 
         Args:
@@ -683,10 +683,17 @@ class EOSDevice(BaseDevice):
         if dest is None:
             dest = src.file_name
 
-        log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
-
         self.open()
         self.enable()
+
+        if self.check_file_exists(dest, file_system):
+            if self.verify_optimized_image(dest, file_system):
+                log.debug("Host %s: File '%s' already exists in '%s'", self.host, dest, file_system)
+                return
+            log.debug("Host %s: File '%s' is present but cannot be verified", self.host, dest)
+            self.native_ssh.send_command(f"delete {file_system}{dest}")
+
+        log.debug("Host %s: Starting remote file copy for %s to %s/%s", self.host, src.file_name, file_system, dest)
 
         self._pre_transfer_space_check(src, file_system)
 
@@ -760,6 +767,31 @@ class EOSDevice(BaseDevice):
             checksum,
             device_checksum,
         )
+        return False
+
+    def verify_optimized_image(self, image_name: str, file_system: str | None):
+        """Verify the optimized image file without a checksum.
+
+        An Arista EOS image mutates after installation, reducing its
+        storage footprint and thereby changing its checksum value. The
+        optimized image can be validated from the command line using
+        the `verify [file_system]:[image_name]` command without
+        specifying the checksum hash type.
+
+        Args:
+            image_name (str): The name of the image to verify.
+            file_system (str): The device file system to inspect.
+
+        Returns:
+            (bool): True if file verification is successful, else False.
+        """
+        self.open()
+        file_system = file_system or self._get_file_system()
+        result = self.native_ssh.send_command(f"verify {file_system}{image_name}", read_timeout=30)
+        verified = re.search(f"Verifying {file_system}{image_name} successful.", result)
+        if verified:
+            return True
+
         return False
 
     def install_os(self, image_name, reboot=True, **vendor_specifics):

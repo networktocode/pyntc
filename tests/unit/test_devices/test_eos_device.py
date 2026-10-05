@@ -531,6 +531,14 @@ class EOSDeviceMockedTestCase(unittest.TestCase):
 class TestRemoteFileCopy(EOSDeviceMockedTestCase):
     """Tests for remote_file_copy method."""
 
+    def setUp(self):
+        super().setUp()
+        # remote_file_copy first asks whether the destination already exists. Default to a
+        # clean filesystem so each test's send_command stub only has to model the copy itself.
+        patcher = mock.patch.object(EOSDevice, "check_file_exists", return_value=False)
+        self.mock_exists = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_remote_file_copy_invalid_src_type(self):
         """Test remote_file_copy raises TypeError for invalid src type."""
         with self.assertRaises(TypeError) as ctx:
@@ -901,6 +909,72 @@ class TestRemoteFileCopy(EOSDeviceMockedTestCase):
                 any("transferred and verified successfully" in str(call) for call in mock_log.info.call_args_list)
             )
 
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
+    def test_remote_file_copy_skips_transfer_when_optimized_image_verifies(self, _fs, _open, _enable, mock_verify):
+        """An existing image that passes EOS's bare "verify" is left alone; nothing is copied."""
+        self.mock_exists.return_value = True
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.return_value = "Verifying flash:file.bin successful."
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(download_url="http://example.com/file.bin", checksum="abc123", file_name="file.bin")
+        self.device.remote_file_copy(src)
+
+        mock_ssh.send_command.assert_called_once_with("verify flash:file.bin", read_timeout=30)
+        mock_verify.assert_not_called()
+
+    @mock.patch.object(EOSDevice, "verify_file")
+    @mock.patch.object(EOSDevice, "enable")
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
+    def test_remote_file_copy_replaces_unverifiable_existing_file(self, _fs, _open, _enable, mock_verify):
+        """An existing file EOS cannot verify is deleted before the fresh copy."""
+        self.mock_exists.return_value = True
+        mock_verify.return_value = True
+        mock_ssh = mock.MagicMock()
+        mock_ssh.send_command.side_effect = ["% Verification failed", "", "Copy completed successfully"]
+        self.device.native_ssh = mock_ssh
+
+        src = FileCopyModel(download_url="http://example.com/file.bin", checksum="abc123", file_name="file.bin")
+        self.device.remote_file_copy(src)
+
+        commands = [call[0][0] for call in mock_ssh.send_command.call_args_list]
+        self.assertEqual(
+            commands,
+            ["verify flash:file.bin", "delete flash:file.bin", "copy http://example.com/file.bin flash:"],
+        )
+
+
+class TestVerifyOptimizedImage(EOSDeviceMockedTestCase):
+    """Tests for verify_optimized_image."""
+
+    @mock.patch.object(EOSDevice, "open")
+    def test_true_on_success_banner(self, _open):
+        self.device.native_ssh = mock.MagicMock()
+        self.device.native_ssh.send_command.return_value = "Verifying flash:EOS.swi successful."
+
+        self.assertTrue(self.device.verify_optimized_image("EOS.swi", "flash:"))
+        self.device.native_ssh.send_command.assert_called_once_with("verify flash:EOS.swi", read_timeout=30)
+
+    @mock.patch.object(EOSDevice, "open")
+    def test_false_when_verification_fails(self, _open):
+        self.device.native_ssh = mock.MagicMock()
+        self.device.native_ssh.send_command.return_value = "% Verification failed"
+
+        self.assertFalse(self.device.verify_optimized_image("EOS.swi", "flash:"))
+
+    @mock.patch.object(EOSDevice, "open")
+    @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
+    def test_probes_file_system_when_omitted(self, mock_fs, _open):
+        self.device.native_ssh = mock.MagicMock()
+        self.device.native_ssh.send_command.return_value = "Verifying flash:EOS.swi successful."
+
+        self.assertTrue(self.device.verify_optimized_image("EOS.swi", None))
+        mock_fs.assert_called_once()
+
 
 class TestFileCopyModelValidation(unittest.TestCase):
     """Tests for FileCopyModel defaults and validation."""
@@ -1032,7 +1106,8 @@ class TestFreeSpaceCheck(EOSDeviceMockedTestCase):
     @mock.patch.object(EOSDevice, "enable")
     @mock.patch.object(EOSDevice, "open")
     @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
-    def test_remote_file_copy_raises_not_enough_free_space(self, _fs, _open, _enable, _verify):
+    @mock.patch.object(EOSDevice, "check_file_exists", return_value=False)
+    def test_remote_file_copy_raises_not_enough_free_space(self, _exists, _fs, _open, _enable, _verify):
         """remote_file_copy raises NotEnoughFreeSpaceError and never issues a copy command."""
         mock_ssh = mock.MagicMock()
         self.device.native_ssh = mock_ssh
@@ -1056,8 +1131,9 @@ class TestFreeSpaceCheck(EOSDeviceMockedTestCase):
     @mock.patch.object(EOSDevice, "open")
     @mock.patch.object(EOSDevice, "_get_file_system", return_value="flash:")
     @mock.patch.object(EOSDevice, "_check_free_space")
+    @mock.patch.object(EOSDevice, "check_file_exists", return_value=False)
     def test_remote_file_copy_skips_space_check_when_file_size_omitted(
-        self, mock_check, _fs, _open, _enable, mock_verify
+        self, _exists, mock_check, _fs, _open, _enable, mock_verify
     ):
         """When FileCopyModel has no file_size, _check_free_space is NOT called."""
         mock_verify.return_value = True
