@@ -1,1 +1,0 @@
-Fixed `EOSDevice.close()` leaking the Netmiko SSH session opened by the file-transfer methods.
