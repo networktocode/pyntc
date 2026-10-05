@@ -379,7 +379,7 @@ class TestEOSDevice(unittest.TestCase):
 
     def test_os_version(self):
         os_version = self.device.os_version
-        self.assertEqual(os_version, "4.14.7M")
+        self.assertEqual(os_version, "4.14.7M-2384414.4147M")
 
     def test_interfaces(self):
         interfaces = self.device.interfaces

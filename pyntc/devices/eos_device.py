@@ -417,7 +417,7 @@ class EOSDevice(BaseDevice):
         """
         if self._os_version is None:
             sh_version_output = self.show("show version")
-            self._os_version = sh_version_output["version"]
+            self._os_version = sh_version_output["internalVersion"]
 
         log.debug("Host %s: OS version %s", self.host, self._os_version)
         return self._os_version

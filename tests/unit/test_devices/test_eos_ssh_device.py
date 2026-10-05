@@ -1051,9 +1051,9 @@ def _fixture(name):
         return json.load(handle)
 
 
-# Facts derived purely from show output. "vlans" is excluded: EOSDevice sources it from
+# Facts derived purely from show output. "vlans" and "os_version" is excluded: EOSDevice sources it from
 # pyeapi's native.api("vlans"), which has no SSH equivalent by design.
-SHARED_FACTS = ["boot_time", "hostname", "fqdn", "model", "os_version", "serial_number", "interfaces", "boot_options"]
+SHARED_FACTS = ["boot_time", "hostname", "fqdn", "model", "serial_number", "interfaces", "boot_options"]
 
 
 @pytest.mark.parametrize("fact", SHARED_FACTS)

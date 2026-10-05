@@ -125,6 +125,20 @@ class EOSSSHDevice(EOSDevice):
         """
         return self.native
 
+    @property
+    def os_version(self):
+        """Get OS version on device.
+
+        Returns:
+            (str): OS version of device.
+        """
+        if self._os_version is None:
+            sh_version_output = self.show("show version")
+            self._os_version = sh_version_output["version"]
+
+        log.debug("Host %s: OS version %s", self.host, self._os_version)
+        return self._os_version
+
     @staticmethod
     def _read_timeout_for(command: str):
         """Resolve the Netmiko read timeout to use for ``command``.
